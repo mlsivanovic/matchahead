@@ -1,0 +1,501 @@
+{
+  "kind": "synthetic",
+  "notProductionData": true,
+  "purpose": "Lokalni dokaz spajanja više takmičenja na jedan klik. Datumi, protivnici i ID-jevi su izmišljeni.",
+  "createdOn": "2026-09-26",
+  "warning": "Ova datoteka nije preuzeta ni iz jednog sportskog izvora i ne sme se objaviti kao raspored.",
+  "policy": {
+    "reuseWithinMinutes": 360,
+    "minRefreshMinutes": 15
+  },
+  "query": {
+    "seasonId": "2026-2027",
+    "now": "2027-01-15T12:00:00Z",
+    "todayLocalDate": "2027-01-15"
+  },
+  "teams": [
+    {
+      "id": "football:rs:partizan",
+      "sport": "football",
+      "name": "FK Partizan",
+      "shortName": "Partizan",
+      "country": "RS",
+      "city": "Beograd",
+      "aliases": ["Partizan", "FK Partizan"],
+      "providerIds": { "synthetic": "syn-fk-partizan" }
+    },
+    {
+      "id": "basketball:rs:partizan",
+      "sport": "basketball",
+      "name": "KK Partizan",
+      "shortName": "Partizan",
+      "country": "RS",
+      "city": "Beograd",
+      "aliases": ["Partizan", "KK Partizan"],
+      "providerIds": { "synthetic": "syn-kk-partizan" }
+    },
+    {
+      "id": "football:rs:synthetic-gost",
+      "sport": "football",
+      "name": "FK Sintetički gost",
+      "shortName": "Sintetički gost",
+      "country": "RS",
+      "city": "Sintetički grad",
+      "aliases": ["Sintetički gost"],
+      "providerIds": { "synthetic": "syn-fk-gost" }
+    },
+    {
+      "id": "football:rs:synthetic-gost-2",
+      "sport": "football",
+      "name": "FK Sintetički gost 2",
+      "shortName": "Gost 2",
+      "country": "RS",
+      "city": "Sintetički grad",
+      "aliases": [],
+      "providerIds": { "synthetic": "syn-fk-gost-2" }
+    },
+    {
+      "id": "football:rs:synthetic-other",
+      "sport": "football",
+      "name": "FK Tuđi sintetički",
+      "shortName": "Tuđi",
+      "country": "RS",
+      "city": "Sintetički grad",
+      "aliases": [],
+      "providerIds": { "synthetic": "syn-fk-other" }
+    },
+    {
+      "id": "basketball:rs:synthetic-gost",
+      "sport": "basketball",
+      "name": "KK Sintetički gost",
+      "shortName": "KK gost",
+      "country": "RS",
+      "city": "Sintetički grad",
+      "aliases": [],
+      "providerIds": { "synthetic": "syn-kk-gost" }
+    }
+  ],
+  "footballFeeds": [
+    {
+      "competitionId": "football:domestic:synthetic-league",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": "syn-league",
+      "publication": "allowed",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": false,
+      "failure": "none",
+      "totalPages": 2,
+      "evidence": "synthetic: dve strane domaće lige.",
+      "sourceUrl": "synthetic://find-fixtures/league",
+      "checkedAt": "2027-01-15",
+      "pages": [
+        {
+          "page": 1,
+          "fixtures": [
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-01-10",
+              "printedLocalTime": "17:00",
+              "startsAtUtc": "2027-01-10T16:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "finished",
+              "venue": "Sintetički stadion",
+              "round": "sintetičko-prošlo",
+              "sourceUrl": "synthetic://find-fixtures/league/finished",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-finished",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            },
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-03-02",
+              "printedLocalTime": "17:00",
+              "startsAtUtc": "2027-03-02T16:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Sintetički stadion",
+              "round": "sintetičko-potvrđeno",
+              "sourceUrl": "synthetic://find-fixtures/league/confirmed",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-confirmed",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            },
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:synthetic-other",
+              "awayTeamId": "football:rs:synthetic-gost-2",
+              "scheduledLocalDate": "2027-03-02",
+              "printedLocalTime": "17:00",
+              "startsAtUtc": "2027-03-02T16:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Tuđi stadion",
+              "round": "sintetičko-tuđe",
+              "sourceUrl": "synthetic://find-fixtures/league/other",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-other",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            },
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:synthetic-gost",
+              "awayTeamId": "football:rs:partizan",
+              "scheduledLocalDate": "2027-02-02",
+              "printedLocalTime": "02:00",
+              "startsAtUtc": "2027-02-02T00:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": null,
+              "round": "sintetički-sat-02",
+              "sourceUrl": "synthetic://find-fixtures/league/clock-02",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-clock-02",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            }
+          ]
+        },
+        {
+          "page": 2,
+          "fixtures": [
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-03-02",
+              "printedLocalTime": "17:00",
+              "startsAtUtc": "2027-03-02T16:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Sintetički stadion",
+              "round": "sintetičko-potvrđeno",
+              "sourceUrl": "synthetic://find-fixtures/league/confirmed",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-confirmed",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            },
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost-2",
+              "scheduledLocalDate": "2027-04-01",
+              "printedLocalTime": "01:00",
+              "startsAtUtc": "2027-04-01T00:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": null,
+              "round": "sintetički-sat-01",
+              "sourceUrl": "synthetic://find-fixtures/league/clock-01",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-clock-01",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            },
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-04-02",
+              "printedLocalTime": "00:00",
+              "startsAtUtc": "2027-04-01T23:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": null,
+              "round": "sintetički-sat-00",
+              "sourceUrl": "synthetic://find-fixtures/league/clock-00",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-clock-00",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "competitionId": "football:domestic:synthetic-league",
+      "seasonId": "2026-2027",
+      "provider": "synthetic-alt",
+      "providerCompetitionId": "syn-league-alt",
+      "publication": "allowed",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": false,
+      "failure": "none",
+      "totalPages": 1,
+      "evidence": "synthetic: drugi provajder, isti par i datum, drugi ID.",
+      "sourceUrl": "synthetic://find-fixtures/league-alt",
+      "checkedAt": "2027-01-15",
+      "pages": [
+        {
+          "page": 1,
+          "fixtures": [
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-03-02",
+              "printedLocalTime": "17:00",
+              "startsAtUtc": "2027-03-02T16:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Sintetički stadion",
+              "round": "sintetičko-potvrđeno",
+              "sourceUrl": "synthetic://find-fixtures/league-alt/confirmed",
+              "provider": "synthetic-alt",
+              "providerFixtureId": "syn-alt-confirmed",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "competitionId": "football:european:synthetic-league",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": "syn-europe",
+      "publication": "allowed",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": false,
+      "failure": "none",
+      "totalPages": 1,
+      "evidence": "synthetic: evropska ligaška faza.",
+      "sourceUrl": "synthetic://find-fixtures/europe",
+      "checkedAt": "2027-01-15",
+      "pages": [
+        {
+          "page": 1,
+          "fixtures": [
+            {
+              "sport": "football",
+              "competitionId": "football:european:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:synthetic-gost-2",
+              "awayTeamId": "football:rs:partizan",
+              "scheduledLocalDate": "2027-03-20",
+              "printedLocalTime": "19:00",
+              "startsAtUtc": "2027-03-20T18:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Sintetička arena",
+              "round": "sintetičko-evropa",
+              "sourceUrl": "synthetic://find-fixtures/europe/confirmed",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-europe",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            },
+            {
+              "sport": "football",
+              "competitionId": "football:european:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": null,
+              "scheduledLocalDate": null,
+              "printedLocalTime": null,
+              "startsAtUtc": null,
+              "sourceTimeZone": null,
+              "sourceClaimsTimeConfirmed": false,
+              "status": "postponed",
+              "venue": null,
+              "round": "sintetičko-odloženo",
+              "sourceUrl": "synthetic://find-fixtures/europe/postponed",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-postponed",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": "2027-05-01T16:00:00Z",
+              "previousScheduledLocalDate": "2027-05-01"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "competitionId": "football:european:synthetic-knockout",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": "syn-knockout",
+      "publication": "allowed",
+      "organizerMarkedUnpublished": true,
+      "teamNotInCompetition": false,
+      "failure": "none",
+      "totalPages": 1,
+      "evidence": "synthetic: organizator kaže da nokaut faza još nije izvučena.",
+      "sourceUrl": "synthetic://find-fixtures/knockout",
+      "checkedAt": "2027-01-15",
+      "pages": []
+    },
+    {
+      "competitionId": "football:other:synthetic-friendly",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": null,
+      "publication": "allowed",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": false,
+      "failure": "timeout",
+      "totalPages": 1,
+      "evidence": "synthetic: sezona prijateljskih nije stigla.",
+      "sourceUrl": "synthetic://find-fixtures/friendly",
+      "checkedAt": "2027-01-15",
+      "pages": []
+    },
+    {
+      "competitionId": "football:european:synthetic-other-cup",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": "syn-not-in",
+      "publication": "allowed",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": true,
+      "failure": "none",
+      "totalPages": 1,
+      "evidence": "synthetic: tim nije učesnik ovog kupa.",
+      "sourceUrl": "synthetic://find-fixtures/other-cup",
+      "checkedAt": "2027-01-15",
+      "pages": []
+    },
+    {
+      "competitionId": "football:domestic:synthetic-blocked",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": "syn-blocked",
+      "publication": "forbidden",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": false,
+      "failure": "none",
+      "totalPages": 1,
+      "evidence": "synthetic: zabranjena objava, sadržaj ne sme ući u odgovor.",
+      "sourceUrl": "synthetic://find-fixtures/blocked",
+      "checkedAt": "2027-01-15",
+      "pages": [
+        {
+          "page": 1,
+          "fixtures": [
+            {
+              "sport": "football",
+              "competitionId": "football:domestic:synthetic-blocked",
+              "seasonId": "2026-2027",
+              "homeTeamId": "football:rs:partizan",
+              "awayTeamId": "football:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-02-10",
+              "printedLocalTime": "18:00",
+              "startsAtUtc": "2027-02-10T17:00:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Neobjavljivo",
+              "round": "sintetički-blok",
+              "sourceUrl": "synthetic://find-fixtures/blocked/match",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-blocked",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "basketballFeeds": [
+    {
+      "competitionId": "basketball:regional:synthetic-league",
+      "seasonId": "2026-2027",
+      "provider": "synthetic",
+      "providerCompetitionId": "syn-kk-league",
+      "publication": "allowed",
+      "organizerMarkedUnpublished": false,
+      "teamNotInCompetition": false,
+      "failure": "none",
+      "totalPages": 1,
+      "evidence": "synthetic: košarkaška liga, drugi tim od FK.",
+      "sourceUrl": "synthetic://find-fixtures/basketball",
+      "checkedAt": "2027-01-15",
+      "pages": [
+        {
+          "page": 1,
+          "fixtures": [
+            {
+              "sport": "basketball",
+              "competitionId": "basketball:regional:synthetic-league",
+              "seasonId": "2026-2027",
+              "homeTeamId": "basketball:rs:partizan",
+              "awayTeamId": "basketball:rs:synthetic-gost",
+              "scheduledLocalDate": "2027-03-02",
+              "printedLocalTime": "18:30",
+              "startsAtUtc": "2027-03-02T17:30:00Z",
+              "sourceTimeZone": "Europe/Belgrade",
+              "sourceClaimsTimeConfirmed": true,
+              "status": "scheduled",
+              "venue": "Sintetička hala",
+              "round": "sintetičko-kk",
+              "sourceUrl": "synthetic://find-fixtures/basketball/confirmed",
+              "provider": "synthetic",
+              "providerFixtureId": "syn-kk-confirmed",
+              "fetchedAt": "2027-01-15T12:00:00Z",
+              "sourceUpdatedAt": null,
+              "previousStartsAtUtc": null,
+              "previousScheduledLocalDate": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

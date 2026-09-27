@@ -1,0 +1,8 @@
+# Kopiraj u .dev.vars. Taj fajl je ignorisan. Ne upisuj vrednosti u git.
+# wrangler secret put isto ime koristi na nalogu. Ne lepi privatni ključ u PWA.
+PROBE_SEND_ENABLED=
+PROBE_ENROLL_SECRET=
+FIREBASE_PROJECT_ID=
+FCM_CLIENT_EMAIL=
+FCM_PRIVATE_KEY=
+PUBLIC_BASE_URL=

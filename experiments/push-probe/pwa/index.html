@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#14110e">
+    <meta name="robots" content="noindex">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>MatchAhead — proba obaveštenja</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Sintetička proba</p>
+      <h1>MatchAhead</h1>
+      <p>Ovo nije utakmica i ne dolazi iz sportskog rasporeda. Poruka, ako stigne, je sistemsko obaveštenje dok je aplikacija zatvorena.</p>
+      <p id="status">Učitavanje probe.</p>
+      <p id="detail"></p>
+      <p id="server-note"></p>
+      <label for="enroll">Ključ probe</label>
+      <input id="enroll" type="password" autocomplete="off" spellcheck="false" placeholder="Nije Firebase ključ">
+      <button id="enable" type="button">Uključi obaveštenja</button>
+      <button id="register-device" type="button">Registruj uređaj</button>
+      <button id="send" type="button" disabled>Pošalji sintetičku poruku</button>
+      <button id="disable-push" type="button" class="quiet" disabled>Isključi na ovom uređaju</button>
+      <p class="note">Na iPhone-u i iPad-u prvo dodaj stranicu na početni ekran i otvori je odatle. Dozvola se traži samo na klik. Ako je odbiješ, dugme ostaje mirno.</p>
+      <p class="note">Izbor klubova u aplikaciji ostaje FK Crvena zvezda, FK Partizan, KK Crvena zvezda i KK Partizan. Ova proba ne traži izbor kluba. Protivnik u utakmici nije ograničen tim pravilom.</p>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

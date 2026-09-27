@@ -1,0 +1,29 @@
+{
+  "name": "@matchahead/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "node --experimental-strip-types --test test/*.test.ts",
+    "icons": "node scripts/write-icons.mjs",
+    "demo-schedule": "node --experimental-strip-types scripts/write-demo-schedule.ts"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "puppeteer-core": "^24.22.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "vite-plugin-pwa": "^1.0.3",
+    "workbox-precaching": "^7.3.0",
+    "workbox-routing": "^7.3.0"
+  }
+}

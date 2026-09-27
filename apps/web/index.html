@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10211b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MatchAhead" />
+    <title>MatchAhead</title>
+    <script>
+      (function () {
+        var base = "%BASE_URL%";
+        var path = location.pathname;
+        if (path.indexOf(base) !== 0) return;
+        var rest = path.slice(base.length).replace(/^index\.html$/, "").replace(/\/$/, "");
+        if (!rest) return;
+        location.replace(base + "#/" + rest + location.search);
+      })();
+    </script>
+    <link rel="icon" href="%BASE_URL%icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-192.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

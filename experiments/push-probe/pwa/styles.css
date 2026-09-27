@@ -1,0 +1,76 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #14110e;
+  color: #f4efe6;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+h1 {
+  margin: 0 0 0.75rem;
+  font-size: 2rem;
+}
+
+p,
+label {
+  line-height: 1.45;
+}
+
+.eyebrow,
+.note,
+#server-note {
+  color: #d9c7a5;
+}
+
+.note {
+  font-size: 0.95rem;
+}
+
+label,
+input,
+button {
+  display: block;
+  width: 100%;
+}
+
+input,
+button {
+  box-sizing: border-box;
+  min-height: 3rem;
+  margin: 0.35rem 0 0.8rem;
+  border-radius: 0.75rem;
+  font: inherit;
+}
+
+input {
+  padding: 0 0.9rem;
+  border: 1px solid #8c7352;
+  background: #211c17;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: #e8c47c;
+  color: #1a140d;
+  font-weight: 650;
+}
+
+button.quiet,
+button:disabled {
+  background: #3a332c;
+  color: #f4efe6;
+}
+
+a {
+  color: #e8c47c;
+}

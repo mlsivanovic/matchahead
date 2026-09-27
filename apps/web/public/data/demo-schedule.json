@@ -1,0 +1,363 @@
+{
+  "kind": "synthetic-demo",
+  "notProductionData": true,
+  "provider": "demo",
+  "publication": "forbidden",
+  "warning": "DEMO utakmice. Nisu preuzete ni iz jednog sportskog izvora i nisu stvarni termini.",
+  "fetchedAt": "2026-09-20T08:00:00.000Z",
+  "staleAfterHours": 12,
+  "teams": [
+    {
+      "id": "football:rs:crvena-zvezda",
+      "sport": "football",
+      "name": "FK Crvena zvezda",
+      "shortName": "Crvena zvezda",
+      "country": "RS",
+      "city": "Beograd",
+      "aliases": [
+        "Crvena zvezda",
+        "FK Crvena zvezda"
+      ],
+      "providerIds": {}
+    },
+    {
+      "id": "football:rs:partizan",
+      "sport": "football",
+      "name": "FK Partizan",
+      "shortName": "Partizan",
+      "country": "RS",
+      "city": "Beograd",
+      "aliases": [
+        "Partizan",
+        "FK Partizan"
+      ],
+      "providerIds": {}
+    },
+    {
+      "id": "basketball:rs:crvena-zvezda",
+      "sport": "basketball",
+      "name": "KK Crvena zvezda",
+      "shortName": "Crvena zvezda",
+      "country": "RS",
+      "city": "Beograd",
+      "aliases": [
+        "Crvena zvezda",
+        "KK Crvena zvezda"
+      ],
+      "providerIds": {}
+    },
+    {
+      "id": "basketball:rs:partizan",
+      "sport": "basketball",
+      "name": "KK Partizan",
+      "shortName": "Partizan",
+      "country": "RS",
+      "city": "Beograd",
+      "aliases": [
+        "Partizan",
+        "KK Partizan"
+      ],
+      "providerIds": {}
+    },
+    {
+      "id": "football:xx:demo-rival-sever",
+      "sport": "football",
+      "name": "DEMO Rival Sever",
+      "shortName": "DEMO Rival Sever",
+      "country": "xx",
+      "city": "DEMO grad",
+      "aliases": [
+        "DEMO Rival Sever"
+      ],
+      "providerIds": {
+        "demo": "demo-rival-sever"
+      }
+    },
+    {
+      "id": "football:xx:demo-rival-istok",
+      "sport": "football",
+      "name": "DEMO Rival Istok",
+      "shortName": "DEMO Rival Istok",
+      "country": "xx",
+      "city": "DEMO grad",
+      "aliases": [
+        "DEMO Rival Istok"
+      ],
+      "providerIds": {
+        "demo": "demo-rival-istok"
+      }
+    },
+    {
+      "id": "football:xx:demo-rival-morava",
+      "sport": "football",
+      "name": "DEMO Rival Morava",
+      "shortName": "DEMO Rival Morava",
+      "country": "xx",
+      "city": "DEMO grad",
+      "aliases": [
+        "DEMO Rival Morava"
+      ],
+      "providerIds": {
+        "demo": "demo-rival-morava"
+      }
+    },
+    {
+      "id": "basketball:xx:demo-rival-jug",
+      "sport": "basketball",
+      "name": "DEMO Rival Jug",
+      "shortName": "DEMO Rival Jug",
+      "country": "xx",
+      "city": "DEMO grad",
+      "aliases": [
+        "DEMO Rival Jug"
+      ],
+      "providerIds": {
+        "demo": "demo-rival-jug"
+      }
+    },
+    {
+      "id": "basketball:xx:demo-rival-zapad",
+      "sport": "basketball",
+      "name": "DEMO Rival Zapad",
+      "shortName": "DEMO Rival Zapad",
+      "country": "xx",
+      "city": "DEMO grad",
+      "aliases": [
+        "DEMO Rival Zapad"
+      ],
+      "providerIds": {
+        "demo": "demo-rival-zapad"
+      }
+    }
+  ],
+  "competitions": [
+    {
+      "id": "football:demo:demo-liga",
+      "sport": "football",
+      "name": "DEMO liga",
+      "scope": "other",
+      "country": null,
+      "aliases": [
+        "DEMO liga"
+      ],
+      "providerIds": {
+        "demo": "demo-liga-f"
+      }
+    },
+    {
+      "id": "basketball:demo:demo-liga",
+      "sport": "basketball",
+      "name": "DEMO košarkaška liga",
+      "scope": "other",
+      "country": null,
+      "aliases": [
+        "DEMO košarkaška liga"
+      ],
+      "providerIds": {
+        "demo": "demo-liga-b"
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "demo": true,
+      "id": "football:football:demo:demo-liga:demo-sezona:demo:fx-zvezda-sever",
+      "sport": "football",
+      "competitionId": "football:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "football:rs:crvena-zvezda",
+      "awayTeamId": "football:xx:demo-rival-sever",
+      "startsAtUtc": "2026-09-27T17:00:00Z",
+      "scheduledLocalDate": "2026-09-27",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": true,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "scheduled",
+      "venue": "DEMO stadion",
+      "round": "DEMO kolo 1",
+      "sourceUrl": "synthetic://demo/fx-zvezda-sever",
+      "provider": "demo",
+      "providerFixtureId": "fx-zvezda-sever",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "ca93a6a0",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "football:football:demo:demo-liga:demo-sezona:demo:fx-partizan-gostovanje",
+      "sport": "football",
+      "competitionId": "football:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "football:xx:demo-rival-istok",
+      "awayTeamId": "football:rs:partizan",
+      "startsAtUtc": "2026-09-30T15:00:00Z",
+      "scheduledLocalDate": "2026-09-30",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": true,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "scheduled",
+      "venue": "DEMO stadion Istok",
+      "round": "DEMO kolo 2",
+      "sourceUrl": "synthetic://demo/fx-partizan-gostovanje",
+      "provider": "demo",
+      "providerFixtureId": "fx-partizan-gostovanje",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "ccd3b653",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "football:football:demo:demo-liga:demo-sezona:demo:fx-partizan-morava",
+      "sport": "football",
+      "competitionId": "football:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "football:rs:partizan",
+      "awayTeamId": "football:xx:demo-rival-morava",
+      "startsAtUtc": "2026-09-29T18:00:00Z",
+      "scheduledLocalDate": "2026-09-29",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": true,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "scheduled",
+      "venue": "DEMO stadion",
+      "round": "DEMO kolo 3",
+      "sourceUrl": "synthetic://demo/fx-partizan-morava",
+      "provider": "demo",
+      "providerFixtureId": "fx-partizan-morava",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "7d4f5371",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "basketball:basketball:demo:demo-liga:demo-sezona:demo:fx-kk-zvezda-jug",
+      "sport": "basketball",
+      "competitionId": "basketball:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "basketball:rs:crvena-zvezda",
+      "awayTeamId": "basketball:xx:demo-rival-jug",
+      "startsAtUtc": "2026-10-02T16:30:00Z",
+      "scheduledLocalDate": "2026-10-02",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": true,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "scheduled",
+      "venue": "DEMO dvorana",
+      "round": "DEMO kolo 4",
+      "sourceUrl": "synthetic://demo/fx-kk-zvezda-jug",
+      "provider": "demo",
+      "providerFixtureId": "fx-kk-zvezda-jug",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "ae6840cf",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "basketball:basketball:demo:demo-liga:demo-sezona:demo:fx-kk-partizan-zapad",
+      "sport": "basketball",
+      "competitionId": "basketball:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "basketball:rs:partizan",
+      "awayTeamId": "basketball:xx:demo-rival-zapad",
+      "startsAtUtc": null,
+      "scheduledLocalDate": "2026-10-10",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": false,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "time_tbd",
+      "venue": "DEMO dvorana",
+      "round": "DEMO kolo 5",
+      "sourceUrl": "synthetic://demo/fx-kk-partizan-zapad",
+      "provider": "demo",
+      "providerFixtureId": "fx-kk-partizan-zapad",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "d4234317",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "basketball:basketball:demo:demo-liga:demo-sezona:demo:fx-kk-zvezda-zreb",
+      "sport": "basketball",
+      "competitionId": "basketball:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "basketball:rs:crvena-zvezda",
+      "awayTeamId": null,
+      "startsAtUtc": null,
+      "scheduledLocalDate": "2026-10-03",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": false,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "time_tbd",
+      "venue": null,
+      "round": "DEMO žreb nije održan",
+      "sourceUrl": "synthetic://demo/fx-kk-zvezda-zreb",
+      "provider": "demo",
+      "providerFixtureId": "fx-kk-zvezda-zreb",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "2900772f",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "football:football:demo:demo-liga:demo-sezona:demo:fx-zvezda-odlozeno",
+      "sport": "football",
+      "competitionId": "football:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "football:rs:crvena-zvezda",
+      "awayTeamId": "football:xx:demo-rival-sever",
+      "startsAtUtc": null,
+      "scheduledLocalDate": null,
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": false,
+      "previousStartsAtUtc": "2026-09-25T17:00:00Z",
+      "previousScheduledLocalDate": "2026-09-25",
+      "status": "postponed",
+      "venue": "DEMO stadion",
+      "round": "DEMO kolo 0",
+      "sourceUrl": "synthetic://demo/fx-zvezda-odlozeno",
+      "provider": "demo",
+      "providerFixtureId": "fx-zvezda-odlozeno",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "29036d72",
+      "revision": 1
+    },
+    {
+      "demo": true,
+      "id": "football:football:demo:demo-liga:demo-sezona:demo:fx-partizan-proslo",
+      "sport": "football",
+      "competitionId": "football:demo:demo-liga",
+      "seasonId": "demo-sezona",
+      "homeTeamId": "football:rs:partizan",
+      "awayTeamId": "football:xx:demo-rival-morava",
+      "startsAtUtc": "2026-09-01T17:00:00Z",
+      "scheduledLocalDate": "2026-09-01",
+      "sourceTimeZone": "Europe/Belgrade",
+      "timeConfirmed": true,
+      "previousStartsAtUtc": null,
+      "previousScheduledLocalDate": null,
+      "status": "finished",
+      "venue": "DEMO stadion",
+      "round": "DEMO kolo prošlo",
+      "sourceUrl": "synthetic://demo/fx-partizan-proslo",
+      "provider": "demo",
+      "providerFixtureId": "fx-partizan-proslo",
+      "fetchedAt": "2026-09-20T08:00:00.000Z",
+      "sourceUpdatedAt": null,
+      "contentHash": "44d86b6c",
+      "revision": 1
+    }
+  ]
+}

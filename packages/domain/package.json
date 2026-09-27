@@ -1,0 +1,13 @@
+{
+  "name": "@matchahead/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zajednički ugovori sportskih podataka za MatchAhead. Nema mrežnih poziva.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "node --experimental-strip-types --test test/*.test.ts"
+  }
+}
