@@ -19,6 +19,7 @@ export { competitionId, fixtureIdFromProvider, teamId } from './identity.ts';
 export { isSelectableTeamId, selectableTeams } from './selectable-teams.ts';
 export {
   ACCOUNT_OPS_COLLECTION,
+  ACCOUNT_TOMBSTONES_COLLECTION,
   ACCOUNT_UID_PATTERN,
   DELETION_DOC_ID,
   DELETION_FIELDS,
@@ -38,6 +39,7 @@ export {
   REMINDER_MINUTE_OPTIONS,
   SELECTABLE_TEAM_LIMIT,
   TIME_ZONE_PATTERN,
+  TOMBSTONE_FIELDS,
   USER_COLLECTION,
   USER_SCHEMA_VERSION,
   agendaInputs,
@@ -47,6 +49,7 @@ export {
   buildFollow,
   buildManualSelection,
   buildProfile,
+  buildTombstone,
   defaultProfile,
   deletionFlagKey,
   inclusionReasonsForFixture,
@@ -57,9 +60,11 @@ export {
   readFollow,
   readManualSelection,
   readProfile,
+  readTombstone,
 } from './user-account.ts';
 export type {
   AccountDeletionRecord,
+  AccountTombstoneRecord,
   DeviceRecord,
   FollowedClubRecord,
   InclusionReason,

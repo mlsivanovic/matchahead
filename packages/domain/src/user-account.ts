@@ -31,6 +31,8 @@ export const MANUAL_SELECTIONS_COLLECTION = 'manualSelections';
 export const DEVICES_COLLECTION = 'devices';
 export const ACCOUNT_OPS_COLLECTION = 'accountOps';
 export const DELETION_DOC_ID = 'deletion';
+export const ACCOUNT_TOMBSTONES_COLLECTION = 'accountTombstones';
+export const TOMBSTONE_FIELDS = ['status', 'startedAt', 'updatedAt'] as const;
 export const NOTIF_JOBS_COLLECTION = 'notifJobs';
 export const NOTIFICATION_DELIVERIES_COLLECTION = 'notificationDeliveries';
 
@@ -88,6 +90,13 @@ export interface DeviceRecord {
 }
 
 export interface AccountDeletionRecord {
+  status: 'in_progress';
+  startedAt: string;
+  updatedAt: string;
+}
+
+/** Brava van users/{uid}. Nema profila, omiljenih ni uređaja. Klijent je ne briše. */
+export interface AccountTombstoneRecord {
   status: 'in_progress';
   startedAt: string;
   updatedAt: string;
@@ -311,6 +320,20 @@ export function buildDeletion(input: { startedAt: string; updatedAt: string }): 
   return { status: 'in_progress', startedAt: input.startedAt, updatedAt: input.updatedAt };
 }
 
+export function buildTombstone(input: { startedAt: string; updatedAt: string }): AccountTombstoneRecord {
+  if (!isIsoStamp(input.startedAt) || !isIsoStamp(input.updatedAt)) throw new Error('stamp');
+  return { status: 'in_progress', startedAt: input.startedAt, updatedAt: input.updatedAt };
+}
+
+export function readTombstone(data: unknown): AccountTombstoneRecord | null {
+  const record = exactKeys(data, TOMBSTONE_FIELDS);
+  if (!record) return null;
+  if (record.status !== 'in_progress') return null;
+  if (typeof record.startedAt !== 'string' || typeof record.updatedAt !== 'string') return null;
+  if (!isIsoStamp(record.startedAt) || !isIsoStamp(record.updatedAt)) return null;
+  return { status: 'in_progress', startedAt: record.startedAt, updatedAt: record.updatedAt };
+}
+
 export function agendaInputs(input: {
   follows: readonly FollowedClubRecord[];
   manualSelections: readonly ManualSelectionRecord[];
@@ -340,7 +363,7 @@ export function inclusionReasonsForFixture(input: {
   for (const teamId of input.followedTeamIds) {
     if (!isSelectableTeamId(teamId)) continue;
     if (teamId !== input.homeTeamId && teamId !== input.awayTeamId) continue;
-    const key = `club_follow:${teamId}`;
+    const key = `followed_team:${teamId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     reasons.push({ kind: 'followed_team', teamId });

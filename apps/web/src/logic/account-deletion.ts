@@ -12,8 +12,8 @@ export function isRecentLoginError(error: unknown): boolean {
 }
 
 /**
- * Marker ili lokalna zastavica nastavljaju brisanje.
- * auth/requires-recent-login ostavlja zastavicu i ne otvara nov profil.
+ * Lokalna zastavica ili brava accountTombstones nastavljaju brisanje.
+ * deleteDocuments ne skida bravu. auth/requires-recent-login ostavlja zastavicu.
  */
 export async function resumeAccountDeletion(input: {
   deleteDocuments: () => Promise<void>;

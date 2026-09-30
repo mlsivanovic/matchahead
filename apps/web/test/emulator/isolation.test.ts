@@ -29,7 +29,8 @@ import {
 import { firebaseErrorCode } from '../../src/logic/auth-messages.ts';
 import {
   deleteOwnedDocuments,
-  openDeletionMarker,
+  openDeletionLock,
+  readDeletionLock,
   readAgendaIds,
   writeDevice,
   writeFollow,
@@ -55,6 +56,16 @@ interface Client {
   auth: Auth;
   db: Firestore;
   close: () => Promise<void>;
+}
+
+async function tombstoneRemains(uid: string): Promise<boolean> {
+  const url = `http://${FIRESTORE_HOST}:${FIRESTORE_PORT}/v1/projects/${PROJECT}/databases/(default)/documents/accountTombstones/${uid}`;
+  const response = await fetch(url, { headers: { Authorization: 'Bearer owner' } });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error(`tombstone probe ${response.status}`);
+  const body = await response.json() as { fields?: Record<string, unknown> };
+  const fields = Object.keys(body.fields ?? {});
+  return fields.includes('status') && fields.includes('startedAt') && !fields.includes('favoriteTeamIds');
 }
 
 async function resetEmulators(): Promise<void> {
@@ -103,6 +114,10 @@ async function assertDenied(work: Promise<unknown>): Promise<void> {
     const code = firebaseErrorCode(error);
     return code === 'permission-denied' || code === 'unauthenticated';
   });
+}
+
+async function assertPermissionDenied(work: Promise<unknown>): Promise<void> {
+  await assert.rejects(work, (error: unknown) => firebaseErrorCode(error) === 'permission-denied');
 }
 
 function baseProfile(favoriteTeamIds: string[]) {
@@ -215,10 +230,11 @@ test('isti nalog vidi omiljene klubove sa drugog klijenta', { timeout: 30_000 },
   }
 });
 
-test('tokom brisanja drugi klijent ne može da vrati profil ni praćenje', { timeout: 30_000 }, async () => {
+test('tokom brisanja drugi klijent ne može da vrati profil ni praćenje', { timeout: 45_000 }, async () => {
   const cleaner = await openClient();
   const otherDevice = await openClient();
   const bystander = await openClient();
+  const fresh = await openClient();
   try {
     const owner = await signInGoogle(cleaner.auth, 'anaSub');
     const same = await signInGoogle(otherDevice.auth, 'anaSub');
@@ -239,22 +255,22 @@ test('tokom brisanja drugi klijent ne može da vrati profil ni praćenje', { tim
       lastSeenAt: NOW,
     });
     await writeProfile(bystander.db, boris.uid, baseProfile(['basketball:rs:partizan']));
-    await openDeletionMarker(cleaner.db, owner.uid, LATER);
-    await assertDenied(writeFollow(otherDevice.db, same.uid, {
+    await openDeletionLock(cleaner.db, owner.uid, LATER);
+    await assertPermissionDenied(writeFollow(otherDevice.db, same.uid, {
       teamId: 'football:rs:partizan',
       active: true,
       createdAt: NOW,
       updatedAt: LATER,
     }));
-    await assertDenied(writeProfile(otherDevice.db, same.uid, baseProfile(['football:rs:partizan'])));
-    await assertDenied(writeDevice(otherDevice.db, same.uid, {
+    await assertPermissionDenied(writeProfile(otherDevice.db, same.uid, baseProfile(['football:rs:partizan'])));
+    await assertPermissionDenied(writeDevice(otherDevice.db, same.uid, {
       installationId: 'deviceinstall0002',
       fid: null,
       createdAt: LATER,
       updatedAt: LATER,
       lastSeenAt: LATER,
     }));
-    await assertDenied(writeManual(otherDevice.db, same.uid, {
+    await assertPermissionDenied(writeManual(otherDevice.db, same.uid, {
       fixtureId: FIXTURE,
       active: true,
       createdAt: NOW,
@@ -263,22 +279,44 @@ test('tokom brisanja drugi klijent ne može da vrati profil ni praćenje', { tim
     await deleteOwnedDocuments(cleaner.db, owner.uid, LATER);
     assert.equal((await getDoc(doc(cleaner.db, 'users', owner.uid))).exists(), false);
     assert.equal((await getDoc(doc(bystander.db, 'users', boris.uid))).exists(), true);
+    const lock = await readDeletionLock(otherDevice.db, same.uid);
+    assert.equal(lock?.status, 'in_progress');
+    assert.equal(lock && 'favoriteTeamIds' in lock, false);
+    await assertPermissionDenied(writeProfile(otherDevice.db, same.uid, baseProfile(['football:rs:partizan'])));
+    await assertPermissionDenied(deleteDoc(doc(otherDevice.db, 'accountTombstones', same.uid)));
+    await assertPermissionDenied(setDoc(doc(otherDevice.db, 'accountTombstones', same.uid), {
+      status: 'in_progress',
+      startedAt: NOW,
+      updatedAt: LATER,
+    }));
+    const renewed = await signInGoogle(fresh.auth, 'anaSub');
+    assert.equal(renewed.uid, owner.uid);
+    await assertPermissionDenied(deleteDoc(doc(fresh.db, 'accountTombstones', renewed.uid)));
+    await assertPermissionDenied(writeProfile(fresh.db, renewed.uid, baseProfile(['football:rs:partizan'])));
+    await deleteOwnedDocuments(fresh.db, renewed.uid, LATER);
+    assert.equal((await readDeletionLock(fresh.db, renewed.uid))?.status, 'in_progress');
     await deleteUser(owner);
     await signOut(cleaner.auth);
     await assertDenied(getDoc(doc(cleaner.db, 'users', owner.uid)));
+    await assertDenied(writeProfile(otherDevice.db, same.uid, baseProfile(['basketball:rs:crvena-zvezda'])));
+    assert.equal(await tombstoneRemains(owner.uid), true);
   } finally {
     await cleaner.close();
     await otherDevice.close();
     await bystander.close();
+    await fresh.close();
   }
 });
 
-test('prekinuto brisanje se nastavlja i ne dira drugog korisnika', { timeout: 30_000 }, async () => {
+test('prekinuto brisanje se nastavlja, brava ostaje i ne dira drugog korisnika', { timeout: 30_000 }, async () => {
   const client = await openClient();
+  const sameDevice = await openClient();
   const other = await openClient();
   try {
     const owner = await signInGoogle(client.auth, 'anaSub');
+    const same = await signInGoogle(sameDevice.auth, 'anaSub');
     const boris = await signInGoogle(other.auth, 'borisSub');
+    assert.equal(owner.uid, same.uid);
     await writeProfile(client.db, owner.uid, baseProfile(['football:rs:partizan']));
     await writeFollow(client.db, owner.uid, {
       teamId: 'football:rs:partizan',
@@ -293,15 +331,25 @@ test('prekinuto brisanje se nastavlja i ne dira drugog korisnika', { timeout: 30
       updatedAt: NOW,
     });
     await writeProfile(other.db, boris.uid, baseProfile(['football:rs:crvena-zvezda']));
-    await openDeletionMarker(client.db, owner.uid, NOW);
+    await openDeletionLock(client.db, owner.uid, NOW);
     await deleteDoc(doc(client.db, 'users', owner.uid, 'follows', 'football:rs:partizan'));
+    await assertPermissionDenied(writeFollow(sameDevice.db, same.uid, {
+      teamId: 'football:rs:crvena-zvezda',
+      active: true,
+      createdAt: NOW,
+      updatedAt: LATER,
+    }));
     await deleteOwnedDocuments(client.db, owner.uid, LATER);
     const left = await readAgendaIds(client.db, owner.uid);
     assert.deepEqual(left.followedTeamIds, []);
+    assert.deepEqual(left.favoriteTeamIds, []);
     assert.equal((await getDoc(doc(client.db, 'users', owner.uid))).exists(), false);
+    assert.equal((await readDeletionLock(sameDevice.db, same.uid))?.status, 'in_progress');
+    await assertPermissionDenied(writeProfile(sameDevice.db, same.uid, baseProfile(['football:rs:crvena-zvezda'])));
     assert.equal((await getDoc(doc(other.db, 'users', boris.uid))).data()?.favoriteTeamIds?.[0], 'football:rs:crvena-zvezda');
   } finally {
     await client.close();
+    await sameDevice.close();
     await other.close();
   }
 });

@@ -99,5 +99,7 @@ test('pravila i katalog dele ista četiri tima i ista polja profila', () => {
   for (const field of PROFILE_FIELDS) assert.equal(rules.includes(`'${field}'`), true);
   assert.equal(rules.includes('notifJobs'), true);
   assert.equal(rules.includes('notificationDeliveries'), true);
+  assert.equal(rules.includes('match /accountTombstones/{uid}'), true);
+  assert.equal(rules.includes('allow update, delete: if false'), true);
   assert.equal(deletionFlagKey('ana_1').startsWith('matchahead.deletion.'), true);
 });

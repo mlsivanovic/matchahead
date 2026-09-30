@@ -125,8 +125,15 @@ service cloud.firestore {
         && validStamp(data.updatedAt);
     }
 
+    function validTombstone(data) {
+      return data.keys().hasOnly(['status', 'startedAt', 'updatedAt'])
+        && data.status == 'in_progress'
+        && validStamp(data.startedAt)
+        && validStamp(data.updatedAt);
+    }
+
     function deletionOpen(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid)/accountOps/deletion);
+      return exists(/databases/$(database)/documents/accountTombstones/$(uid));
     }
 
     function profileOpen(uid) {
@@ -180,13 +187,21 @@ service cloud.firestore {
       match /accountOps/{opId} {
         allow get: if isOwner(uid) && opId == 'deletion';
         allow list: if isOwner(uid);
-        allow create: if isOwner(uid) && opId == 'deletion' && validDeletion(request.resource.data);
+        allow create: if isOwner(uid) && !deletionOpen(uid) && opId == 'deletion' && validDeletion(request.resource.data);
         allow update: if isOwner(uid)
+          && !deletionOpen(uid)
           && opId == 'deletion'
           && validDeletion(request.resource.data)
           && request.resource.data.startedAt == resource.data.startedAt;
         allow delete: if isOwner(uid) && opId == 'deletion';
       }
+    }
+
+    match /accountTombstones/{uid} {
+      allow get: if isOwner(uid);
+      allow list: if false;
+      allow create: if isOwner(uid) && validTombstone(request.resource.data);
+      allow update, delete: if false;
     }
 
     match /notifJobs/{jobId} {

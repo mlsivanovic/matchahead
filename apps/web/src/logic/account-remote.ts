@@ -10,23 +10,25 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
+import { firebaseErrorCode } from './auth-messages.ts';
 import {
   ACCOUNT_OPS_COLLECTION,
-  DELETION_DOC_ID,
+  ACCOUNT_TOMBSTONES_COLLECTION,
   DEVICES_COLLECTION,
   FOLLOWS_COLLECTION,
   MANUAL_SELECTIONS_COLLECTION,
   USER_COLLECTION,
   agendaInputs,
-  buildDeletion,
   buildDevice,
   buildFollow,
   buildManualSelection,
-  isIsoStamp,
+  buildTombstone,
   readDevice,
   readFollow,
   readManualSelection,
   readProfile,
+  readTombstone,
+  type AccountTombstoneRecord,
   type DeviceRecord,
   type FollowedClubRecord,
   type ManualSelectionRecord,
@@ -52,34 +54,44 @@ export async function writeDevice(db: Firestore, uid: string, device: DeviceReco
   await setDoc(doc(db, USER_COLLECTION, uid, DEVICES_COLLECTION, record.installationId), record);
 }
 
-export async function deletionIsOpen(db: Firestore, uid: string): Promise<boolean> {
-  const snap = await getDoc(doc(db, USER_COLLECTION, uid, ACCOUNT_OPS_COLLECTION, DELETION_DOC_ID));
-  return snap.exists();
+export async function readDeletionLock(db: Firestore, uid: string): Promise<AccountTombstoneRecord | null> {
+  const snap = await getDoc(doc(db, ACCOUNT_TOMBSTONES_COLLECTION, uid));
+  return snap.exists() ? readTombstone(snap.data()) : null;
 }
 
-/** Marker prvo. Dok postoji, rules odbijaju novi profil i poddokumente. */
-export async function openDeletionMarker(db: Firestore, uid: string, now: string): Promise<void> {
-  const ref = doc(db, USER_COLLECTION, uid, ACCOUNT_OPS_COLLECTION, DELETION_DOC_ID);
-  const snap = await getDoc(ref);
-  const startedAt = snap.exists() && typeof snap.data().startedAt === 'string' && isIsoStamp(snap.data().startedAt)
-    ? snap.data().startedAt
-    : now;
-  await setDoc(ref, buildDeletion({ startedAt, updatedAt: now }));
+export async function deletionIsOpen(db: Firestore, uid: string): Promise<boolean> {
+  return (await readDeletionLock(db, uid)) !== null;
 }
 
 /**
- * Briše praćenja, ručne izbore, uređaje i profil.
- * Marker se briše poslednji. Ponovni poziv nastavlja prekinuto brisanje.
- * Auth nalog ova funkcija ne dira.
+ * Brava je accountTombstones/{uid}, van stabla korisnika.
+ * Posle kreiranja klijent je ne menja i ne briše. Ponovni poziv je prazan ako već postoji.
+ */
+export async function openDeletionLock(db: Firestore, uid: string, now: string): Promise<void> {
+  const ref = doc(db, ACCOUNT_TOMBSTONES_COLLECTION, uid);
+  if ((await getDoc(ref)).exists()) return;
+  try {
+    await setDoc(ref, buildTombstone({ startedAt: now, updatedAt: now }));
+  } catch (error) {
+    const code = firebaseErrorCode(error);
+    if (code !== 'permission-denied' && code !== 'already-exists') throw error;
+    if (!(await getDoc(ref)).exists()) throw error;
+  }
+}
+
+/**
+ * Prvo otvara bravu, pa briše praćenja, ručne izbore, uređaje, accountOps i profil.
+ * Brava ostaje. Auth nalog ova funkcija ne dira.
+ * Ponovni poziv nastavlja prekinuto brisanje i ne skida bravu.
  */
 export async function deleteOwnedDocuments(db: Firestore, uid: string, now: string): Promise<void> {
-  await openDeletionMarker(db, uid, now);
+  await openDeletionLock(db, uid, now);
   await deleteCollection(db, uid, FOLLOWS_COLLECTION);
   await deleteCollection(db, uid, MANUAL_SELECTIONS_COLLECTION);
   await deleteCollection(db, uid, DEVICES_COLLECTION);
+  await deleteCollection(db, uid, ACCOUNT_OPS_COLLECTION);
   const profile = doc(db, USER_COLLECTION, uid);
   if ((await getDoc(profile)).exists()) await deleteDoc(profile);
-  await deleteDoc(doc(db, USER_COLLECTION, uid, ACCOUNT_OPS_COLLECTION, DELETION_DOC_ID));
 }
 
 export async function readAgendaIds(db: Firestore, uid: string): Promise<{
