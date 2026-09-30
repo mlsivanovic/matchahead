@@ -8,18 +8,21 @@ Autori / uloge: Gemini CLI (revizor bezbednosti i koda push infrastrukture), ork
 
 ## Sažetak nalaza i ispravka stanja projekta
 
-Prethodna dokumentacija je sadržala zastarele pretpostavke da nalozi i resursi za push ne postoje. Ova revizija potvrđuje činjenično stanje na sistemu:
+Prethodna dokumentacija je sadržala zastarele pretpostavke da nalozi i resursi za push ne postoje. Ova revizija potvrđuje činjenično stanje na sistemu, ali identifikuje i **kritičan raskorak između raspoređenog koda i koda u repozitorijumu**:
 
 1. **Cloudflare Worker je već raspoređen na produkciji:** Worker `matchahead-push-probe` (verzija `2ee78270-c9d8-4374-ba09-623d590ec448`, uploadovana 27. septembra 2026) je aktivan i javan na adresi:
    `https://matchahead-push-probe.mls-ivanovic.workers.dev`
-2. **Javna PWA i VAPID konfiguracija je već ugrađena na produkciji:** Na pomenutoj adresi endpoint `https://matchahead-push-probe.mls-ivanovic.workers.dev/config.json` servira važeću konfiguraciju za Firebase web aplikaciju `MatchAhead` (`appId: 1:298957530037:web:e60964d052cc34662d6ffc`) sa javnim VAPID ključem (`BIXoXs...`). U lokalnom repozitorijumu fajl `experiments/push-probe/pwa/config.json` je namerno prazan templejt kako se javni ključevi ne bi nekontrolisano menjali kroz git commit-e.
-3. **Zaštitna kapija slanja je podrazumevano isključena:** Živi endpoint `/api/probe/status` vraća `HTTP 200` sa telom:
-   ```json
-   {"enabled":false,"fcmConfigured":true,"sdk":"firebase@12.19.0","identifier":"fid","delivery":"NOT_TESTED","synthetic":true,"store":"durable-object","storeBound":true}
-   ```
-   Slanje i registracija su blokirani na Cloudflare nivou jer tajna `PROBE_SEND_ENABLED` nije postavljena na `1`, a tajna `PROBE_ENROLL_SECRET` nije uneta u Cloudflare Secret Store.
-4. **FCM HTTP v1 i FID semantika su usklađeni sa zvaničnim Google standardima:** Kod u `experiments/push-probe` koristi najnoviji Firebase 12.19.0 API (`register` / `onRegistered` i `message.fid`), a u potpunosti izbegava zastareli `getToken()` / `message.token`.
-5. **Testovi i merenja prolaze lokalno:** Svih 22 testa u `experiments/push-probe` prolaze (`pass 22, fail 0`), esbuild kompajlira klijentske skripte bez greške, a lokalni `measure-cpu.mjs` potvrđuje da WebCrypto RSA PKCS8 potpis troši svega 1–2 ms (daleko ispod limita od 10 ms za besplatni Cloudflare plan).
+2. **Kritičan raskorak koda (Deployed Durable Object vs. Repo In-Memory):**
+   - Živi radnik na adresi `GET /api/probe/status` vraća:
+     ```json
+     {"enabled":false,"fcmConfigured":true,"sdk":"firebase@12.19.0","identifier":"fid","delivery":"NOT_TESTED","synthetic":true,"store":"durable-object","storeBound":true}
+     ```
+   - Pregledom metapodataka raspoređene verzije (`npx wrangler versions view 2ee78270... --json`), potvrđeno je da raspoređeni radnik koristi binding `PROBE_DIRECTORY` tipa `durable_object_namespace` i klasu `ProbeDirectoryObject` (migracioni tag `v1-probe-directory`).
+   - Međutim, u praćenom repozitorijumu (`experiments/push-probe/wrangler.jsonc` i `src/`), Durable Object binding uopšte ne postoji, a `src/app.ts` koristi lokalnu `Map<string, StoredRegistration>` u memoriji.
+   - **Upozorenje koordinatoru:** Svih 22 lokalna testa izvršavaju se nad *in-memory* verzijom i ne mogu garantovati ispravnost raspoređenog Durable Object snopa. Svako neoprezno ponovno postavljanje (`wrangler deploy`) iz trenutnog repozitorijuma pregazilo bi produkcioni Durable Object radnik starijom in-memory verzijom.
+3. **Javna PWA i VAPID konfiguracija je već ugrađena na produkciji:** Na pomenutoj adresi endpoint `https://matchahead-push-probe.mls-ivanovic.workers.dev/config.json` servira važeću konfiguraciju za Firebase web aplikaciju `MatchAhead` (`appId: 1:298957530037:web:e60964d052cc34662d6ffc`) sa javnim VAPID ključem (`BIXoXs...`). U lokalnom repozitorijumu fajl `experiments/push-probe/pwa/config.json` je namerno prazan templejt kako se javni ključevi ne bi nekontrolisano menjali kroz git commit-e.
+4. **Zaštitna kapija slanja je podrazumevano isključena:** Slanje i registracija su blokirani na Cloudflare nivou jer tajna `PROBE_SEND_ENABLED` nije postavljena na `1`, a tajna `PROBE_ENROLL_SECRET` nije uneta u Cloudflare Secret Store.
+5. **FCM HTTP v1 i FID semantika su usklađeni sa zvaničnim Google standardima:** Kod koristi moderni Firebase 12.19.0 API (`register` / `onRegistered` i `message.fid`), a u potpunosti izbegava zastareli `getToken()` / `message.token`.
 6. **Stvarna isporuka na fizičkim telefonima ostaje `NOT_TESTED`:** Dozvola za notifikacije i prijem sistemske poruke na zatvorenoj PWA na fizičkim uređajima (Android i iPhone/iOS 16.4+) nisu izvršeni tokom ove revizije u skladu sa bezbednosnim mandatom.
 
 ---
@@ -82,11 +85,54 @@ Pregledano i verifikovano u odnosu na zvaničnu Google dokumentaciju i izvorni k
 
 ---
 
-## 2. Rezultati izvršenih lokalnih testova i merenja
+## 2. Raskorak raspoređenog koda i koda u repozitorijumu (Deployed vs. Tracked Drift)
+
+Tokom revizije uočena je suštinska razlika između stanja na Cloudflare produkciji i lokalnog repozitorijuma:
+
+### 2.1. Dokaz iz Cloudflare inspekcije
+Komanda `npx wrangler versions view 2ee78270-c9d8-4374-ba09-623d590ec448 --name matchahead-push-probe --json` daje:
+```json
+{
+  "named_handlers": [
+    {
+      "name": "ProbeDirectoryObject",
+      "handlers": [ "class" ]
+    }
+  ],
+  "script_runtime": {
+    "migration_tag": "v1-probe-directory"
+  },
+  "bindings": [
+    {
+      "class_name": "ProbeDirectoryObject",
+      "name": "PROBE_DIRECTORY",
+      "namespace_id": "a6557e79488a4c648b9f198a9d8b986a",
+      "type": "durable_object_namespace"
+    }
+  ]
+}
+```
+A poziv `curl -s https://matchahead-push-probe.mls-ivanovic.workers.dev/api/probe/status` potvrđuje:
+`"store": "durable-object", "storeBound": true`.
+
+### 2.2. Stanje u praćenom repozitorijumu
+- `experiments/push-probe/wrangler.jsonc` sadrži samo `ASSETS` binding, bez Durable Object konfiguracije.
+- `experiments/push-probe/src/worker.ts` ne eksportuje klasu `ProbeDirectoryObject`.
+- `experiments/push-probe/src/app.ts` sadrži samo lokalnu promenljivu `inMemoryRegistrations = new Map<string, StoredRegistration>()`.
+- Tracked `/api/probe/status` kod uopšte ne generiše polja `store` i `storeBound`.
+
+### 2.3. Ozbiljnost i preporuke (Severity: HIGH)
+1. **Lokalni testovi ne sertifikuju produkciju:** Svih 22 testa u `test/app.test.ts` i `test/contract.test.ts` testiraju ponašanje in-memory mape. Oni ne testiraju skladištenje niti perzistenciju `ProbeDirectoryObject` Durable Object-a koji se trenutno izvršava na Cloudflare-u.
+2. **Zabrana slepog deploy-a:** Izričito se zabranjuje pokretanje `npx wrangler deploy` iz trenutnog stanja repozitorijuma, jer bi to obrisalo Durable Object binding i degradiralo produkciju na in-memory rešenje (koje gubi registracije pri svakom gašenju izolata ili preusmeravanju na drugu edge lokaciju).
+3. **Akcija za koordinatora:** U posebnom scoped zadatku potrebno je uskladiti kod repozitorijuma sa raspoređenim stanjem (preneti Durable Object implementaciju u `src/` i `wrangler.jsonc`).
+
+---
+
+## 3. Rezultati izvršenih lokalnih testova i merenja
 
 Izvršene komande u okviru revizije (30. septembar 2026):
 
-### 2.1. Testiranje push-probe paketa (`check-push-probe.mjs`)
+### 3.1. Testiranje push-probe paketa (`check-push-probe.mjs`)
 Komanda:
 ```bash
 $ node scripts/check-push-probe.mjs
@@ -98,12 +144,12 @@ Rezultati:
 - **Neuspešnih (fail):** 0
 - **Preskočenih (skipped):** 0
 - **Trajanje testova:** 282.4 ms
-- **Stavke verifikovane u testovima:**
+- **Stavke verifikovane u testovima (napomena: nad in-memory modelom):**
   1. Isključen probe ne dozvoljava slanje (`status` ostaje vidljiv, `send` vraća 404 `probe_disabled`).
   2. Slanje ide samo vlasniku registracije (self-send provera `registrationSecret`), a FCM telo nema tuđi sadržaj.
   3. Ograničenje učestanosti: četvrto slanje u istom satu je odbijeno (429 `rate_limited`).
   4. Odsustvo servisnog ključa ne izaziva lažan uspeh (greška 500 `fcm_unconfigured`).
-  5. Nevažeći FID (npr. Google FCM vrati 404 `UNREGISTERED`) automatski gasi registraciju u bazi/Durable Object-u.
+  5. Nevažeći FID (npr. Google FCM vrati 404 `UNREGISTERED`) automatski gasi registraciju u bazi.
   6. Toplo zakazivanje koristi keširani OAuth token i ne potpisuje ponovo PKCS8 ključ; osvežavanje odvaja mrežni poziv od potpisa.
   7. KV keš preskače potpis, dok je živi Firestore odvojen.
   8. Dozvola za notifikacije se traži isključivo na eksplicitan korisnički gest (klik).
@@ -111,9 +157,9 @@ Rezultati:
   10. Zabrana curenja tajni u klijentske logove i statičke izvore.
   11. Parsiranje sintetičkog Firestore formata je lokalno i iznosi 0 ms.
   12. Klijentski kod ne sadrži reference na zastareli token API.
-- **Build klijentskih skripti:** `node scripts/build-client.mjs` generiše `pwa/app.js` (81.6 KB bundle sa Firebase messaging-om) i `pwa/firebase-messaging-sw.js` (80.1 KB bundle) bez grešaka.
+- **Build klijentskih skripti:** `node scripts/build-client.mjs` generiše `pwa/app.js` (81.6 KB) i `pwa/firebase-messaging-sw.js` (80.1 KB) bez grešaka.
 
-### 2.2. Merenje lokalne CPU potrošnje (`measure-cpu.mjs`)
+### 3.2. Merenje lokalne CPU potrošnje (`measure-cpu.mjs`)
 Komanda:
 ```bash
 $ cd experiments/push-probe && npm run measure
@@ -158,19 +204,19 @@ Rezultati (izvršeno na lokalnom `workerd` preko Miniflare `5.20260926.0-alpha` 
 }
 ```
 - **Veličina workers snopa:** 27 034 bajta (~26.4 KB, gzip ~7.56 KB).
-- **Hladan potpis (PKCS8 import + WebCrypto RS256):** Medijana 2 ms (ispod 10 ms limita besplatnog plana).
+- **Hladan potpis (PKCS8 import + WebCrypto RS256):** Medijana 2 ms (lokalno unutar 10 ms limita).
 - **Topao potpis:** 0 ms (keširan pristupni token u memoriji).
 - **Mrežno čekanje na razmenu tokena:** ~40 ms (mrežni I/O koji ne opterećuje CPU budžet radnika).
-- **Edge CPU (Workers Logs):** `NOT_TESTED` (stvarna CPU potrošnja na Cloudflare edge serverima se mora potvrditi iz live logova).
+- **Važno razlikovanje — Edge CPU vs Lokalni tajmer:** Lokalni `workerd` meri prolazno vreme petlje tajmerom koji otkucava i tokom CPU ciklusa. Na Cloudflare edge-u tajmer je zamrznut tokom I/O i meri se strogi `cpuTime`. Stvarni edge CPU ostaje **`NOT_TESTED`** dok se ne očita iz live Workers Logs.
 
 ---
 
-## 3. Sigurnosna i arhitektonska revizija koda
+## 4. Sigurnosna i arhitektonska revizija koda
 
 | Oblast revizije | Implementacija i mehanizam zaštite | Nalaz / Status |
 |---|---|---|
-| **Registracija i Enrollment** | Zahteva zaglavlje `x-matchahead-enroll: <PROBE_ENROLL_SECRET>`. Provera se vrši korišćenjem `timingSafeEqualSecret` (SHA-256 heširanje i konstantno poređenje bajtova protiv timing napada). | **ODLIČNO** — neovlašćeni klijenti ne mogu kreirati probne registracije. |
-| **Self-Send autorizacija** | `POST /api/probe/send` prima `registrationId` i `registrationSecret`. Slanje je vezano isključivo za FID koji pripada toj registraciji. Klijent ne može navesti tuđi FID, ne može navesti tekst poruke niti ciljni URL. | **ODLIČNO** — potpuno onemogućeno korišćenje workera kao otvorenog push releja (open proxy). |
+| **Registracija i Enrollment** | Zahteva zaglavlje `x-matchahead-enroll: <PROBE_ENROLL_SECRET>`. Provera se vrši u konstantnom vremenu pomoću `timingSafeEqualSecret` (SHA-256 heširanje i poređenje bajtova protiv timing napada). | **ODLIČNO** — neovlašćeni klijenti ne mogu kreirati probne registracije. |
+| **Self-Send autorizacija** | `POST /api/probe/send` prima `registrationId` i `registrationSecret`. Slanje je vezano isključivo za FID koji pripada toj registraciji. Klijent ne može navesti tuđi FID, ne može uneti proizvoljan tekst poruke niti ciljni URL. | **ODLIČNO** — potpuno onemogućeno korišćenje workera kao otvorenog push releja (open proxy). |
 | **Disabled-default kapija** | Funkcija `probeEnabled(env)` proverava da li je `PROBE_SEND_ENABLED === '1'`. Ako nije, i registracija i slanje vraćaju 404 `probe_disabled`. | **ODLIČNO** — na produkciji je slanje trenutno onemogućeno (`enabled: false`). |
 | **Istek i Rate Limiting** | Implementirano u `src/limits.ts`: dozvoljeno je maksimalno 3 slanja po registraciji (`MAX_PROBE_SENDS_PER_REGISTRATION = 3`) i najviše 3 slanja po satu. Četvrti zahtev vraća HTTP 429 `rate_limited`. | **ODLIČNO** — sprečava iscrpljivanje Google i Cloudflare kvota. |
 | **Opozvane registracije** | Klijent može pozvati `/api/probe/unregister` koji postavlja `revokedAtMs`. Ako FCM API javi 404 `UNREGISTERED` (obrisana aplikacija na telefonu), worker registraciju automatski gasi u bazi. | **ODLIČNO** — eliminiše nepotrebne podzahteve ka neaktivnim uređajima. |
@@ -180,11 +226,11 @@ Rezultati (izvršeno na lokalnom `workerd` preko Miniflare `5.20260926.0-alpha` 
 
 ---
 
-## 4. Status raspoređivanja i spremnost konfiguracije (Cloud State)
+## 5. Status raspoređivanja i spremnost konfiguracije (Cloud State)
 
 Nalazi utvrđeni bezbednim inspekcijama komandama `gcloud`, `firebase`, `npx wrangler` i `curl`:
 
-### 4.1. Cloudflare Workers
+### 5.1. Cloudflare Workers
 - **Javni URL workera:**  
   `https://matchahead-push-probe.mls-ivanovic.workers.dev`
 - **Javni status probe:**  
@@ -216,9 +262,9 @@ Nalazi utvrđeni bezbednim inspekcijama komandama `gcloud`, `firebase`, `npx wra
   - `appId`: `1:298957530037:web:e60964d052cc34662d6ffc`
   - `vapidKey`: `BIXoXsMLvzfyDPgtoqB_9E3ECgtafBAuLkvx5IVb5YpaIIy2fIrUbGifd2qaYuP2vFQhm4VlkKYgoAAdYzreBLk`
 
-### 4.2. Google Cloud i Firebase
+### 5.2. Google Cloud i Firebase
 - **Projekat:** `matchahead` (Project Number `298957530037`).
-- **Plan:** Spark (besplatni nivo, Firestore koristi `freeTier: true` u višenamenskoj regiji `eur3`). Status naplate samog krovnog Google naloga nije eksplicitno proveravan.
+- **Firestore nivo kvote:** `freeTier: true` u višenamenskoj regiji `eur3`. *(Napomena: Oznaka `freeTier: true` na samoj bazi podataka potvrđuje besplatni nivo korišćenja baze, ali sama po sebi ne dokazuje da li krovni Google Cloud nalog ima pridružen instrument plaćanja ili je striktno na Spark planu).*
 - **Aktivni FCM API servisi:**
   - `fcm.googleapis.com` (Firebase Cloud Messaging API) — **Omogućen**
   - `fcmregistrations.googleapis.com` (FCM Registration API) — **Omogućen**
@@ -229,7 +275,7 @@ Nalazi utvrđeni bezbednim inspekcijama komandama `gcloud`, `firebase`, `npx wra
 
 ---
 
-## 5. Da li se FCM može testirati i tačni preostali blokeri
+## 6. Da li se FCM može testirati i tačni preostali blokeri
 
 ### Može li se FCM isporuka testirati u ovom trenutku?
 **NE.** Sistem je bezbedno zaključan i spreman za kontrolisano testiranje, ali slanje poruka i registracija su blokirani na Cloudflare nivou.
@@ -238,113 +284,103 @@ Nalazi utvrđeni bezbednim inspekcijama komandama `gcloud`, `firebase`, `npx wra
 
 1. **Bloker 1 (Nedostaje tajna za registraciju):** Tajna `PROBE_ENROLL_SECRET` nije uneta u Cloudflare Secrets store. Korisnik u interfejsu probe mora uneti istu lozinku koja je konfigurisana na serveru.
 2. **Bloker 2 (Kapija slanja je zatvorena):** Promenljiva/tajna `PROBE_SEND_ENABLED` nije postavljena na `1`. Bez ovoga, server odbija sve zahteve sa `404 probe_disabled`.
-3. **Bloker 3 (Fizički mobilni uređaji nisu testirani — `NOT_TESTED`):**
-   - **Android:** PWA mora biti otvorena u Chrome-u, zatražena dozvola, aplikacija poslata u pozadinu ili potpuno zatvorena (swipe away), pa potvrđen prijem sistemskog obaveštenja.
+3. **Bloker 3 (Raskorak koda radnika):** Produkcija koristi Durable Object (`ProbeDirectoryObject`), dok repozitorijum ima samo in-memory model. Pre novih deploymenta neophodno je uskladiti kod.
+4. **Bloker 4 (Fizički mobilni uređaji nisu testirani — `NOT_TESTED`):**
+   - **Android:** PWA mora biti otvorena u Chrome-u, izvršena registracija, a zatim aplikacija **potpuno zatvorena pre slanja**, pa potvrđen prijem sistemskog obaveštenja.
    - **iPhone / iPad (iOS 16.4+):** Web Push na Apple uređajima radi **isključivo** kada se sajt doda na početni ekran („Add to Home Screen”) kao instalirana PWA i pokrene kao standalone prozor pre traženja dozvole.
-4. **Bloker 4 (Edge `cpuTime` nije očitan):** Tokom live poziva potrebno je kroz `npx wrangler tail` očitati stvarni `cpuTime` kako bi se potvrdilo da hladan start i WebCrypto potpis na Cloudflare edge infrastrukturi ne probijaju granicu od 10 ms.
-5. **Bloker 5 (Lokalni `config.json` u repozitorijumu):** Za lokalno testiranje preko `npm run serve`, operater mora kopirati javne vrednosti iz sekcije 4.1 u `experiments/push-probe/pwa/config.json`.
+5. **Bloker 5 (Edge `cpuTime` nije očitan):** Tokom live poziva potrebno je kroz `npx wrangler tail` očitati stvarni `cpuTime` kako bi se potvrdilo da hladan start i WebCrypto potpis na Cloudflare edge infrastrukturi ne probijaju granicu od 10 ms.
+6. **Bloker 6 (Lokalni `config.json` u repozitorijumu):** Za lokalno testiranje preko `npm run serve`, operater mora kopirati javne vrednosti iz sekcije 5.1 u `experiments/push-probe/pwa/config.json`.
 
 ---
 
-## 6. Akcioni plan verifikacije (Actionable Proof Plan)
+## 7. Akcioni plan verifikacije (Actionable Proof Plan za zatvorenu PWA)
 
-Kada koordinator i korisnik odobre izvođenje fizičke probe, sledeći koraci vode do prevođenja statusa iz `NOT_TESTED` u `PASS` ili `FAIL`:
+### Zašto je stari pristup „pošalji sebi pa zatvori” bio nevalidan?
+Ako korisnik u otvorenoj aplikaciji pritisne dugme za slanje i zatim pokuša da je brzo zatvori, mrežni zahtev, prijem odgovora ili čak sam push event mogu pristići dok je instanca pregledača/PWA još uvek u memoriji ili u toku tranzicije. **To ne dokazuje isporuku na zatvorenu PWA.**
+
+Da bi test bio metodološki validan i dokazao buđenje zatvorene aplikacije:
+1. Ciljni uređaj (mobilni telefon) se registruje i dobije svoj `registrationId` i `registrationSecret`.
+2. Aplikacija i pregledač na telefonu se **POTPUNO ZATVORE** (swipe away iz menija nedavnih aplikacija / task switcher-a) pre bilo kakvog slanja.
+3. Slanje se inicira sa **zasebnog autorizovanog pošiljaoca** (npr. preko `curl` sa radne stanice ili administratorskog računara) navođenjem dobijenog `registrationId` i `registrationSecret`.
+4. Tek kada telefon primi sistemsko obaveštenje dok je aplikacija potpuno ugašena, isporuka se smatra dokazanom.
 
 ```text
-               +-------------------------------------------+
-               |  1. Postavljanje Cloudflare tajni         |
-               |     npx wrangler secret put PROBE_ENROLL  |
-               |     npx wrangler secret put PROBE_SEND    |
-               +---------------------+---------------------+
-                                     |
-                                     v
-               +-------------------------------------------+
-               |  2. Provera živog statusa                 |
-               |     GET /api/probe/status -> enabled:true |
-               +---------------------+---------------------+
-                                     |
-                                     v
-               +-------------------------------------------+
-               |  3. Pokretanje praćenja logova            |
-               |     npx wrangler tail matchahead-push-... |
-               +---------------------+---------------------+
-                                     |
-                                     v
-               +-------------------------------------------+
-               |  4. Registracija na telefonu              |
-               |     Unos tajne probe -> Dozvola -> FID    |
-               +---------------------+---------------------+
-                                     |
-                                     v
-               +-------------------------------------------+
-               |  5. Zatvaranje PWA aplikacije na telefonu |
-               |     (Swipe away iz task managera)         |
-               +---------------------+---------------------+
-                                     |
-                                     v
-               +-------------------------------------------+
-               |  6. Slanje probne notifikacije            |
-               |     (FCM HTTP v1 šalje ka FID-u)          |
-               +---------------------+---------------------+
-                                     |
-                     +---------------+---------------+
-                     |                               |
-                     v                               v
-         [Notifikacija stigla]             [Nije stigla / Greška]
-                     |                               |
-                     v                               v
-       +---------------------------+   +---------------------------+
-       | Provera klika -> URL      |   | Provera FCM greške u logu |
-       | Provera cpuTime u logu    |   | Analiza uzroka            |
-       | STATUS: PASS              |   | STATUS: FAIL              |
-       +-------------+-------------+   +-------------+-------------+
-                     |                               |
-                     +---------------+---------------+
-                                     |
-                                     v
-               +-------------------------------------------+
-               |  7. Bezbedno gašenje kapije               |
-               |     PROBE_SEND_ENABLED=0                  |
-               +-------------------------------------------+
+       [ CILJNI UREĐAJ - TELEFON ]               [ ZASEBNI POŠILJALAC - RADNA STANICA ]
+                   |                                               |
+         1. Registracija                                           |
+         (Unos PROBE_ENROLL_SECRET)                                |
+                   |                                               |
+         2. Prikaz/Očitavanje                                      |
+         registrationId & secret -----------------------------> 3. Preuzimanje ID/tajne
+                   |                                               |
+         4. POTPUNO ZATVARANJE PWA                                 |
+         (Swipe away iz App Switchera,                             |
+          telefon zaključan / idle)                                |
+                   |                                               |
+                   |                                    5. Slanje preko curl-a:
+                   |                                       POST /api/probe/send
+                   |                                       (ka registrationId telefona)
+                   |                                               |
+                   |<----------------[ FCM Push ]------------------+
+                   |
+         6. Buđenje sistemskog obaveštenja
+            na zaključanom ekranu!
+                   |
+         7. Klik otvara /poruka.html
+            -> STATUS: PASS
 ```
 
 ### Korak po korak instrukcije za operatera:
 
-1. **Aktivacija kapije i tajne na Cloudflare-u:**
+1. **Generisanje sigurne tajne visoke entropije (NE koristiti predvidive lozinke):**
+   ```bash
+   # Generisanje slučajne heksadecimalne tajne (24 bajta / 48 karaktera):
+   ENROLL_SECRET=$(openssl rand -hex 24)
+   echo "Generisana tajna: $ENROLL_SECRET"
+   ```
+2. **Aktivacija kapije i tajne na Cloudflare-u:**
    ```bash
    $ npx wrangler secret put PROBE_ENROLL_SECRET --name matchahead-push-probe
-   # Uneti odabranu privremenu lozinku (npr. proba-2026)
+   # Uneti generisanu vrednost $ENROLL_SECRET
 
    $ npx wrangler secret put PROBE_SEND_ENABLED --name matchahead-push-probe
    # Uneti vrednost: 1
    ```
-2. **Provera statusa radnika:**
+3. **Provera statusa radnika:**
    ```bash
    $ curl -s https://matchahead-push-probe.mls-ivanovic.workers.dev/api/probe/status
    # Očekivani odgovor: {"enabled":true,"fcmConfigured":true,...}
    ```
-3. **Pokretanje Workers tail sesije u posebnom terminalu:**
+4. **Pokretanje Workers tail sesije na računaru za praćenje CPU potrošnje:**
    ```bash
    $ npx wrangler tail matchahead-push-probe --format pretty
    ```
-4. **Test na Android telefonu:**
-   - Otvoriti Chrome i posetiti `https://matchahead-push-probe.mls-ivanovic.workers.dev/`.
-   - U polje "Ključ probe" uneti privremenu lozinku.
-   - Kliknuti na taster "Uključi probu". Kada browser zatraži dozvolu za obaveštenja, odabrati "Dozvoli" (Allow).
-   - Sačekati poruku: "Uređaj je registrovan za probu".
-   - Kliknuti na taster "Pošalji probnu poruku sebi".
-   - Odmah prevući prstom i potpuno zatvoriti Chrome i PWA prozor.
-   - **Kriterijum uspeha:** U roku od nekoliko sekundi na zaključanom ekranu ili u sistemskoj traci Androida pojavljuje se sistemska notifikacija "MatchAhead proba" sa tekstom "Sintetička poruka. Ovo nije utakmica.".
-   - Kliknuti na obaveštenje: Mora se otvoriti stranica `/poruka.html?probe=synthetic&id=...` sa detaljima poruke.
-5. **Test na iPhone uređaju (iOS 16.4+):**
-   - Otvoriti Safari i posetiti `https://matchahead-push-probe.mls-ivanovic.workers.dev/`.
-   - Pritisnuti dugme Share (Deli) i odabrati "Add to Home Screen" (Dodaj na početni ekran).
-   - Izaći iz Safarija i pokrenuti aplikaciju MatchAhead sa početnog ekrana.
-   - Ponoviti proceduru unosa ključa, davanja dozvole, zatvaranja aplikacije i prijema notifikacije.
-6. **Očitavanje CPU vremena iz tail loga:**
-   - Proveriti polje `cpuTime` u zabeleženim Workers Log zapisima za `POST /api/probe/send`.
-   - Potvrditi da je `cpuTime <= 10 ms`.
-7. **Vraćanje u sigurno stanje (Deaktivacija kapije):**
+5. **Registracija na telefonu:**
+   - **Android:** Otvoriti Chrome i posetiti `https://matchahead-push-probe.mls-ivanovic.workers.dev/`.
+   - **iPhone (iOS 16.4+):** Otvoriti Safari, pritisnuti Share -> "Add to Home Screen", pa pokrenuti instaliranu ikonu sa početnog ekrana.
+   - U polje "Ključ probe" uneti `$ENROLL_SECRET`.
+   - Kliknuti na taster "Uključi probu". Browser traži dozvolu za notifikacije -> odabrati "Dozvoli" (Allow).
+   - Na ekranu se ispisuje potvrda o registraciji sa `registrationId` i `registrationSecret`. Zabeležiti te vrednosti na računaru.
+6. **POTPUNO ZATVARANJE APLIKACIJE NA TELEFONU:**
+   - Izaći na početni ekran.
+   - Otvoriti Task Switcher (pregled pokrenutih aplikacija) i **prevući prstom nagore (swipe away)** kako bi se Chrome / PWA potpuno izbacila iz radne memorije.
+   - Zaključati telefon ili ga ostaviti na stolu.
+7. **Slanje probne notifikacije sa zasebne radne stanice (terminala):**
+   ```bash
+   $ curl -X POST https://matchahead-push-probe.mls-ivanovic.workers.dev/api/probe/send \
+       -H "content-type: application/json" \
+       -d '{
+         "registrationId": "<REGISTRATION_ID_SA_TELEFONA>",
+         "registrationSecret": "<REGISTRATION_SECRET_SA_TELEFONA>"
+       }'
+   ```
+8. **Kriterijum uspeha i verifikacija:**
+   - **Prijem sistemske notifikacije:** U roku od nekoliko sekundi, na zaključanom ekranu telefona pojavljuje se sistemska notifikacija:  
+     *Naslov:* `MatchAhead proba`  
+     *Tekst:* `Sintetička poruka. Ovo nije utakmica.`
+   - **Interaktivni klik:** Klik na obaveštenje mora probuditi pregledač i otvoriti tačnu rutu `/poruka.html?probe=synthetic&id=...`.
+   - **Očitavanje CPU vremena:** U pokrenutom `wrangler tail` terminalu pronaći zapis poziva i očitati `cpuTime`. Potvrditi da je `cpuTime <= 10 ms`.
+9. **Vraćanje u sigurno stanje (Deaktivacija kapije po završetku testa):**
    ```bash
    $ npx wrangler secret put PROBE_SEND_ENABLED --name matchahead-push-probe
    # Uneti vrednost: 0
@@ -352,10 +388,13 @@ Kada koordinator i korisnik odobre izvođenje fizičke probe, sledeći koraci vo
 
 ---
 
-## 7. Predloženi opsežni sledeći koraci (Scoped Followups)
+## 8. Predloženi opsežni sledeći koraci (Scoped Followups)
 
-1. **Paralelni rad (Faza 04):** Rad na fazi 04 (Google Auth i Firestore bezbednosna pravila) može nesmetano da teče. Push-probe je potpuno izolovan na namenskom Cloudflare origin-u i ne ometa rad na `apps/web` i GitHub Pages.
-2. **Buduća integracija (Faza 09 — Push na uređaju):**
+1. **Usklađivanje koda radnika sa produkcijom (Scoped Followup 1):**  
+   Pre bilo kakvog novog postavljanja radnika na Cloudflare, potrebno je kreirati zadatak za sinhronizaciju koda: uneti definiciju `ProbeDirectoryObject` Durable Object-a u `src/` i konfigurisati `wrangler.jsonc` tako da repozitorijum verno odražava produkciju i omogući testiranje Durable Object perzistencije.
+2. **Paralelni rad (Faza 04):**  
+   Rad na fazi 04 (Google Auth i Firestore bezbednosna pravila) može nesmetano da teče. Push-probe je potpuno izolovan na namenskom Cloudflare origin-u i ne ometa rad na `apps/web` i GitHub Pages.
+3. **Buduća integracija (Faza 09 — Push na uređaju):**  
    Kada dođe vreme za uvođenje push funkcionalnosti u glavni klijent (`apps/web`), rešenje iz `experiments/push-probe` poslužiće kao direktna osnova:
    - Zadržati `firebase/messaging` sa `register` / `onRegistered` pozivima.
    - U bazi korisnika čuvati isključivo `fid` polje.
