@@ -1,6 +1,9 @@
 import { createProbeApp, type ProbeEnv } from './app.ts';
+import { ProbeDirectoryObject } from './directory-object.ts';
 
 const app = createProbeApp();
+
+export { ProbeDirectoryObject };
 
 export default {
   fetch(request: Request, env: ProbeEnv): Promise<Response> {

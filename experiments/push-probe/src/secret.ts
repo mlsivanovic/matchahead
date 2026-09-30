@@ -1,3 +1,11 @@
+export function decodeBase64Url(value: string): Uint8Array {
+  const padded = value.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - (value.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
 export function encodeBase64Url(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -16,6 +24,12 @@ export function timingSafeEqualBytes(left: Uint8Array, right: Uint8Array): boole
 export async function sha256(value: string): Promise<Uint8Array> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return new Uint8Array(digest);
+}
+
+/** Pod prihvata samo dugu tajnu sa dovoljno različitih znakova. Kratka lozinka ne otvara upis. */
+export function enrollSecretAccepted(secret: string): boolean {
+  if (secret.length < 32) return false;
+  return new Set(secret).size >= 16;
 }
 
 export async function secretMatches(candidate: string, expected: string): Promise<boolean> {

@@ -8,5 +8,20 @@
     "directory": "./pwa",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
-  }
+  },
+  // Tag v1-probe-directory je već primenjen na postojeći SQLite namespace. Ne deploy-ovati iz ovog zadatka.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PROBE_DIRECTORY",
+        "class_name": "ProbeDirectoryObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-probe-directory",
+      "new_sqlite_classes": ["ProbeDirectoryObject"]
+    }
+  ]
 }

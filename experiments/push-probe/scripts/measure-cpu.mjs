@@ -7,7 +7,7 @@ import { Miniflare } from 'miniflare';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist/worker.js');
-const enroll = `measure-${crypto.randomUUID()}`;
+const enroll = 'measure-a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4';
 
 function pemFromNode() {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });

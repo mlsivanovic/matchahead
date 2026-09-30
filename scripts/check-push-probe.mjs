@@ -14,10 +14,32 @@ function run(command, args) {
 run('npm', ['run', 'check']);
 run('node', ['scripts/build-client.mjs']);
 
-for (const relative of ['pwa/app.js', 'pwa/firebase-messaging-sw.js', 'src/worker.ts', 'src/app.ts']) {
+for (const relative of [
+  'pwa/app.js',
+  'pwa/firebase-messaging-sw.js',
+  'src/worker.ts',
+  'src/app.ts',
+  'src/directory.ts',
+  'src/directory-object.ts',
+  'wrangler.jsonc',
+]) {
   const source = readFileSync(resolve(probe, relative), 'utf8');
   if (source.includes('BEGIN PRIVATE KEY') || source.includes('BEGIN RSA PRIVATE KEY')) {
     console.error(`${relative} sadrži privatni ključ`);
+    process.exit(1);
+  }
+}
+
+const workerSource = readFileSync(resolve(probe, 'src/worker.ts'), 'utf8');
+if (!workerSource.includes('export { ProbeDirectoryObject }')) {
+  console.error('worker ne izvozi ProbeDirectoryObject');
+  process.exit(1);
+}
+
+const wranglerSource = readFileSync(resolve(probe, 'wrangler.jsonc'), 'utf8');
+for (const needle of ['PROBE_DIRECTORY', 'ProbeDirectoryObject', 'v1-probe-directory', 'new_sqlite_classes']) {
+  if (!wranglerSource.includes(needle)) {
+    console.error(`wrangler.jsonc nema ${needle}`);
     process.exit(1);
   }
 }

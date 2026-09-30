@@ -28,7 +28,7 @@ export function bytesFromBase64Url(value: string): Uint8Array {
 }
 
 export const VALID_FID = 'cAAAAAAAAAAAAAAAAAAAAA';
-export const ENROLL = 'enroll-test-secret';
+export const ENROLL = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718';
 
 export function probeEnv(pem: string) {
   return {

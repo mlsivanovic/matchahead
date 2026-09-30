@@ -12,7 +12,7 @@ import { syntheticFcmMessage, SYNTHETIC_BODY } from '../src/message.ts';
 import { decidePermission } from '../src/permission.ts';
 import { createRateLimiter } from '../src/rate.ts';
 import { parseRegistrationBody } from '../src/registration.ts';
-import { secretMatches } from '../src/secret.ts';
+import { enrollSecretAccepted, secretMatches } from '../src/secret.ts';
 import { selectableTeams } from '../../../packages/domain/src/selectable-teams.ts';
 import { VALID_FID } from './helpers.ts';
 
@@ -113,6 +113,10 @@ test('tajna se poredi i kad je pogrešna, a prazna očekivana ne prolazi', async
   assert.equal(await secretMatches('tačno', 'tačno'), true);
   assert.equal(await secretMatches('drugo', 'tačno'), false);
   assert.equal(await secretMatches('tačno', ''), false);
+  assert.equal(enrollSecretAccepted(''), false);
+  assert.equal(enrollSecretAccepted('enroll-test-secret'), false);
+  assert.equal(enrollSecretAccepted('a'.repeat(40)), false);
+  assert.equal(enrollSecretAccepted('a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718'), true);
 });
 
 test('ograničenje broja pokušaja staje na granici', () => {

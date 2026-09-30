@@ -1,4 +1,11 @@
 import { probeClickUrl } from './click.ts';
+import {
+  DirectoryUnavailable,
+  remoteProbeDirectory,
+  type ProbeDirectory,
+  type ProbeDirectoryNamespace,
+  type StoredRegistration,
+} from './directory.ts';
 import { timeFirestoreParse } from './firestore-measure.ts';
 import {
   type CachedAccessToken,
@@ -16,9 +23,8 @@ import {
   SENDS_PER_WORKER_PER_UTC_DAY,
 } from './limits.ts';
 import { SYNTHETIC_TITLE, syntheticFcmMessage } from './message.ts';
-import { createRateLimiter, type RateLimiter } from './rate.ts';
 import { parseRegistrationBody } from './registration.ts';
-import { encodeBase64Url, secretMatches, sha256, timingSafeEqualBytes } from './secret.ts';
+import { decodeBase64Url, encodeBase64Url, enrollSecretAccepted, secretMatches, sha256, timingSafeEqualBytes } from './secret.ts';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -33,6 +39,7 @@ export interface ProbeEnv {
   FCM_PRIVATE_KEY?: string;
   PUBLIC_BASE_URL?: string;
   TOKEN_CACHE?: TokenCacheKv;
+  PROBE_DIRECTORY?: ProbeDirectoryNamespace;
   ASSETS?: { fetch(request: Request): Promise<Response> };
 }
 
@@ -41,15 +48,7 @@ export interface ProbeDeps {
   now: () => number;
   randomUUID: () => string;
   randomBytes: (size: number) => Uint8Array;
-}
-
-interface Registration {
-  registrationId: string;
-  fid: string;
-  followedTeamId: string | null;
-  opponentLabel: string | null;
-  selfSendKeyHash: Uint8Array;
-  createdAtMs: number;
+  directory?: ProbeDirectory;
 }
 
 export interface ScheduledResult {
@@ -127,9 +126,17 @@ function iconUrlFor(clickUrl: string): string {
   return new URL(`${basePath}icons/icon-192.png`, click.origin).toString();
 }
 
-async function hashesEqual(candidate: string, expectedHash: Uint8Array): Promise<boolean> {
+async function expectedHash(hashB64: string): Promise<Uint8Array> {
+  try {
+    return decodeBase64Url(hashB64);
+  } catch {
+    return sha256('missing-registration');
+  }
+}
+
+async function hashesEqual(candidate: string, expectedHashBytes: Uint8Array): Promise<boolean> {
   const actual = await sha256(candidate);
-  return timingSafeEqualBytes(actual, expectedHash);
+  return timingSafeEqualBytes(actual, expectedHashBytes);
 }
 
 export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
@@ -140,9 +147,19 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
     randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),
     ...overrides,
   };
-  const registrations = new Map<string, Registration>();
-  const limiter: RateLimiter = createRateLimiter();
   let memoryToken: CachedAccessToken | null = null;
+
+  function resolveDirectory(env: ProbeEnv): ProbeDirectory | null {
+    if (deps.directory) return deps.directory;
+    if (!env.PROBE_DIRECTORY) return null;
+    return remoteProbeDirectory(env.PROBE_DIRECTORY);
+  }
+
+  function directoryOrResponse(env: ProbeEnv): ProbeDirectory | Response {
+    const directory = resolveDirectory(env);
+    if (!directory) return problem(503, 'store_not_bound');
+    return directory;
+  }
 
   async function loadToken(env: ProbeEnv, nowMs: number): Promise<{ token: CachedAccessToken | null; source: 'memory' | 'kv' | 'miss'; kvWaitMs: number; parseMs: number }> {
     if (memoryToken && memoryToken.expiresAtMs > nowMs + 60_000 && memoryToken.scope === FCM_SCOPE) {
@@ -222,8 +239,9 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
     };
   }
 
-  async function authorizedEnroll(request: Request, env: ProbeEnv): Promise<'missing' | 'rejected' | 'ok'> {
+  async function authorizedEnroll(request: Request, env: ProbeEnv): Promise<'missing' | 'weak' | 'rejected' | 'ok'> {
     if (!env.PROBE_ENROLL_SECRET) return 'missing';
+    if (!enrollSecretAccepted(env.PROBE_ENROLL_SECRET)) return 'weak';
     const supplied = request.headers.get('x-matchahead-enroll') ?? '';
     const matches = await secretMatches(supplied, env.PROBE_ENROLL_SECRET);
     return matches ? 'ok' : 'rejected';
@@ -245,6 +263,17 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
     if (!originAllowed(request)) return problem(403, 'origin_rejected');
 
     if (url.pathname === '/api/probe/status' && request.method === 'GET') {
+      const directory = resolveDirectory(env);
+      let store = 'none';
+      let storeBound = false;
+      if (directory) {
+        store = deps.directory ? 'shared-directory' : 'durable-object';
+        try {
+          storeBound = await directory.health();
+        } catch {
+          storeBound = false;
+        }
+      }
       return Response.json({
         enabled: probeEnabled(env),
         fcmConfigured: fcmConfigured(env),
@@ -252,48 +281,65 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
         identifier: 'fid',
         delivery: 'NOT_TESTED',
         synthetic: true,
+        store,
+        storeBound,
       }, { headers: { 'cache-control': 'no-store' } });
     }
 
     if (!probeEnabled(env)) return problem(404, 'probe_disabled');
 
     if (url.pathname === '/api/registrations' && request.method === 'POST') {
+      const directory = directoryOrResponse(env);
+      if (directory instanceof Response) return directory;
       const enroll = await authorizedEnroll(request, env);
       if (enroll === 'missing') return problem(503, 'enroll_not_configured');
+      if (enroll === 'weak') return problem(503, 'enroll_weak');
       if (enroll === 'rejected') return problem(401, 'enroll_rejected');
       const body = await readJson(request);
       if (!body.ok) return body.response;
       const parsed = parseRegistrationBody(body.value);
       if (!parsed.ok) return problem(parsed.status, parsed.error);
-      if (!limiter.take('register', deps.now(), REGISTRATIONS_PER_HOUR, HOUR_MS)) {
-        return problem(429, 'rate_limited');
+      try {
+        if (!await directory.take('register', deps.now(), REGISTRATIONS_PER_HOUR, HOUR_MS)) {
+          return problem(429, 'rate_limited');
+        }
+        const registrationId = deps.randomUUID();
+        const selfSendKey = encodeBase64Url(deps.randomBytes(32));
+        await directory.save({
+          registrationId,
+          fid: parsed.value.fid,
+          followedTeamId: parsed.value.followedTeamId,
+          opponentLabel: parsed.value.opponentLabel,
+          selfSendKeyHashB64: encodeBase64Url(await sha256(selfSendKey)),
+          createdAtMs: deps.now(),
+        });
+        return Response.json({ registrationId, selfSendKey }, {
+          status: 201,
+          headers: { 'cache-control': 'no-store' },
+        });
+      } catch (error) {
+        if (error instanceof DirectoryUnavailable) return problem(503, 'directory_unavailable');
+        throw error;
       }
-      const registrationId = deps.randomUUID();
-      const selfSendKey = encodeBase64Url(deps.randomBytes(32));
-      registrations.set(registrationId, {
-        registrationId,
-        fid: parsed.value.fid,
-        followedTeamId: parsed.value.followedTeamId,
-        opponentLabel: parsed.value.opponentLabel,
-        selfSendKeyHash: await sha256(selfSendKey),
-        createdAtMs: deps.now(),
-      });
-      return Response.json({ registrationId, selfSendKey }, {
-        status: 201,
-        headers: { 'cache-control': 'no-store' },
-      });
     }
 
     const deletion = /^\/api\/registrations\/([^/]+)$/.exec(url.pathname);
     if (deletion && request.method === 'DELETE') {
+      const directory = directoryOrResponse(env);
+      if (directory instanceof Response) return directory;
       const registrationId = deletion[1];
       const key = bearer(request);
       if (!key || !UUID_PATTERN.test(registrationId)) return problem(401, 'self_send_rejected');
-      const registration = registrations.get(registrationId);
-      if (!registration || !(await hashesEqual(key, registration.selfSendKeyHash))) {
-        return problem(401, 'self_send_rejected');
+      try {
+        const registration = await directory.read(registrationId, deps.now());
+        if (!registration || !(await hashesEqual(key, await expectedHash(registration.selfSendKeyHashB64)))) {
+          return problem(401, 'self_send_rejected');
+        }
+        await directory.remove(registrationId);
+      } catch (error) {
+        if (error instanceof DirectoryUnavailable) return problem(503, 'directory_unavailable');
+        throw error;
       }
-      registrations.delete(registrationId);
       return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
     }
 
@@ -309,23 +355,35 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
       if (typeof record.registrationId !== 'string' || !UUID_PATTERN.test(record.registrationId)) {
         return problem(401, 'self_send_rejected');
       }
+      const directory = directoryOrResponse(env);
+      if (directory instanceof Response) return directory;
       const key = bearer(request);
       if (!key) return problem(401, 'self_send_required');
-      const registration = registrations.get(record.registrationId);
-      const authorized = await hashesEqual(key, registration?.selfSendKeyHash ?? await sha256('missing-registration'));
-      if (!registration || !authorized) {
-        if (!limiter.take(`auth-fail:${record.registrationId}`, deps.now(), AUTH_FAILURES_PER_HOUR, HOUR_MS)) {
+      let registration: StoredRegistration | null = null;
+      try {
+        registration = await directory.read(record.registrationId, deps.now());
+        const expected = registration
+          ? await expectedHash(registration.selfSendKeyHashB64)
+          : await sha256('missing-registration');
+        const authorized = await hashesEqual(key, expected);
+        if (!registration || !authorized) {
+          if (!await directory.take(`auth-fail:${record.registrationId}`, deps.now(), AUTH_FAILURES_PER_HOUR, HOUR_MS)) {
+            return problem(429, 'rate_limited');
+          }
+          return problem(401, 'self_send_rejected');
+        }
+        const dayKey = `send-global:${Math.floor(deps.now() / DAY_MS)}`;
+        if (!await directory.take(`send:${registration.registrationId}`, deps.now(), SENDS_PER_REGISTRATION_PER_HOUR, HOUR_MS)) {
           return problem(429, 'rate_limited');
         }
-        return problem(401, 'self_send_rejected');
+        if (!await directory.take(dayKey, deps.now(), SENDS_PER_WORKER_PER_UTC_DAY, DAY_MS)) {
+          return problem(429, 'rate_limited');
+        }
+      } catch (error) {
+        if (error instanceof DirectoryUnavailable) return problem(503, 'directory_unavailable');
+        throw error;
       }
-      const dayKey = `send-global:${Math.floor(deps.now() / DAY_MS)}`;
-      if (!limiter.take(`send:${registration.registrationId}`, deps.now(), SENDS_PER_REGISTRATION_PER_HOUR, HOUR_MS)) {
-        return problem(429, 'rate_limited');
-      }
-      if (!limiter.take(dayKey, deps.now(), SENDS_PER_WORKER_PER_UTC_DAY, DAY_MS)) {
-        return problem(429, 'rate_limited');
-      }
+      if (!registration) return problem(401, 'self_send_rejected');
       if (!fcmConfigured(env)) return problem(503, 'fcm_not_configured');
       let clickUrl: string;
       try {
@@ -351,7 +409,12 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
         body: JSON.stringify(message),
       });
       if (fcmResponse.status === 404) {
-        registrations.delete(registration.registrationId);
+        try {
+          await directory.remove(registration.registrationId);
+        } catch (error) {
+          if (error instanceof DirectoryUnavailable) return problem(503, 'directory_unavailable');
+          throw error;
+        }
         return problem(410, 'fid_not_registered');
       }
       if (!fcmResponse.ok) return problem(502, 'fcm_rejected', { upstreamStatus: fcmResponse.status });
@@ -369,6 +432,7 @@ export function createProbeApp(overrides: Partial<ProbeDeps> = {}) {
     if (url.pathname === '/api/probe/measure' && request.method === 'POST') {
       const enroll = await authorizedEnroll(request, env);
       if (enroll === 'missing') return problem(503, 'enroll_not_configured');
+      if (enroll === 'weak') return problem(503, 'enroll_weak');
       if (enroll === 'rejected') return problem(401, 'enroll_rejected');
       const body = await readJson(request);
       if (!body.ok) return body.response;

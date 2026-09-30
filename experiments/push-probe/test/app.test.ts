@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createProbeApp, type ProbeEnv } from '../src/app.ts';
+import { createProbeApp, type ProbeDeps, type ProbeEnv } from '../src/app.ts';
+import { createMemoryDirectory } from '../src/directory.ts';
 import { TOKEN_CACHE_KEY } from '../src/google-auth.ts';
 import { selectableTeams } from '../../../packages/domain/src/selectable-teams.ts';
 import { ENROLL, VALID_FID, generatePrivateKeyPem, probeEnv } from './helpers.ts';
@@ -16,6 +17,10 @@ function jsonRequest(url: string, body: unknown, headers: Record<string, string>
   });
 }
 
+function trackedApp(overrides: Partial<ProbeDeps> = {}) {
+  return createProbeApp({ directory: createMemoryDirectory(), ...overrides });
+}
+
 async function registerDevice(app: ReturnType<typeof createProbeApp>, env: ProbeEnv, extra: Record<string, unknown> = {}) {
   const response = await app.fetch(jsonRequest('http://127.0.0.1:4173/api/registrations', {
     fid: VALID_FID,
@@ -28,17 +33,19 @@ async function registerDevice(app: ReturnType<typeof createProbeApp>, env: Probe
 test('isključen probe ne otvara slanje, a status ostaje vidljiv', async () => {
   const app = createProbeApp();
   const status = await app.fetch(new Request('http://127.0.0.1:4173/api/probe/status'));
-  const body = await status.json() as { enabled: boolean; delivery: string; identifier: string };
+  const body = await status.json() as { enabled: boolean; delivery: string; identifier: string; store: string; storeBound: boolean };
   assert.equal(body.enabled, false);
   assert.equal(body.delivery, 'NOT_TESTED');
   assert.equal(body.identifier, 'fid');
+  assert.equal(body.store, 'none');
+  assert.equal(body.storeBound, false);
   const send = await app.fetch(jsonRequest('http://127.0.0.1:4173/api/probe/send', { registrationId: 'x' }));
   assert.equal(send.status, 404);
 });
 
 test('slanje ide samo vlasniku registracije i FCM telo nema tuđi sadržaj', async () => {
   const calls: Array<{ url: string; body: string }> = [];
-  const app = createProbeApp({
+  const app = trackedApp({
     fetch: async (input, init) => {
       const url = String(input);
       calls.push({ url, body: String(init?.body ?? '') });
@@ -86,7 +93,7 @@ test('slanje ide samo vlasniku registracije i FCM telo nema tuđi sadržaj', asy
 });
 
 test('četvrto slanje u istom satu je odbijeno', async () => {
-  const app = createProbeApp({
+  const app = trackedApp({
     fetch: async (input) => {
       const url = String(input);
       if (url.includes('oauth2.googleapis.com')) return Response.json({ access_token: 'ya29.test-token', expires_in: 3600 });
@@ -108,7 +115,7 @@ test('četvrto slanje u istom satu je odbijeno', async () => {
 });
 
 test('bez serverskog ključa slanje nije označeno kao uspelo', async () => {
-  const app = createProbeApp({ fetch: async () => { throw new Error('ne sme se zvati'); } });
+  const app = trackedApp({ fetch: async () => { throw new Error('ne sme se zvati'); } });
   const created = await registerDevice(app, { PROBE_SEND_ENABLED: '1', PROBE_ENROLL_SECRET: ENROLL });
   const response = await app.fetch(jsonRequest('http://127.0.0.1:4173/api/probe/send', {
     registrationId: created.registrationId,
@@ -119,7 +126,7 @@ test('bez serverskog ključa slanje nije označeno kao uspelo', async () => {
 });
 
 test('nevažeći FID na FCM-u gasi registraciju', async () => {
-  const app = createProbeApp({
+  const app = trackedApp({
     fetch: async (input) => {
       const url = String(input);
       if (url.includes('oauth2.googleapis.com')) return Response.json({ access_token: 'ya29.test-token', expires_in: 3600 });
@@ -195,6 +202,42 @@ test('KV keš preskače potpis, a živi Firestore ostaje neproveren', async () =
   const firestore = await parsed.json() as { firestoreLive: string; ok: boolean };
   assert.equal(firestore.firestoreLive, 'NOT_TESTED');
   assert.equal(firestore.ok, true);
+});
+
+test('kratka tajna ne otvara upis, a ista mapa preživljava novi objekat aplikacije', async () => {
+  const weak = trackedApp();
+  const rejected = await weak.fetch(jsonRequest('http://127.0.0.1:4173/api/registrations', {
+    fid: VALID_FID,
+  }, { 'x-matchahead-enroll': 'enroll-test-secret' }), {
+    PROBE_SEND_ENABLED: '1',
+    PROBE_ENROLL_SECRET: 'enroll-test-secret',
+  });
+  assert.equal(rejected.status, 503);
+  assert.equal((await rejected.json() as { error: string }).error, 'enroll_weak');
+
+  const directory = createMemoryDirectory();
+  const first = createProbeApp({ directory });
+  const env = probeEnv(material.pem);
+  const created = await registerDevice(first, env);
+  assert.match(created.selfSendKey, /^[A-Za-z0-9_-]{43}$/);
+  const status = await first.fetch(new Request('http://127.0.0.1:4173/api/probe/status'), env);
+  const statusBody = await status.json() as { store: string; storeBound: boolean; enabled: boolean };
+  assert.equal(statusBody.store, 'shared-directory');
+  assert.equal(statusBody.storeBound, true);
+  assert.equal(statusBody.enabled, true);
+
+  const second = createProbeApp({
+    directory,
+    fetch: async (input) => {
+      const url = String(input);
+      if (url.includes('oauth2.googleapis.com')) return Response.json({ access_token: 'ya29.test-token', expires_in: 3600 });
+      return Response.json({ name: 'projects/matchahead-probe/messages/1' });
+    },
+  });
+  const sent = await second.fetch(jsonRequest('http://127.0.0.1:4173/api/probe/send', {
+    registrationId: created.registrationId,
+  }, { authorization: `Bearer ${created.selfSendKey}` }), env);
+  assert.equal(sent.status, 200);
 });
 
 test('tuđe poreklo i tajna u URL-u se odbijaju', async () => {
