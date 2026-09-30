@@ -169,6 +169,169 @@ export function fixturesForFollowed(fixtures: readonly Fixture[], followedTeamId
   return fixtures.filter((fixture) => followedTeamIds.some((teamId) => fixture.homeTeamId === teamId || fixture.awayTeamId === teamId));
 }
 
+/**
+ * Faza 06: čista korisnička agenda kao unija praćenih klubova i ručnih izbora.
+ * Namerno prima samo `followedTeamIds` i `manualFixtureIds` kao readonly nizove
+ * umesto celog korisničkog modela, jer Grok schema (faza 04) još nije gotova.
+ * DEMO podaci; nema Google/ICS tvrdnji, nema mrežnih poziva, nema auth-a.
+ */
+
+/** Razlog uključivanja jednog reda agende. Svi razlozi se čuvaju. */
+export type AgendaInclusionReason =
+  | { kind: 'followed_team'; teamId: string }
+  | { kind: 'manual_selection'; fixtureId: string };
+
+/** Jedan red agende: jedna stabilna fixture ID, svi njeni razlozi. */
+export interface AgendaEntry {
+  fixture: Fixture;
+  reasons: AgendaInclusionReason[];
+}
+
+function followedReasonsForFixture(
+  fixture: Pick<Fixture, 'homeTeamId' | 'awayTeamId'>,
+  followedTeamIds: readonly string[],
+): AgendaInclusionReason[] {
+  const reasons: AgendaInclusionReason[] = [];
+  const seen = new Set<string>();
+  for (const teamId of followedTeamIds) {
+    if (seen.has(teamId)) continue;
+    if (fixture.homeTeamId === teamId || fixture.awayTeamId === teamId) {
+      seen.add(teamId);
+      reasons.push({ kind: 'followed_team', teamId });
+    }
+  }
+  return reasons;
+}
+
+/** Svi razlozi uključivanja za jednu utakmicu. Prazan niz znači: nije u agendi. */
+export function reasonsForFixture(
+  fixture: Pick<Fixture, 'id' | 'homeTeamId' | 'awayTeamId'>,
+  followedTeamIds: readonly string[],
+  manualFixtureIds: readonly string[],
+): AgendaInclusionReason[] {
+  const reasons = followedReasonsForFixture(fixture, followedTeamIds);
+  if (manualFixtureIds.includes(fixture.id)
+    && !reasons.some((reason) => reason.kind === 'manual_selection')) {
+    reasons.push({ kind: 'manual_selection', fixtureId: fixture.id });
+  }
+  return reasons;
+}
+
+/**
+ * Unija praćenja i ručnih izbora, deduplikovana po stabilnom fixture ID-u.
+ * Jedan red po ID-u; povlačenje jednog razloga (ponovni poziv bez njega)
+ * ne uklanja utakmicu koju pokriva drugi razlog. Nepoznati ručni ID se ignoriše.
+ * Redosled: UTC početak rastuće, stabilan dodatni ključ (isto kao postojeće).
+ */
+export function buildUserAgenda(
+  fixtures: readonly Fixture[],
+  followedTeamIds: readonly string[],
+  manualFixtureIds: readonly string[],
+): AgendaEntry[] {
+  const byId = new Map<string, AgendaEntry>();
+  for (const fixture of fixtures) {
+    if (byId.has(fixture.id)) continue;
+    const reasons = reasonsForFixture(fixture, followedTeamIds, manualFixtureIds);
+    if (reasons.length > 0) byId.set(fixture.id, { fixture, reasons });
+  }
+  return [...byId.values()].sort(compareAgendaEntries);
+}
+
+export function compareAgendaEntries(left: AgendaEntry, right: AgendaEntry): number {
+  return compareFixtures(left.fixture, right.fixture);
+}
+
+/** Grupe ekrana „Moje utakmice” iz faze 06. */
+export interface UserAgendaGroups {
+  /** Buduće utakmice sa potvrđenim početkom, bez poremećaja. */
+  upcoming: AgendaEntry[];
+  /** Nepotvrđen sat: nikad ponoć, nikad precizno odbrojavanje. */
+  toBeAnnounced: AgendaEntry[];
+  /** Odloženo ili otkazano (izričita oznaka organizatora). */
+  disrupted: AgendaEntry[];
+  /** Prošlo po rasporedu, uživo-downgrade, prekinuto ili završeno. */
+  archive: AgendaEntry[];
+}
+
+/**
+ * Grupisanje agende u odnosu na `nowMs`. Lokalni datum određuje samo
+ * grupisanje po danima na ekranu, ne i ovu podelu.
+ */
+export function groupUserAgenda(entries: readonly AgendaEntry[], nowMs: number): UserAgendaGroups {
+  const upcoming: AgendaEntry[] = [];
+  const toBeAnnounced: AgendaEntry[] = [];
+  const disrupted: AgendaEntry[] = [];
+  const archive: AgendaEntry[] = [];
+  for (const entry of entries) {
+    const fixture = entry.fixture;
+    if (fixture.status === 'postponed' || fixture.status === 'cancelled') {
+      disrupted.push(entry);
+      continue;
+    }
+    if (fixture.status === 'finished' || fixture.status === 'abandoned' || fixture.status === 'live') {
+      archive.push(entry);
+      continue;
+    }
+    if (fixture.timeConfirmed && fixture.startsAtUtc !== null) {
+      if (Date.parse(fixture.startsAtUtc) < nowMs) archive.push(entry);
+      else upcoming.push(entry);
+    } else {
+      toBeAnnounced.push(entry);
+    }
+  }
+  upcoming.sort(compareAgendaEntries);
+  toBeAnnounced.sort(compareAgendaEntries);
+  disrupted.sort(compareAgendaEntries);
+  archive.sort(compareAgendaEntries);
+  return { upcoming, toBeAnnounced, disrupted, archive };
+}
+
+/**
+ * „Sledeća” nad agendom: najraniji budući potvrđeni početak.
+ * Predikat je namerno isti kao kod postojećeg nextConfirmedFixtures
+ * (isključuje otkazane/završene/prekinute; odložena bez termina otpada jer
+ * nema potvrđen početak). Istovremene vraćaju sve („još N u isto vreme”).
+ */
+export function nextAgendaFixtures(entries: readonly AgendaEntry[], nowMs: number): AgendaEntry[] {
+  const upcoming = entries
+    .filter((entry) => {
+      const fixture = entry.fixture;
+      return fixture.timeConfirmed
+        && fixture.startsAtUtc !== null
+        && fixture.status !== 'cancelled'
+        && fixture.status !== 'finished'
+        && fixture.status !== 'abandoned'
+        && Date.parse(fixture.startsAtUtc) >= nowMs;
+    })
+    .sort(compareAgendaEntries);
+  if (upcoming.length === 0) return [];
+  const kick = upcoming[0]?.fixture.startsAtUtc;
+  return upcoming.filter((entry) => entry.fixture.startsAtUtc === kick);
+}
+
+/**
+ * Bezbedan status posle prolaska termina: bez pouzdanog live izvora nikad
+ * „Uživo” ni izvedeno „Završeno” — samo „Počela prema rasporedu”.
+ * Izričit `finished` organizatora ostaje „Završeno”; izričit `live` se
+ * namerno spušta na istu bezbednu rečenicu.
+ */
+export function scheduleStatusLabel(fixture: Fixture, nowMs: number): string {
+  if (fixture.status === 'finished') return 'Završeno';
+  if (fixture.status === 'cancelled') return 'Otkazano';
+  if (fixture.status === 'postponed') return 'Odloženo';
+  if (fixture.status === 'abandoned') return 'Prekinuto';
+  if (fixture.status === 'live') return 'Počela prema rasporedu';
+  if (fixture.timeConfirmed && fixture.startsAtUtc !== null && Date.parse(fixture.startsAtUtc) < nowMs) {
+    return 'Počela prema rasporedu';
+  }
+  return statusLabel(fixture.status);
+}
+
+/** Kompatibilnost: sledeća nad sirovim Fixture nizom (postoji od ranije, ostaje). */
+export function nextAgendaFixturesFromFixtures(fixtures: readonly Fixture[], nowMs: number): Fixture[] {
+  return nextConfirmedFixtures(fixtures, nowMs);
+}
+
 export function fixtureTitle(
   fixture: Pick<Fixture, 'homeTeamId' | 'awayTeamId'>,
   teams: readonly { id: string; name: string }[],
