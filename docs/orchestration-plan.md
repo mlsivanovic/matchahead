@@ -42,7 +42,7 @@ Nakon završetka rada Groka i Muse-a:
 | **07** | Automatski kalendar (ICS) | Čeka integraciju | **DA** (generisanje standardnog RFC 5545 ICS fajla iz agende) | Za live distribuciju: javni HTTPS hosting bezbedan od curenja ličnih podataka |
 | **08** | Ručni Google Calendar upis | Čeka fazu 04 | Delimično (mock OAuth tokena i Calendar API tela) | Za live: Google Calendar OAuth saglasnost i nalog sa pravima upisa |
 | **09** | Push notifikacije na uređaju | Čeka fazu 04 (FID) i 02 | Delimično (lokalni workerd potpis prolazi) | **DA** (fizički Android i iPhone telefoni, VAPID ključ, instalirana zatvorena PWA) |
-| **10** | Zakazivanje podsetnika | Čeka faze 06, 08 i 09 | **DA** (logika izračunavanja termina -2h/-24h, mock crona) | Za live: Cloudflare Workers Cron Trigger i siguran limit CPU vremena (< 10 ms) |
+| **10** | Zakazivanje podsetnika | Čeka faze 06, 08 i 09 | **DA** (logika izračunavanja termina 15/30/60 min, mock crona) | Za live: Cloudflare Workers Cron Trigger i siguran limit CPU vremena (< 10 ms) |
 | **11** | Provera celog toka | Čeka sve prethodne celine | Delimično | **DA** (krajnji E2E test na mobilnom uređaju) |
 | **12** | Pilot i predaja | Završna faza | Ne | **DA** (stvarni korisnici na telefonima tokom takmičarskih kola) |
 
@@ -58,6 +58,6 @@ Nakon završetka rada Groka i Muse-a:
 - Generisanje ICS tekstualnog formata.
 
 ### B. Zahteva stvarne spoljne servise ili fizičke uređaje
-- **Stvarni sportski podaci:** Nijedan besplatan API ne daje kompletan raspored za FK/KK Partizan i FK/KK Crvenu zvezdu uz pravo redistribucije. Bez komercijalnog ugovora ili dozvole, aplikacija mora ostati na opciji eksternih klupskih linkova ili sintetičkog DEMO rasporeda.
+- **Stvarni sportski podaci:** Postojeće revizije navode da nema potvrđene dozvole za besplatne API-je. Aplikacija se mora osloniti na DEMO raspored dok se ne potvrdi izvor sa dozvolom.
 - **Google Sign-In u produkciji:** Zahteva raspoređivanje konfiguracije i test na javnom domenu (`https://mlsivanovic.github.io/matchahead/`).
 - **PWA Push na zaključanom telefonu:** Prijem obaveštenja dok je aplikacija potpuno zatvorena (naročito na iOS 16.4+ uz WebPush i Android Chrome-u) mora se empirijski dokazati na fizičkom uređaju.

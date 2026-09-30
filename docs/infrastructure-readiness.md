@@ -1,16 +1,16 @@
 # Provera spremnosti infrastrukture i pristupa (Infrastructure Readiness)
 
 Datum provere: 30. septembar 2026.  
-Status infrastrukture: VERIFIKOVANO (Spark / besplatni nivo, bez naplate)  
+Status infrastrukture: VERIFIKOVANO (Firestore freeTier aktivan, status naplate samog naloga nije eksplicitno proveren)  
 Autori / uloge: Gemini CLI (infrastrukturna revizija i provera pristupa), orkestrirano u okviru Orca run-a `run_b1cd86cb71c5`.
 
 ---
 
 ## Sažetak nalaza
 
-1. **GitHub Pages produkcija:** Repozitorijum `mlsivanovic/matchahead` je aktivan na grani `main` (poslednji deploy commit `be48495`). Aplikacija je javno dostupna na adresi `https://mlsivanovic.github.io/matchahead/` (HTTP 200 OK, učitava PWA manifest i service worker). Raniji navod u dokumentaciji da git nije inicijalizovan i da projekat nije objavljen je zastareo i ovim ažuriran.
-2. **Firebase nalog i projekat:** Korisnik je prijavljen kao `mls.ivanovic@gmail.com`. Namenski projekat `matchahead` (broj projekta `298957530037`) već postoji na besplatnom Spark planu (0 €, bez uključene naplate).
-   - **Firestore:** Aktivan u Native režimu u evropskoj zoni `eur3` (`europe-west3` Frankfurt). Besplatna kvota (`freeTier: true`) je aktivna.
+1. **GitHub Pages produkcija:** Repozitorijum `mlsivanovic/matchahead` je aktivan na grani `main` (poslednji deploy commit `be48495`). Aplikacija je javno dostupna na adresi `https://mlsivanovic.github.io/matchahead/` (HTTP 200 OK potvrđuje samo dostupnost, ne i uspešnu PWA instalaciju na uređaju). Raniji navod u dokumentaciji da git nije inicijalizovan i da projekat nije objavljen je zastareo i ovim ažuriran.
+2. **Firebase nalog i projekat:** Korisnik je prijavljen kao `mls.ivanovic@gmail.com`. Namenski projekat `matchahead` (broj projekta `298957530037`) već postoji i baza koristi freeTier.
+   - **Firestore:** Aktivan u Native režimu u višenamenskoj evropskoj regiji `eur3`. Besplatna kvota (`freeTier: true`) je aktivna.
    - **Google prijava (Identity Platform):** Provajder `google.com` je omogućen (`enabled: true`, Client ID `298957530037-tign4u584abrmhegrlejpb0rci88juqi.apps.googleusercontent.com`).
    - **Ovlašćeni domeni:** `localhost`, `matchahead.firebaseapp.com`, `matchahead.web.app`, kao i `mlsivanovic.github.io` su autorizovani za Google prijavu.
    - **Web aplikacija:** Registrovana aplikacija `MatchAhead` (App ID `1:298957530037:web:e60964d052cc34662d6ffc`). Javna web SDK konfiguracija je predata koordinatoru i Groku za fazu 04.
@@ -66,6 +66,12 @@ x-github-edge-region: fra
 
 ## 3. Firebase revizija (Projekat `matchahead`)
 
+Nalazi su utvrđeni komandama (primeri iz ranijih revizija):
+- `firebase projects:list`
+- `firebase apps:list`
+- `gcloud firestore databases describe (default) --project=matchahead`
+- `gcloud identity providers list --project=matchahead`
+
 Prijavljeni nalog: `mls.ivanovic@gmail.com`
 
 ### 3.1. Detalji projekta i baza podataka
@@ -81,7 +87,7 @@ Prijavljeni nalog: `mls.ivanovic@gmail.com`
 
 - **Baza podataka:** `projects/matchahead/databases/(default)`
   - **Tip:** `FIRESTORE_NATIVE`
-  - **Lokacija:** `eur3` (`europe-west3`, Frankfurt)
+  - **Lokacija:** `eur3` (European multi-region)
   - **Besplatni nivo (Free Tier):** `freeTier: true`
   - **Status brisanja:** `DELETE_PROTECTION_DISABLED`
   - **Kreirano:** 27. septembar 2026.
@@ -117,6 +123,10 @@ Ovo su javni parametri klijentske aplikacije (nisu admin tajne niti servisni klj
 
 ## 4. Cloudflare Wrangler i Workers revizija
 
+Nalazi su utvrđeni pomoću:
+- `npx wrangler whoami`
+- `npx wrangler deployments list --name matchahead-push-probe`
+
 - **Nalog:** `mls.ivanovic@gmail.com`
 - **Account ID:** `691fe270f7bcf12734823eed7f29a559`
 - **Worker ime:** `matchahead-push-probe` (definisano u `experiments/push-probe/wrangler.jsonc`)
@@ -132,7 +142,7 @@ Da bi stanje bilo kristalno jasno u skladu sa standardima projekta:
 
 | Komponenta | Instalirano / CLI prisutan | Nalog / Pristup | Konfigurisano u projektu | Testirano u emulatoru / lokalno | Živo testirano na uređaju (Live) |
 |---|---|---|---|---|---|
-| **GitHub Pages** | Da (`git`) | Da (`origin/main`) | Da (`.github/workflows/pages.yml`) | Da (lokalni build) | **DA** (`https://mlsivanovic.github.io/matchahead/`, HTTP 200) |
+| **GitHub Pages** | Da (`git`) | Da (`origin/main`) | Da (`.github/workflows/pages.yml`) | Da (lokalni build) | **NE** (HTTP 200 je samo dostupnost; PWA instalacija NOT_TESTED) |
 | **Firestore** | Da (`firebase`) | Da (`mls.ivanovic@gmail.com`) | Da (`matchahead`, `eur3`) | U toku (Grok faza 04 emulator testovi) | **NE** (pravila i podaci još nisu raspoređeni na produkcioni Firestore) |
 | **Google Auth** | Da (`gcloud`) | Da (`mls.ivanovic@gmail.com`) | Da (`google.com` aktivan, `github.io` dodat) | U toku (faza 04 emulator testovi) | **NE** (klik na Google prijavu na živom `github.io` još nije izvršen) |
 | **Cloudflare Worker** | Da (`wrangler`) | Da (`mls.ivanovic@gmail.com`) | Da (`matchahead-push-probe`) | Da (`workerd` testovi, 22/22) | Delimično (worker postavljen, slanje ugašeno) |
@@ -145,13 +155,10 @@ Da bi stanje bilo kristalno jasno u skladu sa standardima projekta:
 
 - **Superliga i Kup Srbije:** FSS nema javni mašinski API. Rasporedi se objavljuju kao HTML sa nepreciznim satnicama (00:00). Fixtur.es pruža ICS, ali uslovi korišćenja zabranjuju ponovnu objavu ili preprodaju u tuđim aplikacijama.
 - **Evropska takmičenja (Liga konferencije / Liga šampiona):** UEFA pruža samo korisnički „Add to calendar” link, bez API licence za treća lica.
-- **Košarka (ABA, Evroliga, KLS):** ABA i Evroliga imaju objavljene termine na sajtovima, ali bez zvaničnog besplatnog API-ja sa pravom distribucije. TheSportsDB besplatni nalog daje najviše 15 utakmica i seče sezonu. API-Sports uslovi zabranjuju javnu redistribuciju na besplatnom nalogu.
+- **Košarka (ABA, Evroliga, KLS):** ABA i Evroliga imaju objavljene termine na sajtovima, ali bez zvaničnog besplatnog API-ja sa pravom distribucije. TheSportsDB besplatni nalog daje najviše 15 utakmica i seče sezonu. Za API-Sports prethodna revizija navodi da nema potvrđene dozvole.
 - **Akcioni zaključak za sportski raspored:**
   1. Za potrebe razvoja faza 04, 06 i 07 koristi se sintetički DEMO raspored definisan u `data/synthetic/` i `public/data/demo-schedule.json`.
-  2. Za buduću fazu 05, ukoliko korisnik ne obezbedi komercijalni API ključ ili direktan pisani ugovor, rešenje je:
-     - Ponuditi direktne linkove ka oficijelnim klupskim pretplatama gde postoje.
-     - Omogućiti korisniku ručni uvoz / izbor utakmica.
-     - Prikazati status `BLOCKED / UNKNOWN` uz svako takmičenje bez potvrđenog otvorenog izvora.
+  2. Za buduću fazu 05 rešenje ostaje BLOCKED dok se ne potvrdi ovlašćen izvor (na primer, uz oficijelne klupske linkove gde je to primenjivo).
 
 ---
 
