@@ -7,8 +7,8 @@ Verzija specifikacije: 2.0
 |---|---|---|
 | 01 | DONE | `docs/data-feasibility.md`. Zahtev „sve utakmice” nije ispunjen: TheSportsDB seče sezonu na 15 zapisa, API-Sports je bez ključa, football-data.org nema srpska takmičenja ni košarku. |
 | 01B | DONE | `docs/data-on-demand-feasibility.md`. Tok jednog klika i sintetičko spajanje prolaze. Nijedan stvarni izvor nema i pokrivenost i pravo unosa. 00:00/01:00/02:00 nisu potvrđen sat. |
-| 02 | BLOCKED | `docs/push-feasibility.md`. Lokalni FID tok i CPU potpisa prolaze. Android i iPhone su NOT_TESTED. Nema Firebase projekta, Cloudflare naloga ni HTTPS adrese. |
-| 03 | DONE | `apps/web` i `docs/handoffs/03-pwa-osnova.md`. Lokalni Chrome na `/repo/`: instalabilnost, samostalni prozor, offline omotač i DEMO raspored, oznaka zastarelosti, čekanje nove verzije dok traje unos. Telefon i objavljeni GitHub Pages nisu testirani. |
+| 02 | BLOCKED | `docs/push-feasibility.md`. Lokalni FID tok i CPU potpisa prolaze. Android i iPhone su NOT_TESTED na fizičkom uređaju. Firebase Spark projekat `matchahead` i Cloudflare nalog su verifikovani (`docs/infrastructure-readiness.md`). |
+| 03 | DONE | `apps/web` i `docs/handoffs/03-pwa-osnova.md`. Objavljeno na GitHub Pages: `https://mlsivanovic.github.io/matchahead/` (HTTP 200). Instalabilnost, samostalni prozor, offline omotač i DEMO raspored, oznaka zastarelosti, čekanje nove verzije dok traje unos. Prikaz na fizičkom telefonu (ikona na telefonu) je NOT_TESTED. |
 | 04 | TODO | — |
 | 05 | TODO | Čeka dopušten izvor. 01B je skup izvora za unos ostavio praznim. `findFixtures` postoji samo nad sintetičkim odgovorima. |
 | 06 | TODO | — |
@@ -24,8 +24,8 @@ Verzija specifikacije: 2.0
 - Rezultat: React/TypeScript/Vite PWA u `apps/web`. Četiri ekrana, manifest sa stabilnim ID-jem jednakim Pages putanji, jedan service worker za omotač i budući FCM. Javni prikaz je samo sintetički DEMO. Faza 02 ostaje BLOCKED.
 - Promenjene datoteke: `apps/web/`, `scripts/check-pwa.mjs`, `docs/progress.md`, `docs/decisions.md`, `docs/handoffs/03-pwa-osnova.md`, `README.md`, `.gitignore`.
 - Izvršene komande i rezultati: `node scripts/check-pwa.mjs` — 15 prolaza jediničnih provera, TypeScript bez greške, produkcioni build sa bazom `/repo/`, zatim Chrome. Instalabilnost bez grešaka, samostalni `--app` prozor, offline posle jednog online učitavanja, OAuth nije u kešu, neuspeo novi omotač ne aktivira se, nova verzija čeka kraj unosa. U otvorenom Chrome-u dugme „Instaliraj” se pojavilo, a širina 360 px prošla je četiri ekrana.
-- Stvarni uređaji / integracije: desktop Chrome na `127.0.0.1`, putanja `/repo/`. Nema objave na GitHub Pages. Android i iPhone su NOT_TESTED.
-- Neizvršene provere: ikona na početnom ekranu telefona, živi `github.io`, Firebase prijava, FCM isporuka.
+- Stvarni uređaji / integracije: desktop Chrome na `127.0.0.1` (putanja `/repo/`) i verifikovana javna objava na GitHub Pages (`https://mlsivanovic.github.io/matchahead/`, HTTP 200). Android i iPhone na fizičkom uređaju su NOT_TESTED.
+- Neizvršene provere: ikona na početnom ekranu fizičkog telefona, živa Firebase prijava u PWA, FCM isporuka na zatvorenoj PWA.
 
 ## Prethodna rađena celina
 
@@ -53,13 +53,13 @@ Verzija specifikacije: 2.0
 
 ## Prepreke
 
-- Problem push-a: nema Firebase projekta, Cloudflare naloga, HTTPS adrese ni telefona, pa zatvorena PWA nije primila poruku.
-- Dokaz: `docs/push-feasibility.md`. Android i iPhone su NOT_TESTED.
-- Šta je potrebno: Spark projekat, FCM servisni nalog, besplatan Cloudflare nalog i po jedan Android i iPhone. Koraci su u tom zapisu.
+- Problem push-a: Firebase Spark projekat (`matchahead`) i Cloudflare nalog jesu obezbeđeni (`docs/infrastructure-readiness.md`), ali zatvorena PWA na fizičkom mobilnom uređaju nije primila poruku.
+- Dokaz: `docs/push-feasibility.md` i `docs/infrastructure-readiness.md`. Android i iPhone su NOT_TESTED.
+- Šta je potrebno: proveriti FCM isporuku na fizičkom Android i iPhone telefonu sa zatvorenom PWA aplikacijom.
 - Problem podataka: nema izvora koji je istovremeno besplatan, dovoljan za objavljene utakmice ovih klubova i dopušten za unos u MatchAhead.
 - Dokaz: `docs/data-on-demand-feasibility.md` i `docs/data-feasibility.md`.
 - Šta je potrebno: pisana dozvola nosioca ili novi otvoreni izvor, pa tek onda adapter u fazi 05. API-Sports proba i dalje ne otvara pravo objave.
-- Šta može nezavisno nastaviti: faza 04, prijava i podešavanja, preko postojećeg PWA omotača. Ne sme da registruje drugi service worker. Zadatak 05 ne sme da krene kao da je unos rešen. Push isporuka čeka nalog, HTTPS i telefon.
+- Šta može nezavisno nastaviti: faza 04, prijava i podešavanja, preko postojećeg PWA omotača. Ne sme da registruje drugi service worker. Zadatak 05 ne sme da krene kao da je unos rešen. Push isporuka na zatvorenoj PWA čeka fizički telefon.
 
 ## Sledeći zadatak
 

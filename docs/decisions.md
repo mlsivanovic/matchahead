@@ -94,7 +94,7 @@ Javni fajl `public/data/demo-schedule.json` ima `kind: synthetic-demo`, `publica
 
 Lični unos ove faze živi u `sessionStorage` i nije nalog. Odjava briše tu sesiju i, kad uid postoji, samo ključeve `matchahead.user.{uid}.`. Tuđi uid i podešavanja uređaja ostaju. Google prijava nije uključena.
 
-Posledica: faza 04 nastavlja ovaj omotač i ne dodaje drugi worker. Faza 05 i dalje nema šta da unese. Naplata nije uključena. Desktop Chrome je video instalabilnu aplikaciju i samostalni prozor. Ikona na telefonu i objavljeni Pages ostaju NOT_TESTED.
+Posledica: faza 04 nastavlja ovaj omotač i ne dodaje drugi worker. Faza 05 i dalje nema šta da unese. Naplata nije uključena. Desktop Chrome je video instalabilnu aplikaciju i samostalni prozor. Aplikacija je objavljena i verifikovana na GitHub Pages (`https://mlsivanovic.github.io/matchahead/`, HTTP 200). Ikona na telefonu ostaje NOT_TESTED.
 
 Migracija: nema korisničke baze.
 

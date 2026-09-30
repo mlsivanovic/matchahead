@@ -2,11 +2,11 @@
 
 Projektni folder za razvoj sa Grokom, u zasebnim taskovima.
 
-**Trenutno stanje:** celine 01 i 01B su završene kao provere izvora. Besplatan i dopušten unos svih objavljenih utakmica nije dokazan. Celina 02 ima lokalnu push probu u `experiments/push-probe` i zapis u `docs/push-feasibility.md`. Poruka na zatvorenoj PWA nije proverena, pa je faza BLOCKED. Celina 03 je PWA osnova u `apps/web`: četiri ekrana, manifest i jedan service worker. Prikaz koristi samo sintetičke DEMO utakmice. Izbor je ograničen na FK/KK Crvenu zvezdu i FK/KK Partizan. Git repozitorijum nije inicijalizovan i projekat nije objavljen.
+**Trenutno stanje:** celine 01 i 01B su završene kao provere izvora. Besplatan i dopušten unos svih objavljenih utakmica nije dokazan. Celina 02 ima lokalnu push probu u `experiments/push-probe` i zapis u `docs/push-feasibility.md`. Poruka na zatvorenoj PWA na fizičkom uređaju nije proverena, pa je push faza BLOCKED za stvarnu isporuku. Celina 03 je PWA osnova u `apps/web`: četiri ekrana, manifest i jedan service worker. Prikaz koristi samo sintetičke DEMO utakmice. Izbor je ograničen na FK/KK Crvenu zvezdu i FK/KK Partizan. Projekat je verziran u git repozitorijumu `mlsivanovic/matchahead` (grana `main`) i javno objavljen na GitHub Pages: [https://mlsivanovic.github.io/matchahead/](https://mlsivanovic.github.io/matchahead/). Firebase Spark projekat `matchahead` je aktivan (Firestore u `eur3`, Google prijava omogućena), a Cloudflare Wrangler je prijavljen. Detaljna revizija pristupa je u `docs/infrastructure-readiness.md`.
 
 ## Početak
 
-Otvori ovaj folder u okruženju u kojem Grok može čitati i menjati lokalne datoteke. Sledeći zaseban task je faza 04. Push faza 02 ostaje BLOCKED dok ne postoje nalog, HTTPS i telefon. Provera PWA osnove: `node scripts/check-pwa.mjs`.
+Otvori ovaj folder u okruženju u kojem Grok može čitati i menjati lokalne datoteke. Sledeći zaseban task je faza 04 (Google prijava i podešavanja). Push isporuka na zatvorenu PWA čeka proveru na fizičkom telefonu. Provera PWA osnove: `node scripts/check-pwa.mjs`.
 
 Ako Grok nema pristup lokalnom filesystem-u, priloži datoteke koje prompt traži ili mu obezbedi pristup projektu; sama apsolutna putanja ne daje pristup fajlovima.
 
