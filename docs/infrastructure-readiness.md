@@ -1,20 +1,28 @@
 # Provera spremnosti infrastrukture i pristupa (Infrastructure Readiness)
 
 Datum provere: 30. septembar 2026.  
-Status infrastrukture: VERIFIKOVANO (Firestore freeTier aktivan, status naplate samog naloga nije eksplicitno proveren)  
+Status infrastrukture: VERIFIKOVANO (read-only provera; Firestore freeTier aktivan, naplata projekta isključena)  
 Autori / uloge: Gemini CLI (infrastrukturna revizija i provera pristupa), orkestrirano u okviru Orca run-a `run_b1cd86cb71c5`.
+Naplata je proverena isključivo čitanjem, bez ikakve promene na projektu:
+
+```bash
+$ gcloud billing projects describe matchahead --format='json(billingEnabled)'
+{
+  "billingEnabled": false
+}
+```
 
 ---
 
 ## Sažetak nalaza
 
-1. **GitHub Pages produkcija:** Repozitorijum `mlsivanovic/matchahead` je aktivan na grani `main` (poslednji deploy commit `be48495`). Aplikacija je javno dostupna na adresi `https://mlsivanovic.github.io/matchahead/` (HTTP 200 OK potvrđuje samo dostupnost, ne i uspešnu PWA instalaciju na uređaju). Raniji navod u dokumentaciji da git nije inicijalizovan i da projekat nije objavljen je zastareo i ovim ažuriran.
+1. **GitHub Pages produkcija:** Repozitorijum `mlsivanovic/matchahead` je aktivan na grani `main`. Poslednja potvrđena objava je commit `be48495` (HTTP 200 OK na `https://mlsivanovic.github.io/matchahead/`, provereno 30. septembra 2026; HTTP 200 potvrđuje samo dostupnost, ne i uspešnu PWA instalaciju na uređaju). Nova objava posle ovog checkpointa nije potvrđena — važi `be48495` dok koordinator ne pošalje dokaz nove publikacije. Raniji navod u dokumentaciji da git nije inicijalizovan i da projekat nije objavljen je zastareo i ovim ažuriran.
 2. **Firebase nalog i projekat:** Korisnik je prijavljen kao `mls.ivanovic@gmail.com`. Namenski projekat `matchahead` (broj projekta `298957530037`) već postoji i baza koristi freeTier.
    - **Firestore:** Aktivan u Native režimu u višenamenskoj evropskoj regiji `eur3`. Besplatna kvota (`freeTier: true`) je aktivna.
    - **Google prijava (Identity Platform):** Provajder `google.com` je omogućen (`enabled: true`, Client ID `298957530037-tign4u584abrmhegrlejpb0rci88juqi.apps.googleusercontent.com`).
    - **Ovlašćeni domeni:** `localhost`, `matchahead.firebaseapp.com`, `matchahead.web.app`, kao i `mlsivanovic.github.io` su autorizovani za Google prijavu.
    - **Web aplikacija:** Registrovana aplikacija `MatchAhead` (App ID `1:298957530037:web:e60964d052cc34662d6ffc`). Javna web SDK konfiguracija je predata koordinatoru i Groku za fazu 04.
-3. **Cloudflare Wrangler / Workers:** Korisnik je prijavljen kao `mls.ivanovic@gmail.com` (Account ID `691fe270f7bcf12734823eed7f29a559`). Worker `matchahead-push-probe` je već postavljen na Cloudflare Workers Free planu (verzija od 27. septembra 2026).
+3. **Cloudflare Wrangler / Workers:** Korisnik je prijavljen kao `mls.ivanovic@gmail.com` (Account ID `691fe270f7bcf12734823eed7f29a559`). Worker `matchahead-push-probe` je postavljen 27. septembra 2026. (verzija `2ee78270-c9d8-4374-ba09-623d590ec448`). Plan naloga nije verifikovan dokazom — bez tvrdnje o Free/plaćenom planu. Granica od 10 ms CPU navedena dalje u tekstu je dokumentovano ograničenje besplatnog nivoa, ne dokaz plana ovog naloga.
 4. **Lokalni alati i emulatori:** Node.js v26.7.0, Java OpenJDK 21.0.2, Firebase CLI 15.32.0 i Wrangler 4.144.0 su instalirani. Preuzeti su JAR paketi za Firestore emulator (`v1.22.0`) i UI emulator (`v1.15.0`).
 5. **Izvori sportskih podataka:** Prepreka ostaje na snazi — nijedan besplatan izvor nema istovremeno i punu pokrivenost mečeva (Superliga, KLS, ABA, Evroliga, Liga konferencije) i pravo ponovne objave. MatchAhead ostaje na sintetičkom DEMO rasporedu dok se ne definiše ovlašćeni izvor.
 
@@ -66,11 +74,15 @@ x-github-edge-region: fra
 
 ## 3. Firebase revizija (Projekat `matchahead`)
 
-Nalazi su utvrđeni komandama (primeri iz ranijih revizija):
+Nalazi o Auth konfiguraciji utvrđeni su read-only REST pozivima sa postojećom prijavom (bez promene stanja):
+- `GET .../defaultSupportedIdpConfigs/google.com` (Identity Toolkit: provajder `google.com`, `enabled`, OAuth klijent)
+- `GET .../admin/v2/projects/matchahead/config` (ovlašćeni domeni, web aplikacija)
+
+Opšte read-only provere okruženja:
 - `firebase projects:list`
 - `firebase apps:list`
 - `gcloud firestore databases describe (default) --project=matchahead`
-- `gcloud identity providers list --project=matchahead`
+- `gcloud billing projects describe matchahead --format='json(billingEnabled)'`
 
 Prijavljeni nalog: `mls.ivanovic@gmail.com`
 
@@ -132,7 +144,7 @@ Nalazi su utvrđeni pomoću:
 - **Worker ime:** `matchahead-push-probe` (definisano u `experiments/push-probe/wrangler.jsonc`)
 - **Istorija postavljanja:**
   - Poslednji upload: `2026-09-27T17:52:49.105Z` (verzija `2ee78270-c9d8-4374-ba09-623d590ec448`)
-- **Ograničenja:** Worker je postavljen na besplatnom nalogu (10 ms CPU limit). Slanje je podrazumevano onemogućeno (`PROBE_SEND_ENABLED=0`) dok se ne unesu odobreni parametri i ne pokrene ciljano testiranje.
+- **Ograničenja:** Dokumentovano ograničenje besplatnog nivoa je 10 ms CPU po pozivu (plan ovog naloga nije verifikovan dokazom). Slanje je podrazumevano onemogućeno (`PROBE_SEND_ENABLED=0`) dok se ne unesu odobreni parametri i ne pokrene ciljano testiranje.
 
 ---
 
@@ -145,15 +157,15 @@ Da bi stanje bilo kristalno jasno u skladu sa standardima projekta:
 | **GitHub Pages** | Da (`git`) | Da (`origin/main`) | Da (`.github/workflows/pages.yml`) | Da (lokalni build) | **NE** (HTTP 200 je samo dostupnost; PWA instalacija NOT_TESTED) |
 | **Firestore** | Da (`firebase`) | Da (`mls.ivanovic@gmail.com`) | Da (`matchahead`, `eur3`) | U toku (Grok faza 04 emulator testovi) | **NE** (pravila i podaci još nisu raspoređeni na produkcioni Firestore) |
 | **Google Auth** | Da (`gcloud`) | Da (`mls.ivanovic@gmail.com`) | Da (`google.com` aktivan, `github.io` dodat) | U toku (faza 04 emulator testovi) | **NE** (klik na Google prijavu na živom `github.io` još nije izvršen) |
-| **Cloudflare Worker** | Da (`wrangler`) | Da (`mls.ivanovic@gmail.com`) | Da (`matchahead-push-probe`) | Da (`workerd` testovi, 22/22) | Delimično (worker postavljen, slanje ugašeno) |
-| **FCM Push na telefonu** | N/A | N/A | U probnom obliku | Da (lokalni FID test) | **NE (NOT_TESTED)** — fizički Android/iPhone nisu primili sistemsko obaveštenje na zatvorenoj PWA |
+| **Cloudflare Worker** | Da (`wrangler`) | Da (`mls.ivanovic@gmail.com`) | Da (`matchahead-push-probe`) | Da (`workerd` testovi, 22/22, nad in-memory modelom) | Delimično (worker postavljen, slanje ugašeno; plan naloga nije verifikovan) |
+| **FCM Push na telefonu** | N/A | N/A | U probnom obliku | Da (lokalni FID test) | **NE (NOT_TESTED)** — nijedan fizički uređaj nije primio sistemsko obaveštenje na zatvorenoj PWA (Android uređaj je dostupan po korisniku, iPhone nije potvrđen) |
 | **Sportski podaci** | N/A | N/A | Sintetički ugovor | Da (`check-data-contracts.mjs`, 20/20) | **BLOCKED** — nema besplatnog izvora sa licencom i punom pokrivenošću |
 
 ---
 
 ## 6. Stanje sportskih izvora i blokada
 
-- **Superliga i Kup Srbije:** FSS nema javni mašinski API. Rasporedi se objavljuju kao HTML sa nepreciznim satnicama (00:00). Fixtur.es pruža ICS, ali uslovi korišćenja zabranjuju ponovnu objavu ili preprodaju u tuđim aplikacijama.
+- **Superliga i Kup Srbije:** FSS nema javni mašinski API. Rasporedi se objavljuju kao HTML sa nepreciznim satnicama (00:00). Fixtur.es pruža ICS i direktnu korisničku pretplatu; dozvola da MatchAhead njihov raspored unese u agendu, javni JSON ili svoj ICS nije potvrđena — bez pravnih zaključaka o njihovim uslovima.
 - **Evropska takmičenja (Liga konferencije / Liga šampiona):** UEFA pruža samo korisnički „Add to calendar” link, bez API licence za treća lica.
 - **Košarka (ABA, Evroliga, KLS):** ABA i Evroliga imaju objavljene termine na sajtovima, ali bez zvaničnog besplatnog API-ja sa pravom distribucije. TheSportsDB besplatni nalog daje najviše 15 utakmica i seče sezonu. Za API-Sports prethodna revizija navodi da nema potvrđene dozvole.
 - **Akcioni zaključak za sportski raspored:**
@@ -164,10 +176,11 @@ Da bi stanje bilo kristalno jasno u skladu sa standardima projekta:
 
 ## 7. Preostali koraci za potpuno živo testiranje
 
-1. **Faza 04 (Grok):** Završetak Auth i Firestore pravila u emulatoru, priprema modela korisnika.
-2. **Raspoređivanje Firestore pravila:** Nakon pregleda Grokovih pravila, izvršiti `firebase deploy --only firestore:rules --project matchahead`.
-3. **Živa provera Google prijave:** Otvoriti `https://mlsivanovic.github.io/matchahead/#/podesavanja` na računaru i telefonu i testirati prijavu Google nalogom.
-4. **Verifikacija na fizičkom telefonu (Android / iPhone):**
+1. **Faza 04:** Jezgro naloga je testirano u emulatoru (IN_PROGRESS); slede React ekran i adapter. Pravila nisu deployovana na produkcioni projekat `matchahead`.
+2. **Raspoređivanje Firestore pravila:** Tek nakon završnog pregleda i odluke koordinatora; ovaj checkpoint ne raspoređuje ništa (`firebase deploy` nije izvršen).
+3. **Živa provera Google prijave:** NOT_TESTED — otvoriti `https://mlsivanovic.github.io/matchahead/#/podesavanja` na računaru i telefonu i testirati prijavu Google nalogom.
+4. **Verifikacija na fizičkom telefonu:**
+   - Android uređaj je dostupan po korisniku; iPhone nije potvrđen. Nijedan fizički push test nije izvršen.
    - Instalirati PWA sa `https://mlsivanovic.github.io/matchahead/` na početni ekran.
    - Proveriti rad offline režima.
-   - Za push notifikacije: kada faza 09 bude spremna, proveriti prijem sistemske notifikacije kada je aplikacija potpuno zatvorena.
+   - Za push notifikacije: kada faza 09 bude spremna, proveriti prijem sistemske notifikacije na PWA koja je zatvorena pre slanja sa odvojenog pošiljaoca (cilj: zatvoreno pre slanja; NIJE Force stop ni gašenje browsera, NIJE slanje pa zatvaranje).

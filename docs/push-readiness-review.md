@@ -23,7 +23,7 @@ Prethodna dokumentacija je sadržala zastarele pretpostavke da nalozi i resursi 
 3. **Javna PWA i VAPID konfiguracija je već ugrađena na produkciji:** Na pomenutoj adresi endpoint `https://matchahead-push-probe.mls-ivanovic.workers.dev/config.json` servira važeću konfiguraciju za Firebase web aplikaciju `MatchAhead` (`appId: 1:298957530037:web:e60964d052cc34662d6ffc`) sa javnim VAPID ključem (`BIXoXs...`). U lokalnom repozitorijumu fajl `experiments/push-probe/pwa/config.json` je namerno prazan templejt kako se javni ključevi ne bi nekontrolisano menjali kroz git commit-e.
 4. **Zaštitna kapija slanja je podrazumevano isključena:** Slanje i registracija su blokirani na Cloudflare nivou jer tajna `PROBE_SEND_ENABLED` nije postavljena na `1`, a tajna `PROBE_ENROLL_SECRET` nije uneta u Cloudflare Secret Store.
 5. **FCM HTTP v1 i FID semantika su usklađeni sa zvaničnim Google standardima:** Kod koristi moderni Firebase 12.19.0 API (`register` / `onRegistered` i `message.fid`), a u potpunosti izbegava zastareli `getToken()` / `message.token`.
-6. **Stvarna isporuka na fizičkim telefonima ostaje `NOT_TESTED`:** Dozvola za notifikacije i prijem sistemske poruke na zatvorenoj PWA na fizičkim uređajima (Android i iPhone/iOS 16.4+) nisu izvršeni tokom ove revizije u skladu sa bezbednosnim mandatom.
+6. **Stvarna isporuka na fizičkim telefonima ostaje `NOT_TESTED`:** Dozvola za notifikacije i prijem sistemske poruke na zatvorenoj PWA nisu izvršeni ni na jednom fizičkom uređaju tokom ove revizije u skladu sa bezbednosnim mandatom. Android uređaj je dostupan po korisniku; iPhone nije potvrđen.
 
 ---
 
@@ -222,7 +222,7 @@ Rezultati (izvršeno na lokalnom `workerd` preko Miniflare `5.20260926.0-alpha` 
 | **Opozvane registracije** | Klijent može pozvati `/api/probe/unregister` koji postavlja `revokedAtMs`. Ako FCM API javi 404 `UNREGISTERED` (obrisana aplikacija na telefonu), worker registraciju automatski gasi u bazi. | **ODLIČNO** — eliminiše nepotrebne podzahteve ka neaktivnim uređajima. |
 | **Bezbedan klik na notifikaciju** | Link u poruci je striktno ograničen na `/poruka.html?probe=synthetic&id=synthetic-<uuid>`. U `poruka.js` se koristi `textContent` (nema `innerHTML`), a URL parametri se strogo validiraju regexom. | **ODLIČNO** — eliminiše rizik od Cross-Site Scripting (XSS) i Open Redirect ranjivosti. |
 | **Rukovanje tajnama i ključevima** | Tajne `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` i `FIREBASE_PROJECT_ID` su tipa `secret_text` na Cloudflare-u. Repozitorijum ne sadrži privatne ključeve (`.gitignore` štiti `.env`, `.dev.vars`, itd.). | **ODLIČNO** — servisni nalog koristi least-privilege ulogu `roles/firebasecloudmessaging.admin`. |
-| **CPU i Batch ograničenja** | Free nivo ima 10 ms CPU po HTTP pozivu. Proba šalje poruke pojedinačno (1 subrequest po slanju, plus 1 za povremenu razmenu tokena), što je daleko ispod limita od 50 podzahteva. | **VERIFIKOVANO LOKALNO** (Edge ostaje `NOT_TESTED`). |
+| **CPU i Batch ograničenja** | Dokumentovana granica besplatnog nivoa je 10 ms CPU po HTTP pozivu (plan ovog naloga nije verifikovan dokazom). Proba šalje poruke pojedinačno (1 subrequest po slanju, plus 1 za povremenu razmenu tokena), što je daleko ispod dokumentovanog limita od 50 podzahteva. | **VERIFIKOVANO LOKALNO** (Edge ostaje `NOT_TESTED`). |
 
 ---
 
@@ -264,7 +264,7 @@ Nalazi utvrđeni bezbednim inspekcijama komandama `gcloud`, `firebase`, `npx wra
 
 ### 5.2. Google Cloud i Firebase
 - **Projekat:** `matchahead` (Project Number `298957530037`).
-- **Firestore nivo kvote:** `freeTier: true` u višenamenskoj regiji `eur3`. *(Napomena: Oznaka `freeTier: true` na samoj bazi podataka potvrđuje besplatni nivo korišćenja baze, ali sama po sebi ne dokazuje da li krovni Google Cloud nalog ima pridružen instrument plaćanja ili je striktno na Spark planu).*
+- **Firestore nivo kvote:** `freeTier: true` u višenamenskoj regiji `eur3`. Naplata projekta je read-only proverena 30. septembra 2026: `gcloud billing projects describe matchahead --format='json(billingEnabled)'` → `{"billingEnabled": false}`.
 - **Aktivni FCM API servisi:**
   - `fcm.googleapis.com` (Firebase Cloud Messaging API) — **Omogućen**
   - `fcmregistrations.googleapis.com` (FCM Registration API) — **Omogućen**
@@ -286,9 +286,9 @@ Nalazi utvrđeni bezbednim inspekcijama komandama `gcloud`, `firebase`, `npx wra
 2. **Bloker 2 (Kapija slanja je zatvorena):** Promenljiva/tajna `PROBE_SEND_ENABLED` nije postavljena na `1`. Bez ovoga, server odbija sve zahteve sa `404 probe_disabled`.
 3. **Bloker 3 (Raskorak koda radnika):** Produkcija koristi Durable Object (`ProbeDirectoryObject`), dok repozitorijum ima samo in-memory model. Pre novih deploymenta neophodno je uskladiti kod.
 4. **Bloker 4 (Fizički mobilni uređaji nisu testirani — `NOT_TESTED`):**
-   - **Android:** PWA mora biti otvorena u Chrome-u, izvršena registracija, a zatim aplikacija **potpuno zatvorena pre slanja**, pa potvrđen prijem sistemskog obaveštenja.
-   - **iPhone / iPad (iOS 16.4+):** Web Push na Apple uređajima radi **isključivo** kada se sajt doda na početni ekran („Add to Home Screen”) kao instalirana PWA i pokrene kao standalone prozor pre traženja dozvole.
-5. **Bloker 5 (Edge `cpuTime` nije očitan):** Tokom live poziva potrebno je kroz `npx wrangler tail` očitati stvarni `cpuTime` kako bi se potvrdilo da hladan start i WebCrypto potpis na Cloudflare edge infrastrukturi ne probijaju granicu od 10 ms.
+   - **Android (uređaj dostupan po korisniku, test nije izvršen):** PWA mora biti otvorena u Chrome-u, izvršena registracija, a zatim aplikacija **zatvorena pre slanja** (swipe away iz task switchera), pa potvrđen prijem sistemskog obaveštenja.
+   - **iPhone / iPad (nije potvrđen, test nije izvršen):** Ako uređaj bude dostupan, Web Push na Apple uređajima (iOS 16.4+) radi samo kada se sajt doda na početni ekran („Add to Home Screen”) kao instalirana PWA i pokrene kao standalone prozor pre traženja dozvole.
+5. **Bloker 5 (Edge `cpuTime` nije očitan):** Tokom live poziva potrebno je kroz `npx wrangler tail` očitati stvarni `cpuTime` kako bi se potvrdilo da hladan start i WebCrypto potpis na Cloudflare edge infrastrukturi ne probijaju dokumentovanu granicu besplatnog nivoa od 10 ms (plan naloga nije verifikovan).
 6. **Bloker 6 (Lokalni `config.json` u repozitorijumu):** Za lokalno testiranje preko `npm run serve`, operater mora kopirati javne vrednosti iz sekcije 5.1 u `experiments/push-probe/pwa/config.json`.
 
 ---
@@ -300,9 +300,9 @@ Ako korisnik u otvorenoj aplikaciji pritisne dugme za slanje i zatim pokuša da 
 
 Da bi test bio metodološki validan i dokazao buđenje zatvorene aplikacije:
 1. Ciljni uređaj (mobilni telefon) se registruje i dobije svoj `registrationId` i `registrationSecret`.
-2. Aplikacija i pregledač na telefonu se **POTPUNO ZATVORE** (swipe away iz menija nedavnih aplikacija / task switcher-a) pre bilo kakvog slanja.
+2. PWA na telefonu se **ZATVORI PRE SLANJA** (swipe away iz menija nedavnih aplikacija / task switcher-a) pre bilo kakvog slanja. Cilj je zatvorena PWA, a NE Android Force stop, NE gašenje browser procesa, i NE redosled „prvo pošalji pa zatvori”.
 3. Slanje se inicira sa **zasebnog autorizovanog pošiljaoca** (npr. preko `curl` sa radne stanice ili administratorskog računara) navođenjem dobijenog `registrationId` i `registrationSecret`.
-4. Tek kada telefon primi sistemsko obaveštenje dok je aplikacija potpuno ugašena, isporuka se smatra dokazanom.
+4. Tek kada telefon primi sistemsko obaveštenje dok je aplikacija prethodno zatvorena, isporuka se smatra dokazanom.
 
 ```text
        [ CILJNI UREĐAJ - TELEFON ]               [ ZASEBNI POŠILJALAC - RADNA STANICA ]
@@ -334,14 +334,16 @@ Da bi test bio metodološki validan i dokazao buđenje zatvorene aplikacije:
 
 1. **Generisanje sigurne tajne visoke entropije (NE koristiti predvidive lozinke):**
    ```bash
-   # Generisanje slučajne heksadecimalne tajne (24 bajta / 48 karaktera):
-   ENROLL_SECRET=$(openssl rand -hex 24)
-   echo "Generisana tajna: $ENROLL_SECRET"
+   # Generisanje slučajne heksadecimalne tajne (24 bajta / 48 karaktera),
+   # upis direktno u datoteku sa pravima samo za vlasnika (bez ispisa tajne na ekran):
+   openssl rand -hex 24 > /tmp/probe-enroll-secret.txt
+   chmod 600 /tmp/probe-enroll-secret.txt
    ```
-2. **Aktivacija kapije i tajne na Cloudflare-u:**
+   Tajnu nikada ne ispisivati na ekran (`echo`), ne čuvati u shell istoriji, ne commit-ovati i ne slati chatom.
+2. **Aktivacija kapije i tajne na Cloudflare-u (interaktivni siguran unos):**
    ```bash
    $ npx wrangler secret put PROBE_ENROLL_SECRET --name matchahead-push-probe
-   # Uneti generisanu vrednost $ENROLL_SECRET
+   # Zalepiti vrednost iz /tmp/probe-enroll-secret.txt, zatim obrisati datoteku.
 
    $ npx wrangler secret put PROBE_SEND_ENABLED --name matchahead-push-probe
    # Uneti vrednost: 1
@@ -355,15 +357,15 @@ Da bi test bio metodološki validan i dokazao buđenje zatvorene aplikacije:
    ```bash
    $ npx wrangler tail matchahead-push-probe --format pretty
    ```
-5. **Registracija na telefonu:**
+5. **Registracija na telefonu (prvi kandidat: dostupni Android; iPhone nije potvrđen):**
    - **Android:** Otvoriti Chrome i posetiti `https://matchahead-push-probe.mls-ivanovic.workers.dev/`.
-   - **iPhone (iOS 16.4+):** Otvoriti Safari, pritisnuti Share -> "Add to Home Screen", pa pokrenuti instaliranu ikonu sa početnog ekrana.
-   - U polje "Ključ probe" uneti `$ENROLL_SECRET`.
+   - U polje "Ključ probe" uneti vrednost tajne (pročitati iz datoteke sa pravima 600, bez ispisa na ekran).
    - Kliknuti na taster "Uključi probu". Browser traži dozvolu za notifikacije -> odabrati "Dozvoli" (Allow).
    - Na ekranu se ispisuje potvrda o registraciji sa `registrationId` i `registrationSecret`. Zabeležiti te vrednosti na računaru.
-6. **POTPUNO ZATVARANJE APLIKACIJE NA TELEFONU:**
+6. **ZATVARANJE PWA NA TELEFONU (PRE SLANJA):**
    - Izaći na početni ekran.
-   - Otvoriti Task Switcher (pregled pokrenutih aplikacija) i **prevući prstom nagore (swipe away)** kako bi se Chrome / PWA potpuno izbacila iz radne memorije.
+   - Otvoriti Task Switcher (pregled pokrenutih aplikacija) i **prevući prstom nagore (swipe away)** kako bi se PWA zatvorila.
+   - Ovo NIJE Android Force stop i NIJE gašenje browser procesa — samo redovno zatvaranje PWA pre slanja.
    - Zaključati telefon ili ga ostaviti na stolu.
 7. **Slanje probne notifikacije sa zasebne radne stanice (terminala):**
    ```bash

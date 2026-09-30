@@ -1,25 +1,32 @@
 # Napredak projekta
 
-Ažurirano: 27. septembar 2026. — celina 03 je instalabilna PWA osnova sa DEMO rasporedom. Faza 02 i dalje nije završena. Nema dopuštenog izvora stvarnih utakmica.
+Ažurirano: 30. septembar 2026. — orkestracioni checkpoint prvog talasa (run `run_b1cd86cb71c5`): faze 04 i 06 su IN_PROGRESS nad DEMO/emulatorima, faza 05 je BLOCKED, živa push isporuka NOT_TESTED. Finalni dokazi klijenta i push probe se čekaju od koordinatora; ovaj zapis ih ne izmišlja.
 Verzija specifikacije: 2.0
 
 | Zadatak | Status | Dokaz / prepreka |
 |---|---|---|
 | 01 | DONE | `docs/data-feasibility.md`. Zahtev „sve utakmice” nije ispunjen: TheSportsDB seče sezonu na 15 zapisa, API-Sports je bez ključa, football-data.org nema srpska takmičenja ni košarku. |
 | 01B | DONE | `docs/data-on-demand-feasibility.md`. Tok jednog klika i sintetičko spajanje prolaze. Nijedan stvarni izvor nema i pokrivenost i pravo unosa. 00:00/01:00/02:00 nisu potvrđen sat. |
-| 02 | BLOCKED | `docs/push-feasibility.md`. Lokalni FID tok i CPU potpisa prolaze. Android i iPhone su NOT_TESTED na fizičkom uređaju. Firebase Spark projekat `matchahead` i Cloudflare nalog su verifikovani (`docs/infrastructure-readiness.md`). |
-| 03 | DONE | `apps/web` i `docs/handoffs/03-pwa-osnova.md`. Objavljeno na GitHub Pages: `https://mlsivanovic.github.io/matchahead/` (HTTP 200). Instalabilnost, samostalni prozor, offline omotač i DEMO raspored, oznaka zastarelosti, čekanje nove verzije dok traje unos. Prikaz na fizičkom telefonu (ikona na telefonu) je NOT_TESTED. |
-| 04 | TODO | — |
-| 05 | TODO | Čeka dopušten izvor. 01B je skup izvora za unos ostavio praznim. `findFixtures` postoji samo nad sintetičkim odgovorima. |
-| 06 | TODO | — |
-| 07 | TODO | — |
-| 08 | TODO | — |
-| 09 | TODO | — |
-| 10 | TODO | — |
-| 11 | TODO | — |
-| 12 | TODO | — |
+| 02 | BLOCKED | `docs/push-feasibility.md` + `docs/push-readiness-review.md`. Lokalni FID tok i CPU potpisa prolaze (22/22 nad in-memory modelom; edge `cpuTime` NOT_TESTED). Živa isporuka na zatvorenoj PWA nije proverena ni na jednom fizičkom uređaju (Android dostupan po korisniku, iPhone nepotvrđen). Firebase projekat `matchahead` i Cloudflare worker postoje; plan Cloudflare naloga nije verifikovan. |
+| 03 | DONE | `apps/web` i `docs/handoffs/03-pwa-osnova.md`. Poslednja potvrđena Pages objava `be48495` (`https://mlsivanovic.github.io/matchahead/`, HTTP 200 provereno 30. septembra 2026; samo dostupnost). Instalabilnost, samostalni prozor, offline omotač i DEMO raspored. Prikaz na fizičkom telefonu (ikona) je NOT_TESTED. Nova objava nije potvrđena. |
+| 04 | IN_PROGRESS | Jezgro naloga (`packages/domain/src/user-account.ts`, `firebase/firestore.rules`, emulator pomoćnici) testirano u emulatoru: `check-auth.mjs` 4+5+6 prolaza, `tsc` čist; bezbednosna matrica `docs/reviews/04-account-core.md` PASS uz ograničenja. Nisu urađeni: React ekran, browser adapter, živa Google prijava (NOT_TESTED), deploy pravila. Predaja: `docs/handoffs/04-prijava-i-podesavanja.md`. |
+| 05 | BLOCKED | Odobren izvor nedostaje. 01B je skup izvora za unos ostavio praznim. `findFixtures` postoji samo nad sintetičkim odgovorima. Javni rasporedi ostaju DEMO. |
+| 06 | IN_PROGRESS | Logika agende i samostalne UI komponente verifikovane nad DEMO podacima: 39/39 `apps/web` testova, 20/20 domenskih, DOM pregled `docs/reviews/06-agenda-ui.md` 13/13 scenarija (2 manje mane + 3 zapažanja). Integracija u `App.tsx`/`screens.tsx` namerno nije urađena — čeka koordinatora. Živi Auth i uređaji NOT_TESTED. |
+| 07 | TODO | ICS — planirano, nije implementirano. |
+| 08 | TODO | separateCalendarOAuth — planirano, nije implementirano; odvojen korak, nije deo faze 04. |
+| 09 | TODO | pushdevice — planirano, nije implementirano; čeka 04 (FID) i 02. |
+| 10 | TODO | serverCron — planirano, nije implementirano; čeka 06, 08 i 09. |
+| 11 | TODO | E2E — planirano, nije implementirano. |
+| 12 | TODO | Pilot i predaja — nije implementirano. |
 
-## Poslednja rađena celina
+## Checkpoint prvog talasa (30. septembar 2026., run `run_b1cd86cb71c5`)
+
+- Faza 04 jezgro: model, pravila, emulator pomoćnici — testirano (`check-auth.mjs` 4+5+6, `tsc` čist, bezbednosna matrica PASS uz ograničenja). Ekran, adapter, živa prijava i deploy pravila nisu urađeni. Commits: `f7f3213`, `5246e6d`, `5be2809`.
+- Faza 06: logika + samostalne UI komponente nad DEMO podacima — 39/39 + 20/20 testova, DOM pregled 13/13 (2 mane + 3 zapažanja). Integracija u `App.tsx` čeka koordinatora. Commits: `f9f7952`, `d0f8469`, `4e80cef`.
+- Infrastruktura/push docs: `a667913`, `66d294f`, `db5ba30`, `d2ea0ab`, `36289e9` (cherry-pickovano u ovaj snapshot). Naplata read-only proverena (`billingEnabled: false`); Firestore `eur3` multi-region; Pages `be48495` važi do nove potvrđene objave.
+- Devijacije: Muse ručno uz odobrenje korisnika; Gemini `worker_done` odbijen (nedostaje sposobnost) — isporuke preuzete, radnik zaustavljen/oslobođen, ne evidentira se kao prihvaćen završetak. Finalni dokazi klijenta/push-a se čekaju od koordinatora.
+
+## Poslednja rađena celina (faza 03, istorija)
 
 - Rezultat: React/TypeScript/Vite PWA u `apps/web`. Četiri ekrana, manifest sa stabilnim ID-jem jednakim Pages putanji, jedan service worker za omotač i budući FCM. Javni prikaz je samo sintetički DEMO. Faza 02 ostaje BLOCKED.
 - Promenjene datoteke: `apps/web/`, `scripts/check-pwa.mjs`, `docs/progress.md`, `docs/decisions.md`, `docs/handoffs/03-pwa-osnova.md`, `README.md`, `.gitignore`.
@@ -53,14 +60,14 @@ Verzija specifikacije: 2.0
 
 ## Prepreke
 
-- Problem push-a: Firebase Spark projekat (`matchahead`) i Cloudflare nalog jesu obezbeđeni (`docs/infrastructure-readiness.md`), ali zatvorena PWA na fizičkom mobilnom uređaju nije primila poruku.
-- Dokaz: `docs/push-feasibility.md` i `docs/infrastructure-readiness.md`. Android i iPhone su NOT_TESTED.
-- Šta je potrebno: proveriti FCM isporuku na fizičkom Android i iPhone telefonu sa zatvorenom PWA aplikacijom.
-- Problem podataka: nema izvora koji je istovremeno besplatan, dovoljan za objavljene utakmice ovih klubova i dopušten za unos u MatchAhead.
+- Problem push-a: Firebase projekat (`matchahead`) i Cloudflare worker postoje, ali zatvorena PWA ni na jednom fizičkom uređaju nije primila poruku.
+- Dokaz: `docs/push-feasibility.md`, `docs/infrastructure-readiness.md`, `docs/push-readiness-review.md`. Android je dostupan po korisniku, iPhone nije potvrđen; oba su NOT_TESTED za fizičku isporuku.
+- Šta je potrebno: FCM isporuka na PWA zatvorenoj pre slanja sa odvojenog pošiljaoca (NE Force stop, NE gašenje browsera, NE „pošalji pa zatvori”); edge `cpuTime` iz `wrangler tail`; usklađivanje repo koda sa deployovanim Durable Object radnikom pre bilo kakvog novog deploya.
+- Problem podataka: nema odobrenog izvora koji je istovremeno dovoljan za objavljene utakmice ovih klubova i dopušten za unos u MatchAhead. Dozvola Fixtur.es i drugih izvora za unos u MatchAhead nije potvrđena — bez pravnih zaključaka.
 - Dokaz: `docs/data-on-demand-feasibility.md` i `docs/data-feasibility.md`.
-- Šta je potrebno: pisana dozvola nosioca ili novi otvoreni izvor, pa tek onda adapter u fazi 05. API-Sports proba i dalje ne otvara pravo objave.
-- Šta može nezavisno nastaviti: faza 04, prijava i podešavanja, preko postojećeg PWA omotača. Ne sme da registruje drugi service worker. Zadatak 05 ne sme da krene kao da je unos rešen. Push isporuka na zatvorenoj PWA čeka fizički telefon.
+- Šta je potrebno: odobren izvor sa pokrivenošću i pravom unosa, pa tek onda adapter u fazi 05. Do tada javni rasporedi ostaju DEMO.
+- Šta može nezavisno nastaviti: faza 04 ekran/adapter na testiranom jezgru (bez drugog service workera, bez `getToken()`); integracija 04+06; faze 07/08/09/10 na DEMO/mock nivou. Zadatak 05 ne sme da krene kao da je unos rešen.
 
 ## Sledeći zadatak
 
-- Broj i očekivani ishod: 04 — Google prijava i podešavanja. Push faza 02 ostaje BLOCKED. Faza 05 ostaje blokirana praznim skupom dozvoljenih izvora. PWA osnovu ne treba graditi ponovo.
+- 04 klijent (ekran + browser adapter na jezgru) i integracija 04+06 — preko koordinatora, na ovom jezgru. Push faza 02 ostaje BLOCKED za živu isporuku. Faza 05 ostaje BLOCKED. Faze 07–12 su planirane, nisu implementirane. Finalni dokazi klijenta/push-a/pregleda se čekaju od koordinatora.

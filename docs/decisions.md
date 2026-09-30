@@ -108,3 +108,17 @@ Migracija: nema korisničke baze.
 ## Evidencija narednih odluka
 
 Svaku novu odluku zabeleži sa datumom, brojem zadatka, razlogom, dokazima, posledicama i eventualnom migracijom. Ne prepisuj neproveren predlog kao potvrđenu odluku.
+
+## Odluka 04 — checkpoint prvog talasa, 30. septembar 2026.
+
+Run `run_b1cd86cb71c5`. Razlog: orkestracioni krug je završen bez finalnih dokaza klijenta/push-a; checkpoint mora biti IN_PROGRESS i tačan, bez izmišljenog uspeha.
+
+- Faza 04 je IN_PROGRESS: jezgro (`user-account.ts`, `firestore.rules`, emulator pomoćnici) testirano u emulatoru; bezbednosna matrica `docs/reviews/04-account-core.md` PASS uz evidentirana ograničenja (batch pre-state, sintetički `requires-recent-login`, klijentsko brisanje). Ekran, adapter, živa Google prijava i deploy pravila nisu urađeni.
+- Faza 06 je IN_PROGRESS: logika i samostalne komponente verifikovane nad DEMO podacima (DOM pregled 13/13, 2 mane + 3 zapažanja). Integracija u `App.tsx`/`screens.tsx` čeka koordinatora. DONE se priznaje samo za kriterijume koje je finalni pregled dokazao.
+- Faza 05 je BLOCKED: odobren izvor nedostaje; javni rasporedi ostaju DEMO. Dozvola Fixtur.es (i drugih izvora) za unos u MatchAhead je nepotvrđena — bez pravnih zaključaka o tuđim uslovima.
+- Infrastruktura: Firebase projekat `matchahead` postoji; Firestore `FIRESTORE_NATIVE`, multi-region `eur3`, `freeTier: true`; naplata read-only proverena (`gcloud billing projects describe matchahead --format='json(billingEnabled)'` → `billingEnabled: false`). Auth nalazi utvrđeni read-only REST pozivima (`defaultSupportedIdpConfigs/google.com`, `admin/v2/projects/matchahead/config`) — ilustrativna `gcloud identity providers` komanda se ne navodi kao dokaz. Cloudflare nalog i worker `matchahead-push-probe` postoje; plan naloga nije verifikovan dokazom. Pages: `be48495` važi dok koordinator ne pošalje dokaz nove objave.
+- Push dokaz: cilj je PWA zatvorena pre slanja sa odvojenog pošiljaoca — NE Force stop, NE gašenje browsera, NE „pošalji pa zatvori”. Android dostupan po korisniku, iPhone nepotvrđen; nijedan fizički push test nije izvršen. Tajne se ne ispisuju (`echo` zabranjen), unos interaktivan, datoteke sa pravima 600.
+- Faze 07 (ICS), 08 (separateCalendarOAuth, odvojeno od 04), 09 (pushdevice), 10 (serverCron), 11 (E2E), 12 (pilot) su planirane, nisu implementirane.
+- Devijacije: Muse ručno uz odobrenje korisnika; Gemini `worker_done` odbijen (nedostaje sposobnost) — proverene isporuke preuzete, radnik zaustavljen/oslobođen, ne evidentira se kao prihvaćen završetak.
+
+Migracija: nema.
