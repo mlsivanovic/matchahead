@@ -1,0 +1,72 @@
+/* Faza 06 UI: dopuna uz globalne .card/.meta/.filters klase. Bez gradienta i sjaja. */
+
+.agenda-reasons {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.agenda-reasons li {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.agenda-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.agenda-detail {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.agenda-detail dl {
+  margin: 0 0 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.agenda-detail dt {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.agenda-detail dd {
+  margin: 0;
+}
+
+.agenda-selects {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+@media (min-width: 560px) {
+  .agenda-selects {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.agenda-catalog {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-actions button {
+    transition: none;
+  }
+}
