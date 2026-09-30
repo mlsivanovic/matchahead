@@ -1,0 +1,200 @@
+rules_version = '2';
+
+// Vlasnik čita i piše samo svoj nalog. Poslovi i evidencija slanja nisu klijentski.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isSelectableTeam(id) {
+      return id == 'football:rs:crvena-zvezda'
+        || id == 'football:rs:partizan'
+        || id == 'basketball:rs:crvena-zvezda'
+        || id == 'basketball:rs:partizan';
+    }
+
+    function validStamp(value) {
+      return value is string
+        && value.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
+    }
+
+    function validTimeZone(value) {
+      return value is string
+        && value.matches('^[A-Za-z][A-Za-z0-9_+\\-/]{0,63}$');
+    }
+
+    function validReminder(value) {
+      return value is int && (value == 0 || value == 15 || value == 30 || value == 60);
+    }
+
+    function distinctFavorites(ids) {
+      return ids.size() <= 1
+        || (ids.size() == 2 && ids[0] != ids[1])
+        || (ids.size() == 3 && ids[0] != ids[1] && ids[0] != ids[2] && ids[1] != ids[2])
+        || (ids.size() == 4
+          && ids[0] != ids[1] && ids[0] != ids[2] && ids[0] != ids[3]
+          && ids[1] != ids[2] && ids[1] != ids[3]
+          && ids[2] != ids[3]);
+    }
+
+    function validFavorites(ids) {
+      return ids is list
+        && ids.size() <= 4
+        && distinctFavorites(ids)
+        && ids.hasOnly([
+          'football:rs:crvena-zvezda',
+          'football:rs:partizan',
+          'basketball:rs:crvena-zvezda',
+          'basketball:rs:partizan'
+        ]);
+    }
+
+    function validProfile(data) {
+      return data.keys().hasOnly([
+          'schemaVersion',
+          'locale',
+          'timeZone',
+          'favoriteTeamIds',
+          'reminderMinutes',
+          'notifyScheduleChange',
+          'notifyCancellation',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.schemaVersion is int
+        && data.schemaVersion == 1
+        && data.locale == 'sr'
+        && validTimeZone(data.timeZone)
+        && validFavorites(data.favoriteTeamIds)
+        && validReminder(data.reminderMinutes)
+        && data.notifyScheduleChange is bool
+        && data.notifyCancellation is bool
+        && validStamp(data.createdAt)
+        && validStamp(data.updatedAt);
+    }
+
+    function validFollow(data, teamId) {
+      return data.keys().hasOnly(['teamId', 'active', 'createdAt', 'updatedAt'])
+        && data.teamId == teamId
+        && isSelectableTeam(teamId)
+        && data.active is bool
+        && validStamp(data.createdAt)
+        && validStamp(data.updatedAt);
+    }
+
+    function validFixtureId(id) {
+      return id is string && id.matches('^[A-Za-z0-9][A-Za-z0-9:_\\-]{2,399}$');
+    }
+
+    function validManual(data, fixtureId) {
+      return data.keys().hasOnly(['fixtureId', 'active', 'createdAt', 'updatedAt'])
+        && data.fixtureId == fixtureId
+        && validFixtureId(fixtureId)
+        && data.active is bool
+        && validStamp(data.createdAt)
+        && validStamp(data.updatedAt);
+    }
+
+    function validInstallationId(id) {
+      return id is string && id.matches('^[A-Za-z0-9_\\-]{16,64}$');
+    }
+
+    function validFid(fid) {
+      return fid == null || (fid is string && fid.matches('^[cdef][A-Za-z0-9_\\-]{21}$'));
+    }
+
+    function validDevice(data, installationId) {
+      return data.keys().hasOnly(['installationId', 'fid', 'createdAt', 'updatedAt', 'lastSeenAt'])
+        && data.installationId == installationId
+        && validInstallationId(installationId)
+        && validFid(data.fid)
+        && validStamp(data.createdAt)
+        && validStamp(data.updatedAt)
+        && validStamp(data.lastSeenAt);
+    }
+
+    function validDeletion(data) {
+      return data.keys().hasOnly(['status', 'startedAt', 'updatedAt'])
+        && data.status == 'in_progress'
+        && validStamp(data.startedAt)
+        && validStamp(data.updatedAt);
+    }
+
+    function deletionOpen(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/accountOps/deletion);
+    }
+
+    function profileOpen(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid);
+      allow list: if false;
+      allow create: if isOwner(uid) && !deletionOpen(uid) && validProfile(request.resource.data);
+      allow update: if isOwner(uid)
+        && !deletionOpen(uid)
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.schemaVersion == resource.data.schemaVersion;
+      allow delete: if isOwner(uid);
+
+      match /follows/{teamId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && profileOpen(uid) && !deletionOpen(uid) && validFollow(request.resource.data, teamId);
+        allow update: if isOwner(uid)
+          && profileOpen(uid)
+          && !deletionOpen(uid)
+          && validFollow(request.resource.data, teamId)
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(uid);
+      }
+
+      match /manualSelections/{fixtureId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && profileOpen(uid) && !deletionOpen(uid) && validManual(request.resource.data, fixtureId);
+        allow update: if isOwner(uid)
+          && profileOpen(uid)
+          && !deletionOpen(uid)
+          && validManual(request.resource.data, fixtureId)
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(uid);
+      }
+
+      match /devices/{installationId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && profileOpen(uid) && !deletionOpen(uid) && validDevice(request.resource.data, installationId);
+        allow update: if isOwner(uid)
+          && profileOpen(uid)
+          && !deletionOpen(uid)
+          && validDevice(request.resource.data, installationId)
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(uid);
+      }
+
+      match /accountOps/{opId} {
+        allow get: if isOwner(uid) && opId == 'deletion';
+        allow list: if isOwner(uid);
+        allow create: if isOwner(uid) && opId == 'deletion' && validDeletion(request.resource.data);
+        allow update: if isOwner(uid)
+          && opId == 'deletion'
+          && validDeletion(request.resource.data)
+          && request.resource.data.startedAt == resource.data.startedAt;
+        allow delete: if isOwner(uid) && opId == 'deletion';
+      }
+    }
+
+    match /notifJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /notificationDeliveries/{deliveryId} {
+      allow read, write: if false;
+    }
+  }
+}

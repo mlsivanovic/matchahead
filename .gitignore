@@ -11,3 +11,8 @@ experiments/push-probe/worker-startup.cpuprofile
 apps/web/node_modules/
 apps/web/dist/
 apps/web/dev-dist/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log

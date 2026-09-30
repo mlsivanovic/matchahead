@@ -12,6 +12,7 @@
     "demo-schedule": "node --experimental-strip-types scripts/write-demo-schedule.ts"
   },
   "dependencies": {
+    "firebase": "12.19.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
