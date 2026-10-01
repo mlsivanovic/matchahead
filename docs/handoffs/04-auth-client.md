@@ -50,11 +50,47 @@ jezgro 5246e6d (brava accountTombstones, reauth nastavlja samo Auth brisanje).
   (odjava/zamena/late, greške bez curenja, omiljeni odvojeni, red upisa,
   unlink redosled+timeout, brava/zastava/reauth nastavak, potvrda preko
   null događaja, bez prelaska na novi uid, lokalni DEMO, zona overlay).
-- `apps/web/scripts/check-auth-browser.mjs`: 49 browser provera na
+- `apps/web/scripts/check-auth-browser.mjs`: 51 browser provera na
   izolovanim emulatorima (auth 9098, firestore 8081), pravi popup tok,
   dva identiteta, reload sesija, brzi ciklusi, prefs round-trip,
-  cross-tab odjava, otkazani popup, brisanje sa bravom. Sam bilda bundle,
+  cross-tab odjava, otkazani popup, brisanje sa bravom. Odjava veze
+  uređaja se dokazuje posejanim dokumentima: važeći dokument tekuće
+  instalacije + drugi uređaj potvrđeni pre odjave, posle odjave tekući
+  nestao a drugi očuvan (klijent briše kao autentifikovani vlasnik pod
+  živim pravilima; seed ide emulator admin API-jem). Sam bilda bundle,
   gasi browser/server u finally. Granice u zaglavlju.
+- Blokirajuća popravka gašenja sesije (koordinatorski checkpoint):
+  preklopljeni dispose čeka isto deljeno teardown obećanje (barijera),
+  `ensureFirebaseSession` baca dok teardown traje umesto tihe reciklaže
+  app-a, `disposeSessionIfCurrent` pridružuje tuđe gašenje pre spuštanja
+  retiring zastavice, a prijava tokom sopstvene odjave čeka kraj te odjave
+  (signOutSettled) umesto paralelnog gašenja koje ostavlja token pa nova
+  sesija povraća starog korisnika.
+- Vlasništvo zakašnjelih događaja značkom pokušaja, istim simbolima:
+  `beginSignIn` vrati `{uid, seq, endedEpoch}` konkretnog pokušaja, kasni
+  rejection je nosi u `noticeFailure(message, attempt)` — zastareli
+  failure posle novog klika (seq), novog identiteta (uid) ili null-a koji
+  zaista završava identitet (epoha) ostaje bez dejstva; null odjek bez
+  vlasnika ne poništava tekući pokušaj (cancel putanja). Stari kod je
+  novi nalog prebacivao u grešku i brisao mu privatne podatke; tekući
+  pokušaj (uklj. offline) i dalje prikazuje svoju poruku. Sama
+  generacija tiketa nije dovoljna (observer null diže generaciju bez
+  promene vlasnika). Obe finally grane delegiraju lastUid na
+  `settleUidAfterAccountEnd` (kraj starog postupka ne dira novijeg
+  vlasnika). Sve creation putanje čekaju završetak gašenja pre ensure
+  (signIn: kraj sopstvene odjave ili tuđa barijera; mount remount, cycle,
+  switch: dispose barijera); ensure guard baca samo na zloupotrebu.
+  Regresija:
+  `test/session-teardown.test.ts` (stvarni firebase/app SDK, kontrolisani
+  terminate: overlap, klik/remount barijera, ensure-guard; fail-first 3
+  pada na starom kodu), `test/account-ownership.test.ts` (kontrolisani
+  pending popup redosled istim simbolima: novi nalog, novi klik,
+  dolazak+kraj identiteta, null odjek; fail-first 3 pada), plus
+  pinovanje pravila `test/account-uid-settlement.test.ts` i disciplinu
+  klik/remount barijere. Globalni
+  mutable owner je odbačen: ne veže failure za konkretan pokušaj niti
+  štiti isti uid (nalaz Gemini/msg_7c3c95201523; teardown guard
+  msg_48809e0629bb).
 - `apps/web/scripts/check-pwa.mjs`: popravljeno čekanje iscrtanog ekrana
   (hash-vs-render trka), id beleške vraćen na draft-note, offline tvrdnje
   usklađene sa ispražnjenom agendom (keširan raspored 200, prazna agenda,
@@ -65,13 +101,21 @@ jezgro 5246e6d (brava accountTombstones, reauth nastavlja samo Auth brisanje).
 
 ## Provere (sve viđene u ovoj sesiji)
 
-- Jedinični: apps/web 63/63, domain 24/24; `tsc --noEmit` čist;
+- Jedinični: apps/web 73/73, domain 24/24; `tsc --noEmit` čist;
   `vite build` uspešan (jedan SW, precache 13).
-- Browser DOM na izolovanim emulatorima: 49/49 PASS (uključuje
+- Browser DOM na izolovanim emulatorima: 52/52 PASS (uključuje
   signInA->signOut->signInB, relogin istog naloga, 2 brza ciklusa,
   reload sesiju sa omiljenima, cross-tab čišćenje, otkazani popup,
-  brisanje C sa `Nalog je obrisan.`, tombstone tačno
-  status/startedAt/updatedAt, A/B netaknuti).
+  posejani unlink dokaz, brisanje C sa `Nalog je obrisan.`, tombstone
+  tačno status/startedAt/updatedAt, A/B netaknuti). Pravi uzrok povremenih
+  cancel prekida nađen /tmp marker-sondom: klik odmah po odjavi, dok je
+  finally odjave još u letu — prijava je sama gasila sesiju uporedo sa
+  signOutAuth, token je preživeo pa je nova sesija tiho povratila Anu
+  umesto popup greške. Popravljeno: prijava čeka kraj sopstvene odjave
+  (signOutSettled, bez paralelnog gašenja); trka dokazano daje odjavljeno
+  stanje + poruku. Harness zatvara popup tek po spremnosti handlera;
+  izmerena detekcija zatvaranja ~9–10s, čekanje 20s je 2x margina.
+  Hipoteza o brisanju greške kasnim null odjekom je opovrgnuta i povučena.
 - PWA: svih 11 PASS (offline omotač+raspored, update blokada, OAuth
   van keša, jedan SW, Pages baza).
 - Greške koje su uhvaćene proverom pa popravljene: missing popup
@@ -95,7 +139,11 @@ jezgro 5246e6d (brava accountTombstones, reauth nastavlja samo Auth brisanje).
 
 ## Otvoreno za koordinatora
 
-- Postaviti repository VARIABLES VITE_FIREBASE_* (javne) ili potvrditi
-  da će to koordinator (commit ne gura sajt; integration je tvoj).
+- Repository VARIABLES VITE_FIREBASE_* (javne, klijentski config koji se
+  ugrađuje u bundle) provereno postavljene: `gh variable list --repo
+  mlsivanovic/matchahead` vraća svih 6 imena (API_KEY, APP_ID,
+  AUTH_DOMAIN, MESSAGING_SENDER_ID, PROJECT_ID, STORAGE_BUCKET) sa
+  updated oznakama 2026-10-01T12:45:21-23Z. Vrednosti se ne navode ovde;
+  bez tajni. Commit ne gura sajt; integration je tvoj.
 - Finalni core je već uključen (5246e6d); brisanje je vezano i dokazano
   u browseru. Nema izmena pravila/domena/jegra testova sa moje strane.

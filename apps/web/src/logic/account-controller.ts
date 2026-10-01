@@ -142,6 +142,17 @@ export const firestoreAccountRemote: AccountRemote = {
  * Omiljeni klubovi se nikad ne mešaju u praćenja: agenda prima samo
  * followedTeamIds i manualFixtureIds.
  */
+/**
+ * Značka konkretnog pokušaja prijave: uid pri kliku, redni broj klika i
+ * epoha završenih identiteta. Null odjek bez vlasnika (već odjavljen)
+ * ne diže epohu; null koji zaista završava identitet je čini zastarelom.
+ */
+export interface SignInAttempt {
+  uid: string | null;
+  seq: number;
+  endedEpoch: number;
+}
+
 export class AccountController {
   readonly gate = new AccountGate();
   private listeners = new Set<() => void>();
@@ -191,11 +202,22 @@ export class AccountController {
     this.emit();
   }
 
-  /** Klik na prijavu: radno stanje pre popup-a; uspeh stiže preko auth događaja. */
-  beginSignIn(message: string): void {
-    if (this.gate.uid !== null) return;
+  /**
+   * Klik na prijavu: radno stanje pre popup-a; uspeh stiže preko auth
+   * događaja. Vraća značku konkretnog pokušaja: kasni failure se vezuje
+   * za nju, pa zastareli rejection posle novog klika, novog identiteta
+   * ili null događaja ostaje bez dejstva. Sama generacija tiketa nije
+   * dovoljna: observer null događaj podigne generaciju bez promene
+   * vlasnika, a tekući pokušaj tada i dalje važi.
+   */
+  private endedEpoch = 0;
+
+  beginSignIn(message: string): SignInAttempt {
+    const attempt: SignInAttempt = { uid: this.gate.uid, seq: this.nextSignInSeq(), endedEpoch: this.endedEpoch };
+    if (this.gate.uid !== null) return attempt;
     this.gate.showWorking(message);
     this.emit();
+    return attempt;
   }
 
   /**
@@ -210,8 +232,23 @@ export class AccountController {
     this.emit();
   }
 
-  /** Neuspeo pokušaj prijave bez identiteta: greška bez privatnih podataka. */
-  noticeFailure(message: string): void {
+  private signInSeq = 0;
+
+  private nextSignInSeq(): number {
+    this.signInSeq += 1;
+    return this.signInSeq;
+  }
+
+  /**
+   * Neuspeo pokušaj prijave bez identiteta: greška bez privatnih
+   * podataka. Važi samo za značku svog pokušaja (isti uid i isti redni
+   * broj klika): gate.applyError proverava generaciju (i briše privatne
+   * podatke), pa zakašnjeli failure starog pokušaja nikad ne prebacuje
+   * novi nalog u grešku niti mu briše privatne podatke.
+   */
+  noticeFailure(message: string, attempt: SignInAttempt): void {
+    if (attempt.uid !== this.gate.uid || attempt.seq !== this.signInSeq
+      || attempt.endedEpoch !== this.endedEpoch) return;
     const ticket = this.gate.ticket();
     this.gate.applyError(ticket, message);
     this.emit();
@@ -225,6 +262,9 @@ export class AccountController {
     deletion?: DeletionHooks,
   ): Promise<void> {
     if (!identity || !db) {
+      // Null koji zaista završava identitet diže epohu i zastareva
+      // tekuće pokušaje; odjek bez vlasnika ne dira ništa.
+      if (this.gate.uid !== null) this.endedEpoch += 1;
       // deleteUser gasi Auth i stiže null pre kraja brisanja: sveža
       // potvrda brisanja se čuva, ostalo se čisti kao odjava.
       const keepDeleted = this.gate.message === DELETED_MESSAGE;

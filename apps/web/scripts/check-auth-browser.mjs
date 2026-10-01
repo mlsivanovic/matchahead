@@ -19,9 +19,10 @@
  * kredencijali, samo @example.com identiteti), resetuje emulatore,
  * vozi pravi Google popup tok kroz emulator widget i proverava:
  * DEMO bez prijave, prijavu/odjavu, profil/omiljene/praćenja/ručne
- * izbore, agendu, reload sesije, izolaciju dva naloga, ponovne
- * cikluse, prefs round-trip, cross-tab odjavu, otkazani popup i
- * brisanje naloga sa bravom. Browser i server se gase u finally.
+ * izbore, agendu, reload sesije, izolaciju dva naloga, uklanjanje
+ * veze tekućeg uređaja uz očuvanje drugog (oba posejana pre odjave),
+ * ponovne cikluse, prefs round-trip, cross-tab odjavu, otkazani popup
+ * i brisanje naloga sa bravom. Browser i server se gase u finally.
  *
  * Granice: live Google popup/mobile NOT_TESTED; requires-recent-login
  * je sintetički samo u jediničnim testovima; isti-uid ponovna prijava
@@ -62,6 +63,20 @@ function check(name, condition, detail = '') {
 }
 
 const ADMIN_HEADERS = { Authorization: 'Bearer owner' };
+
+/** Upis dokumenta kroz emulator admin API (Bearer owner): seed je
+ *  oblika koji pravila prihvataju, a brisanje dokazuje sam klijent kao
+ *  autentifikovani vlasnik pod živim pravilima. */
+async function storePut(path, fields) {
+  const encode = (value) => (value === null ? { nullValue: 'NULL_VALUE' } : { stringValue: value });
+  const body = { fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, encode(value)])) };
+  const response = await fetch(`${STORE}/v1/projects/${PROJECT}/databases/(default)/documents/${path}`, {
+    method: 'PATCH',
+    headers: { ...ADMIN_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`seed ${response.status} for ${path}: ${await response.text()}`);
+}
 
 async function storeGet(path) {
   const response = await fetch(`${STORE}/v1/projects/${PROJECT}/databases/(default)/documents/${path}`, { headers: ADMIN_HEADERS });
@@ -310,8 +325,22 @@ async function runFlow(browser, origin) {
   check('drugi-tab', true);
   await tab2.close();
 
-  // 4. Odjava čisti UI, sesiju i vezu uređaja.
+  // 4. Odjava čisti UI, sesiju i vezu uređaja. Pre odjave posej dva
+  // važeća dokumenta (tekuća instalacija + drugi uređaj) i potvrdi da
+  // postoje: prazna kolekcija pre i posle nije dokaz uklanjanja.
   await gotoScreen(page, '#/podesavanja', 'settings');
+  const installationId = await page.evaluate(() => localStorage.getItem('matchahead.device.installationId'));
+  check('odjava-install-id', typeof installationId === 'string' && (installationId?.length ?? 0) >= 16, installationId);
+  const OTHER_DEVICE = 'dev-drugi-uredjaj-0001';
+  const STAMP = '2026-10-01T00:00:00.000Z';
+  const deviceFields = (id) => ({
+    installationId: id, fid: null, createdAt: STAMP, updatedAt: STAMP, lastSeenAt: STAMP,
+  });
+  await storePut(`users/${uidA}/devices/${installationId}`, deviceFields(installationId));
+  await storePut(`users/${uidA}/devices/${OTHER_DEVICE}`, deviceFields(OTHER_DEVICE));
+  const seeded = await listDocs(`users/${uidA}/devices`);
+  check('odjava-seed', seeded.length === 2
+    && seeded.some((d) => d.id === installationId) && seeded.some((d) => d.id === OTHER_DEVICE));
   check('odjava-klik', await clickButton(page, 'Odjavi se'));
   await page.waitForFunction(() => document.body.innerText.includes('Prijavi se Google nalogom'), { timeout: 20000 });
   text = await appText(page);
@@ -321,7 +350,10 @@ async function runFlow(browser, origin) {
     ?? sessionStorage.getItem('matchahead.session.draftNote'));
   check('odjava-sesija', leftoverSession === null);
   await new Promise((resolve) => setTimeout(resolve, 2000));
-  check('odjava-unlink', (await listDocs(`users/${uidA}/devices`)).length === 0);
+  const leftover = await listDocs(`users/${uidA}/devices`);
+  check('odjava-unlink', leftover.length === 1
+    && leftover[0].id === OTHER_DEVICE && leftover[0].fields.installationId === OTHER_DEVICE,
+    JSON.stringify(leftover.map((d) => d.id)));
   await gotoScreen(page, '#/', 'home');
   check('odjava-agenda-prazna', (await appText(page)).includes('Tvoja agenda je prazna'));
 
@@ -407,7 +439,11 @@ async function runFlow(browser, origin) {
     check('cancel-klik', await clickLogin(page));
     const cancelPopup = await w;
     check('cancel-popup', cancelPopup !== null);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Zatvori tek kad je handler spreman: zatvaranje praznog popup-a ulazi
+    // u drugi SDK put od korisničkog otkazivanja. Izmereno: spreman popup
+    // daje poruku za ~10s posle zatvaranja, pa 20s čekanja ima 2x marginu.
+    await cancelPopup.waitForFunction(() => document.body.innerText.includes('Google.com'), { timeout: 15000 });
+    check('cancel-spreman', true);
     try {
       if (!cancelPopup.isClosed()) await cancelPopup.close();
     } catch { /* već zatvoren */ }

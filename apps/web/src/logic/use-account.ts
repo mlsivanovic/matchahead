@@ -46,6 +46,16 @@ export interface UseAccountResult {
   deleteAccount: () => void;
 }
 
+/**
+ * Deo stvarnog finally callbacka odjave i brisanja: kraj starog postupka
+ * čisti lastUid samo dok je njegov vlasnik još aktuelan. Novija prijava
+ * koja je u međuvremenu preuzela lastUid ostaje netaknuta. Obe finally
+ * grane ispod delegiraju ovde; testovi vezuju tačno ovu funkciju.
+ */
+export function settleUidAfterAccountEnd(current: string | null, endedUid: string | null): string | null {
+  return current === endedUid ? null : current;
+}
+
 function browserEnv(): FirebaseEnv {
   const env = import.meta.env as Record<string, string | undefined>;
   return {
@@ -79,6 +89,13 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
   const live = useRef(input);
   live.current = input;
   const lastUid = useRef<string | null>(null);
+  /**
+   * Kraj tekuće sopstvene odjave (uključujući njeno gašenje sesije).
+   * Prijava tokom odjave čeka baš ovaj završetak umesto da sama gasi:
+   * paralelni terminate/deleteApp trči sa signOutAuth, token preživi,
+   * pa nova sesija povraća starog korisnika umesto popup toka.
+   */
+  const signOutSettled = useRef<Promise<void> | null>(null);
   const attachedAuth = useRef<Auth | null>(null);
   const stopAuth = useRef<(() => void) | null>(null);
   const attachRef = useRef<(() => void) | null>(null);
@@ -187,9 +204,20 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
       attach();
     };
 
-    ensureFirebaseSession(setup.config, setup.emulators);
-    attach();
     attachRef.current = attach;
+    void (async () => {
+      // Početni mount (npr. remount) može zateći gašenje u letu: bez
+      // aktivne sesije sačekaj tuđu barijeru pre prve sesije, inače
+      // ensure guard baca umesto da reciklira app koji se još gasi.
+      // Postojeća sesija znači mir (invarijanta: teardown ⟹ nema sesije).
+      if (!activeFirebaseSession()) {
+        await disposeFirebaseSession();
+        if (disposed.current) return;
+      }
+      if (disposed.current) return;
+      ensureFirebaseSession(setup.config, setup.emulators);
+      attach();
+    })();
 
     const onOnline = () => {
       void controller.refresh();
@@ -217,16 +245,27 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
         );
         return;
       }
+      // Tiket konkretnog pokušaja: kasni failure (offline ili odbijeni
+      // popup) vezuje se za njega, pa zastareli rejection posle novog
+      // klika, novog identiteta ili null događaja ostaje bez dejstva.
+      const attempt = controller.beginSignIn(WORKING_MESSAGE);
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        controller.noticeFailure(OFFLINE_MESSAGE);
+        controller.noticeFailure(OFFLINE_MESSAGE, attempt);
         return;
       }
-      controller.beginSignIn(WORKING_MESSAGE);
       void (async () => {
-        if (retiring.current) {
-          // Sačekaj gašenje stare sesije: initializeApp dok je deleteApp
-          // prethodne instance u letu pravi mrtvu instancu (app-deleted)
-          // pa popup umire usred toka.
+        // Pre svake nove sesije sačekaj kraj gašenja u letu: initializeApp
+        // dok je deleteApp prethodne instance u letu pravi mrtvu instancu
+        // (app-deleted) pa popup umire usred toka. Sopstvena odjava u letu
+        // dovršava i svoje gašenje (vidi signOutSettled) pa se samo čeka;
+        // bez sesije (npr. cross-tab cycle je pokrenuo dispose) čeka se
+        // tuđa barijera. Invarijanta modula: dok teardown traje, aktivne
+        // sesije nema, pa postojeća sesija van odjave znači mir.
+        const ongoingSignOut = retiring.current ? signOutSettled.current : null;
+        if (ongoingSignOut) {
+          await ongoingSignOut;
+          if (disposed.current) return;
+        } else if (!activeFirebaseSession()) {
           await disposeFirebaseSession();
           if (disposed.current) return;
         }
@@ -252,7 +291,12 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
           }
         },
         (error: unknown) => {
-          controller.noticeFailure(safeFirebaseMessage(firebaseErrorCode(error)));
+          // Stvarni kasni callback popup-a: greška nosi tiket svog
+          // pokušaja (vidi AccountController.beginSignIn/noticeFailure).
+          // Testovi vezuju upravo ovu putanju preko kontrolera sa
+          // kontrolisanim pending popup redosledom.
+          if (disposed.current) return;
+          controller.noticeFailure(safeFirebaseMessage(firebaseErrorCode(error)), attempt);
         },
         );
       })();
@@ -263,7 +307,7 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
       const auth = session?.auth;
       retiring.current = true;
       live.current.onLocalClear(uid);
-      void controller.signOut({
+      const run = controller.signOut({
         signOutAuth: async () => {
           // Odjavi samo nameravani nalog: tuđi novi currentUser se ne dira.
           if (!auth) return;
@@ -274,12 +318,13 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
         installationId,
         onLocalClear: () => live.current.onLocalClear(uid),
       }).finally(async () => {
-        // Zastarela odjava ne dira lastUid novije prijave.
-        if (lastUid.current === uid) lastUid.current = null;
+        lastUid.current = settleUidAfterAccountEnd(lastUid.current, uid);
         // Gasi samo sesiju ove odjave: novija prijava ima svoju.
         await disposeSessionIfCurrent(session ?? null);
         retiring.current = false;
       });
+      signOutSettled.current = run;
+      void run;
     },
     deleteAccount: () => {
       const session = activeFirebaseSession();
@@ -288,7 +333,7 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
       if (!auth || !uid) return;
       retiring.current = true;
       void controller.deleteAccount(deletionFor(auth, uid)).finally(async () => {
-        lastUid.current = null;
+        lastUid.current = settleUidAfterAccountEnd(lastUid.current, uid);
         await disposeSessionIfCurrent(session ?? null);
         retiring.current = false;
       });
