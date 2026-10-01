@@ -10,7 +10,7 @@ nadzor, integraciju i GitHub push posle uspešne provere. Ugovor i kriterijumi:
 | Vlasnik | Task / aktivni Dispatch | Checkout | Stanje |
 |---|---|---|---|
 | Grok | `task_5005528994dd` / `ctx_4afd0410a698` | `matchahead-05-server` | Stvarni rad potvrđen transcript-om; server, domenski ugovor i izvori. |
-| Muse | `task_d335ec2e38f2` / `ctx_9f999b596daf` | `matchahead-05-client` | Operator-launched `muse exec` radi pod Orca low-level Dispatch-om. Automatski start `ctx_40e3708960e7` readiness timeout, terminal released. |
+| Muse | `task_b13ba1b5b2c8` / `ctx_9c68975dab53` | `matchahead-05-client` | Novi zadatak za jedinstvenu agendu, derbi i deadline celog odgovora; operator-launched `muse exec` u istoj nesupervisanoj procesnoj traci. |
 | Gemini CLI | `task_f5915fa787be` / `ctx_f0564837be01` | `matchahead-05-review` | Novi nezavisni QA zadatak: korekcije audita i pregled koda; finalni pregled čeka integrisani HEAD. |
 
 Sva tri checkout-a su zasebni child worktree-i iz `main` na `7e09458`;
@@ -33,6 +33,27 @@ Zajednički HTTP ugovor `0a9ad3f` integrisan je kao `076c5fc`; 28/28 domenskih
 provera i 73/73 postojećih web provera prolaze i na Node 22. `checkedAt` je
 nullable prema odluci 05A. Pages workflow proverava domen i web pre builda;
 javni URL schedule servera dolazi iz repository variable, bez sportskih tajni.
+
+Prvi Muse zadatak `task_d335ec2e38f2` / `ctx_9f999b596daf` ima prihvaćen
+`worker_done` za `ab54b0e` (integrisan kao `9557699`). Funkcionalna prihvatljivost
+nije potvrđena: završni pregled našao je izdvojenu agendu bez glavnih filtera/
+sledeće utakmice, moguće dupliranje derbija i deadline koji prestaje pre tela
+odgovora. Novi Task nastavlja ove konkretne popravke. Isti operator terminal
+ima novog vlasnika rada; nema retroaktivne tvrdnje o supervisanom resursu.
+
+Koordinator je izričito prekinuo samo četiri proverena test-child procesa prvog
+Muse rada, zaglavljena u mock fetch-u bez AbortSignal obrade. Identitet je
+proveren preko PID-a, skripte, tačnog cwd-a i Muse pretka; agent nije prekinut.
+Mock je potom ispravljen i koordinator je nezavisno potvrdio 91/91 exit 0.
+Ovo ne rešava nalaz o stvarnom sporom telu odgovora; on pripada novom Tasku.
+
+Audit/probe milestone `3f691a9` integrisan je kao squash `d885bcf`, sa ispravljenim
+pravnim opsegom i jasnim granicama dokaza. Nezavisna koordinatorska živa proba:
+8/8 očekivanih ponašanja PASS, exit 0. To uključuje Game Center 429, zastareli
+KK Partizan i TheSportsDB truncation; ne znači osam proizvodnih izvora.
+PWA pregled nad prvim klijentom PASS, lokalna account isolation regresija
+6/6 PASS u zasebnim emulatorima (čisto ugašeni). Završni server/klijent/QA i
+GitHub push još nisu završeni.
 
 Početni koordinatorski lokalni dokazi: domenski 24/24, web 73/73 i PWA build/
 browser checker PASS. Nema novih dokaza produkcionog source prava/potpunosti,
