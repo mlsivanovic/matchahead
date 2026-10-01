@@ -102,3 +102,11 @@ Verzija specifikacije: 2.0
 - Izvorni audit/probe su integrisani kao `d885bcf`. Koordinator je nezavisno ponovio osam mrežnih scenarija (exit 0), uključujući zvanični PDF Evrolige sa 38 kola i očekivanu blokadu Game Centera. To nije potvrda licence, punog sezonskog parsera niti Cloudflare CPU-a.
 - Koordinator: prvi klijent 91/91 web (exit 0), PWA pregled svih 11 scenarija PASS, izolacija naloga 6/6 emulator PASS. Push osnova 27/27 (23 funkcionalna + 4 workerd) potvrđena bez promene produkcije. Konačna faza-05 browser/server matrica još se čeka.
 - Gemini Task `task_f5915fa787be` proverava preliminarne nalaze, a konačni integrisani HEAD dobija tek kada server i korekcije klijenta budu spremni. Nema prihvaćenog finalnog QA niti GitHub push-a.
+
+## Checkpoint klijentske integracije — 1. oktobar, 18:14 UTC
+
+- Muse korekcija `7fa387a` integrisana selektivno kao `6871a5e`: samo devet klijentskih datoteka, bez vraćanja starije domenske kopije. Jedna stvarna agenda spaja klupske snimke, bira konzistentnu reviziju, prikazuje derbi jednom i prekida zahtev do kraja čitanja tela.
+- Koordinator nezavisno potvrđuje stvarni exit 0: web 103/103, browser rasporeda 16 PASS (390/360 px, oba kluba, derbi, filteri, offline, opoziv), PWA 11 PASS. Artefakti su `/tmp/matchahead-05-unified-client-check.log`, `...-browser.log`, `...-pwa.log`.
+- Predaja nije konačna faza-05 prihvatljivost. Novi Muse Task `task_0f1237e026a1` / `ctx_56818f4c2f10` popravlja nedostajuće provere imenika učesnika, sadržaja/reda next pokazivača, pozitivnih revizija i mešovitog dozvoljenog/blokiranog izvora. Prethodni Task ima prihvaćen `worker_done`; operator-launched Muse proces dokazano je završio i terminal je ponovo korišćen za novu tačnu predaju.
+- Grok server i stvarni DO adapteri još su aktivni. Gemini završni QA dobija konačni HEAD posle obe dorade; mora dodatno da propusti stvarne server odgovore kroz klijentski validator i proveri očekivane klupske brojeve redova nezavisno od parsera.
+- Platformski audit `0c8bf84` je integrisan kao `41e6c4b`, uz pending workerd dokaz i bez pretpostavke produkcione dozvole. GitHub push još nije izvršen.

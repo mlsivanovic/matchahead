@@ -152,3 +152,9 @@ Nakon završetka rada Groka i Muse-a:
 - Nova primarna platform dokumentacija razlikuje 30 s CPU u DO od 10 ms običnog Free ingress Worker-a. Odluka 05B uklanja preuranjenu tehničku zabranu parsera; stvarni workerd i edge dokazi se i dalje traže.
 - Audit korekcija `88a4683` integrisana kao `ebb72ab`: CZV lokalni sat nije UTC, hero sat je uočeni konflikt, kolo nije deo kanonskog ID-ja, uklonjena nepodržana sudska tvrdnja.
 - Konačni QA, servis deploy i GitHub push nisu urađeni. Stare roadmap tabele u ovom dokumentu su istorija prvog talasa; aktuelno stanje je `docs/progress.md`.
+
+## Aktivna završna dorada klijenta
+
+Prvi korektivni Task `task_b13ba1b5b2c8` / `ctx_9c68975dab53` prihvaćen je sa `7fa387a`; koordinator je preuzеo samo vlasničke klijentske datoteke kao `6871a5e`, sačuvao noviji domen i nezavisno ponovio 103 web / 16 browser / 11 PWA prolaza. `7fa387a` je uključio lokalno donete domenske promene uprkos vlasništvu, pa njegov kompletan cherry-pick nije urađen.
+
+Dalji vlasnik popravke validatora je Muse novi Task `task_0f1237e026a1` / Dispatch `ctx_56818f4c2f10` u istom worktree-u i terminalu, nakon dokazanog izlaska prethodnog `muse exec`. Proces je opet operator-launched sa tačnim preamble-om, nesupervisan; cleanup procesa ostaje obaveza koordinatora. Popravke: imenici učesnika, next sadržaj/red, pozitivne revizije, dozvoljeni delimični odgovor uz nepovezani blokirani izvor. Grok i Gemini Task-ovi ostaju aktivni, finalni HEAD još nije izdat.
