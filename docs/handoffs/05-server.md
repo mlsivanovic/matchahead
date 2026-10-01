@@ -39,14 +39,16 @@ Komande, 1. oktobar 2026, Node 26.7.0 (mise). Node 22 nije instaliran i nije pok
 
 `node scripts/check-schedule-service.mjs` prvo pokreće `tsc -p experiments/schedule-service --noEmit` iz lockfile-a (`typescript` 5.9.3, `@types/node` 26.6.3), pa testove. `allowImportingTsExtensions` i `noEmit` su uključeni. `rootDir` nije sužen na servis, jer uvoz vuče `packages/domain`. Strip-types i esbuild nisu zamena za ovu proveru.
 
-- `node scripts/check-data-contracts.mjs` — 35 PASS, 0 FAIL, 138 ms
-- `node scripts/check-schedule-service.mjs` — tsc bez greške, zatim 40 PASS, 0 FAIL, 17934 ms
+- `node scripts/check-data-contracts.mjs` — 35 PASS, 0 FAIL, 142 ms
+- `node scripts/check-schedule-service.mjs` — tsc bez greške, zatim 40 PASS, 0 FAIL, 17810 ms
 
 Zid ovog procesa u tom nizu, nije obračunati CPU:
 
-- Node Evroliga PDF: `euroleague-node-wall-ms=90.8`
-- workerd sačuvani FSS HTML: `fss-html-wall-ms=40.0`
-- workerd sačuvani Evroliga PDF: `euroleague-pdf-wall-ms=45.0`
+- Node Evroliga PDF: `euroleague-node-wall-ms=93.4`
+- workerd sačuvani FSS HTML: `fss-html-wall-ms=35.0`
+- workerd sačuvani Evroliga PDF: `euroleague-pdf-wall-ms=51.0`
+
+`miniflare` je `5.20261001.0-alpha`, `undici` `7.29.1`, `workerd` `1.20261001.1`. `npm audit` u tom paketu javlja 0 ranjivosti. To je razvojna zavisnost, ne deploy. Root je na integrisanom `96aea3d` već javio Node 22, 40/40 i domen 35/35. Ovaj radnik je merio Node 26.7.0.
 
 Workerd, isti niz:
 
@@ -63,12 +65,12 @@ Workerd, isti niz:
 
 Sačuvani dokumenti u `/tmp/ma-sources`, nisu u gitu. Obavezne provere su u `adapters.test.ts`. Brojevi su sa ovog diska, 1. oktobar 2026:
 
-- FSS: 182 nacrta, `incomplete_page`, nijedan `startsAtUtc`, nema `k{kolo}` identiteta
-- ABA: 180 nacrta, `incomplete_page`; meč 15 ostaje `startsAtUtc` null, datum `2026-10-02`, sat `18:30`; jedini UTC je meč 27, Cluj, `2026-10-11T10:00:00Z` preko Europe/Bucharest
-- Partizan fudbal: 34 nacrta, nepotpuno, jedan zakazan ili bez sata, odlaganja postoje, zona prazna
-- FK Crvena zvezda: 22 nacrta, nepotpuno, nema zone, hero 13:00 nije termin
+- FSS: 182 nacrta posle odbacivanja istog pregleda 11. kola, `complete`, nijedan `startsAtUtc`. Isti par sa različitim datumom i dalje nije potpuna strana. Nema `k{kolo}` identiteta.
+- ABA: 180 nacrta, `complete`, Partizan 18 i Zvezda 18 posebno. Meč 41 je Igokea m:tel, ne sečenje na dvotački. Meč 15 ostaje `startsAtUtc` null, datum `2026-10-02`, sat `18:30`. Jedini UTC je meč 27, Cluj, `2026-10-11T10:00:00Z` preko Europe/Bucharest.
+- Evroliga PDF: 380 redova, 38 kola, 10 mečeva po kolu, 38 mečeva Partizana i 38 Zvezde. Kolo je ROUND naslov iznad reda po Y koordinati, ne indeks u toku. Dupli par i red bez gosta nisu potpuni. 8. januar 2027. Zvezda kod kuće je `2027-01-08T19:00:00Z` iz GMT kolone. Javno preuzimanje nije dozvola.
+- Partizan fudbal: 34 nacrta, pravilo potpunosti i dalje nije ispunjeno, jedan zakazan ili bez sata, odlaganja postoje, zona prazna
+- FK Crvena zvezda: 22 nacrta, pravilo potpunosti i dalje nije ispunjeno, nema zone, hero 13:00 nije termin
 - KK Partizan: 0 nacrta; KK Crvena zvezda: `incomplete_page`; KLS: 0 nacrta
-- Evroliga PDF: 380 redova, `rounds` 0, `incomplete_page`. Izvučeni tekst nema `ROUND N` neposredno iznad datuma, pa se kola ne izmišljaju. 8. januar 2027. Zvezda kod kuće je `2027-01-08T19:00:00Z` iz GMT kolone. Javno preuzimanje nije dozvola.
 
 ## Živo i mock
 
@@ -81,7 +83,7 @@ Sintetički `allowed` na laboratorijskom domaćinu jeste pravi parser nad kontro
 - Pravo objave za FSS, ABA, sajtove klubova i Evroliga PDF nije utvrđeno. Produkcija zato ne označava `allowed`.
 - Evroliga PDF je javno preuzimanje, ne licenca za redistribuciju. `api-live.euroleague.net` se ne zove.
 - FSS, Partizan, FK Crvena zvezda i ABA redovi bez Cluj sata nemaju zonu, pa `startsAtUtc` ostaje null. ABA UTC postoji samo kad taj red sam odštampa sat u Klužu.
-- Sačuvani FSS, ABA i Evroliga nisu potpuni. Kola se ne dopunjuju. Nestanak reda nije otkazivanje.
+- Sačuvani FSS, ABA i Evroliga PDF sada prolaze sopstvena pravila potpunosti. To i dalje nije dozvola za objavu. Kola se ne dopunjuju iz indeksa. Nestanak reda nije otkazivanje.
 - KK Partizan, KK Crvena zvezda i KLS nemaju upotrebljiv raspored 2026-2027 u sačuvanim stranama.
 - Plan Cloudflare naloga nije potvrđen. Nema deploya.
 

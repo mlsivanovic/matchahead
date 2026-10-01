@@ -6,8 +6,34 @@
 
 const STRING = /\((?:\\.|[^\\)])*\)/g;
 
+export interface PdfTextItem {
+  page: number;
+  x: number;
+  y: number;
+  text: string;
+}
+
 export async function extractPdfTextLines(bytes: Uint8Array): Promise<string[]> {
   const lines: string[] = [];
+  for (const content of await inflateStreams(bytes)) lines.push(...tjLines(content));
+  return lines;
+}
+
+/** Tekst sa stranicom i Tm koordinatama. Y raste naviše, kao u PDF-u. */
+export async function extractPdfTextItems(bytes: Uint8Array): Promise<PdfTextItem[]> {
+  const items: PdfTextItem[] = [];
+  let page = 0;
+  for (const content of await inflateStreams(bytes)) {
+    const placed = tmItems(content, page);
+    if (placed.length === 0) continue;
+    items.push(...placed);
+    page += 1;
+  }
+  return items;
+}
+
+async function inflateStreams(bytes: Uint8Array): Promise<string[]> {
+  const contents: string[] = [];
   let cursor = 0;
   while (cursor < bytes.length) {
     const filterAt = indexOfAscii(bytes, '/FlateDecode', cursor);
@@ -20,14 +46,13 @@ export async function extractPdfTextLines(bytes: Uint8Array): Promise<string[]> 
     const endAt = indexOfAscii(bytes, 'endstream', dataAt);
     if (endAt < 0) break;
     try {
-      const inflated = await inflateZlib(bytes.subarray(dataAt, endAt));
-      lines.push(...tjLines(latin1(inflated)));
+      contents.push(latin1(await inflateZlib(bytes.subarray(dataAt, endAt))));
     } catch {
       // Oštećen tok se preskače. Ostali tokovi i dalje mogu dati redove.
     }
     cursor = endAt + 'endstream'.length;
   }
-  return lines;
+  return contents;
 }
 
 async function inflateZlib(bytes: Uint8Array): Promise<Uint8Array> {
@@ -76,6 +101,20 @@ function indexOfAscii(bytes: Uint8Array, needle: string, from: number): number {
     if (matched) return index;
   }
   return -1;
+}
+
+const TM_TJ = /([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\s+Tm([\s\S]*?)TJ/g;
+
+function tmItems(content: string, page: number): PdfTextItem[] {
+  const items: PdfTextItem[] = [];
+  for (const match of content.matchAll(TM_TJ)) {
+    const text = decodeStrings(match[7] ?? '');
+    const x = Number(match[5]);
+    const y = Number(match[6]);
+    if (!text || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    items.push({ page, x, y, text });
+  }
+  return items;
 }
 
 function tjLines(content: string): string[] {

@@ -57,6 +57,15 @@ test('ABA potvrđuje Beograd samo uz Cluj i različite satove', () => {
   assert.equal(noProof.drafts.every((draft) => draft.startsAtUtc === null), true);
   assert.equal(noProof.drafts[0]?.scheduledLocalDate, '2026-10-02');
   assert.match(proved.evidence, /Dozvola/);
+
+  const tel = parseAbaCalendar(
+    `<h4>ROUND 5</h4><p class="hidden-xs"><a href="https://www.aba-liga.com/match/41/26/1/Overview/x">Igokea m:tel <span>:</span> Crvena zvezda Meridianbet</a></p><td class="scoretable"></td><td class="locationtable">Saturday, 24.10.2026</td>`,
+    '2026-10-02T12:00:00Z',
+  );
+  assert.equal(tel.drafts[0]?.homeTeamId, 'basketball:xx:igokea-m-tel');
+  assert.equal(tel.drafts[0]?.awayTeamId, 'basketball:rs:crvena-zvezda');
+  assert.equal(tel.drafts[0]?.round, 'ROUND 5');
+  assert.equal(tel.drafts[0]?.startsAtUtc, null);
 });
 
 test('FSS nema zonu, 00:00 nije termin, rezultat zatvara utakmicu', () => {
@@ -83,6 +92,21 @@ test('FSS nema zonu, 00:00 nije termin, rezultat zatvara utakmicu', () => {
   assert.equal(parsed.drafts[0]?.providerFixtureId, 'partizan-crvena-zvezda');
   assert.equal(parsed.drafts[0]?.round, '1');
   assert.equal(parsed.complete, false);
+
+  const repeated = parseFssSuperliga(
+    `${fssMatch('11. kolo', '10.10.2026. 00:00', 'PARTIZAN', 'NOVI PAZAR')}${fssMatch('11. kolo', '10.10.2026', 'PARTIZAN', 'NOVI PAZAR')}`,
+    '2026-10-02T12:00:00Z',
+  );
+  assert.equal(repeated.drafts.filter((draft) => draft.providerFixtureId === 'partizan-novi-pazar').length, 1);
+  assert.match(repeated.evidence, /odbačen/);
+  assert.doesNotMatch(repeated.evidence, /različite podatke/);
+  const clashed = parseFssSuperliga(
+    `${fssMatch('11. kolo', '10.10.2026', 'PARTIZAN', 'NOVI PAZAR')}${fssMatch('11. kolo', '11.10.2026', 'PARTIZAN', 'NOVI PAZAR')}`,
+    '2026-10-02T12:00:00Z',
+  );
+  assert.equal(clashed.complete, false);
+  assert.equal(clashed.drafts.filter((draft) => draft.providerFixtureId === 'partizan-novi-pazar').length, 1);
+  assert.match(clashed.evidence, /različite podatke/);
 });
 
 test('Partizanov javni blok ne veruje praznoj zoni ni nuli', () => {
@@ -169,6 +193,48 @@ test('mali PDF čita GMT kao UTC bez spoljnog procesa', async () => {
   assert.equal(parsed.drafts[0]?.round, null);
   assert.match(parsed.evidence, /pdftotext se ne poziva/);
   assert.doesNotMatch(parsed.evidence, /pdftotext se poziva/);
+
+  const placed = await parseEuroleaguePdf(tinyPdf([
+    place(164.7, 490, 'Thursday, 24 September 2026'),
+    place(275, 490, '20:00'),
+    place(303.3, 490, '18:00'),
+    place(347.4, 490, 'CRVENA ZVEZDA MERIDIANBET BELGRADE'),
+    place(558.7, 490, 'ZALGIRIS KAUNAS'),
+    place(481.6, 507.5, 'ROUND 1'),
+  ].join('\n')), '2026-09-01T00:00:00Z');
+  assert.equal(placed.drafts.length, 1);
+  assert.equal(placed.drafts[0]?.round, '1');
+  assert.equal(placed.drafts[0]?.startsAtUtc, '2026-09-24T18:00:00Z');
+  assert.equal(placed.complete, false);
+
+  const duplicated = await parseEuroleaguePdf(tinyPdf([
+    place(164.7, 490, 'Thursday, 24 September 2026'),
+    place(275, 490, '20:00'),
+    place(303.3, 490, '18:00'),
+    place(347.4, 490, 'CRVENA ZVEZDA MERIDIANBET BELGRADE'),
+    place(558.7, 490, 'ZALGIRIS KAUNAS'),
+    place(164.7, 480, 'Friday, 25 September 2026'),
+    place(275, 480, '20:00'),
+    place(303.3, 480, '19:00'),
+    place(347.4, 480, 'CRVENA ZVEZDA MERIDIANBET BELGRADE'),
+    place(558.7, 480, 'ZALGIRIS KAUNAS'),
+    place(481.6, 507.5, 'ROUND 1'),
+  ].join('\n')), '2026-09-01T00:00:00Z');
+  assert.equal(duplicated.drafts.length, 2);
+  assert.equal(duplicated.drafts[0]?.providerFixtureId, duplicated.drafts[1]?.providerFixtureId);
+  assert.equal(duplicated.complete, false);
+  assert.equal(duplicated.rounds, 1);
+
+  const removed = await parseEuroleaguePdf(tinyPdf([
+    place(164.7, 490, 'Thursday, 24 September 2026'),
+    place(275, 490, '20:00'),
+    place(303.3, 490, '18:00'),
+    place(347.4, 490, 'CRVENA ZVEZDA MERIDIANBET BELGRADE'),
+    place(481.6, 507.5, 'ROUND 1'),
+  ].join('\n')), '2026-09-01T00:00:00Z');
+  assert.equal(removed.drafts.length, 0);
+  assert.equal(removed.complete, false);
+  assert.equal(removed.rounds, 0);
 });
 
 function abaHtml(cluj: boolean, clocks: string[]): string {
@@ -181,6 +247,14 @@ function abaHtml(cluj: boolean, clocks: string[]): string {
     <td class="scoretable"></td><td class="locationtable">Friday, 02.10.2026 ${clocks[0]} CET</td>
     <p class="hidden-xs"><a href="https://www.aba-liga.com/match/27/26/1/Overview/b">Cedevita Olimpija <span>:</span> Dubai Basketball</a></p>
     <td class="scoretable"></td><td class="locationtable">${second}</td>`;
+}
+
+function fssMatch(round: string, when: string, home: string, away: string): string {
+  return `<div class="fss-rezultati__title"> ${round} </div><div class="fss-rezultati__one-date">${when}</div><div class="fss-rezultati__one-city">Beograd</div><a class="fss-rezultati__teams"><div class="col-6">${home}</div><div class="col-6">${away}</div></a><div class="fss-rezultati__result"><div>/</div><div>/</div></div></div>`;
+}
+
+function place(x: number, y: number, text: string): string {
+  return `1 0 0 1 ${x} ${y} Tm [(${text})] TJ`;
 }
 
 function tinyPdf(commands: string): Uint8Array {

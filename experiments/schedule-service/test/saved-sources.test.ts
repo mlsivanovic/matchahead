@@ -26,10 +26,10 @@ test('opciono: ABA snimak', { skip: saved('aba.html') }, () => {
   const regular = (suffix: string) => aba.drafts.filter((draft) => /^ROUND\s+(?:[1-9]|1[0-8])$/.test(draft.round ?? '') && (draft.homeTeamId.endsWith(suffix) || (draft.awayTeamId ?? '').endsWith(suffix))).length;
   const partizanRounds = regular(':partizan');
   const zvezdaRounds = regular(':crvena-zvezda');
-  assert.equal(aba.complete, partizanRounds === 18 && zvezdaRounds === 18);
-  assert.equal(aba.failure, aba.complete ? 'none' : 'incomplete_page');
-  assert.ok(partizanRounds > 0);
-  assert.ok(zvezdaRounds > 0);
+  assert.equal(partizanRounds, 18);
+  assert.equal(zvezdaRounds, 18);
+  assert.equal(aba.complete, true);
+  assert.equal(aba.failure, 'none');
   const evening = aba.drafts.find((draft) => draft.providerFixtureId === '15');
   assert.equal(evening?.startsAtUtc, null);
   assert.equal(evening?.scheduledLocalDate, '2026-10-02');
@@ -40,8 +40,15 @@ test('opciono: ABA snimak', { skip: saved('aba.html') }, () => {
 test('opciono: FSS snimak', { skip: saved('fss.html') }, () => {
   const fss = parseFssSuperliga(readFileSync(`${root}/fss.html`, 'utf8'), fetchedAt);
   assert.equal(fss.confirmedUtc, 0);
-  assert.equal(fss.complete, false);
-  assert.ok(fss.drafts.length > 100);
+  assert.equal(fss.complete, true);
+  assert.equal(fss.failure, 'none');
+  assert.equal(fss.drafts.length, 182);
+  assert.match(fss.evidence, /odbačen/);
+  const roundsOf = (suffix: string) => new Set(
+    fss.drafts.filter((draft) => draft.homeTeamId.endsWith(suffix) || (draft.awayTeamId ?? '').endsWith(suffix)).map((draft) => draft.round),
+  );
+  assert.equal(roundsOf(':partizan').size, 26);
+  assert.equal(roundsOf(':crvena-zvezda').size, 26);
   assert.ok(fss.drafts.some((draft) => draft.status === 'finished'));
   assert.ok(fss.drafts.some((draft) => draft.status === 'time_tbd'));
   assert.equal(fss.drafts.some((draft) => draft.startsAtUtc !== null), false);
@@ -76,9 +83,17 @@ test('opciono: KK Partizan, KK Zvezda i KLS', { skip: saved('kkpart.html') || sa
 
 test('opciono: Evroliga PDF snimak', { skip: saved('el-2026-27.pdf') }, async () => {
   const euroleague = await parseEuroleaguePdf(readFileSync(`${root}/el-2026-27.pdf`), fetchedAt);
-  assert.equal(euroleague.complete, false);
+  assert.equal(euroleague.complete, true);
+  assert.equal(euroleague.failure, 'none');
   assert.equal(euroleague.drafts.length, 380);
-  assert.equal(euroleague.rounds, 0);
+  assert.equal(euroleague.rounds, 38);
+  const perRound = new Map<string, number>();
+  for (const draft of euroleague.drafts) perRound.set(draft.round ?? '', (perRound.get(draft.round ?? '') ?? 0) + 1);
+  assert.equal(perRound.size, 38);
+  assert.equal([...perRound.values()].every((count) => count === 10), true);
+  const clubMatches = (suffix: string) => euroleague.drafts.filter((draft) => draft.homeTeamId.endsWith(suffix) || (draft.awayTeamId ?? '').endsWith(suffix)).length;
+  assert.equal(clubMatches(':partizan'), 38);
+  assert.equal(clubMatches(':crvena-zvezda'), 38);
   const january = euroleague.drafts.find(
     (draft) => draft.scheduledLocalDate === '2027-01-08' && draft.homeTeamId.endsWith(':crvena-zvezda'),
   );

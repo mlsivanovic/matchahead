@@ -89,8 +89,8 @@ export function parseAbaCalendar(html: string, fetchedAt: string): ParsedSource 
 function readRows(html: string): Row[] {
   const rows: Row[] = [];
   for (const match of html.matchAll(ROW)) {
-    const names = visibleText(match[3] ?? '').split(':').map((part) => part.trim()).filter(Boolean);
-    if (names.length < 2) continue;
+    const names = visibleText(match[3] ?? '').split(/\s+:\s+/).map((part) => part.trim()).filter(Boolean);
+    if (names.length !== 2) continue;
     const when = visibleText(match[5] ?? '');
     const dateMatch = /(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/.exec(when);
     const cluj = /\((\d{2}:\d{2})\s+Cluj-Napoca local time\)/i.exec(when);

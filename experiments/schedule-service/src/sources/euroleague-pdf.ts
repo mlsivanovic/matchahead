@@ -1,6 +1,6 @@
 import { competitionId } from '../../../../packages/domain/src/index.ts';
 import { sideSlug, teamIdForName } from '../names.ts';
-import { extractPdfTextLines } from '../pdf-text.ts';
+import { extractPdfTextItems, extractPdfTextLines, type PdfTextItem } from '../pdf-text.ts';
 import { observedDraft } from './draft.ts';
 import type { ParsedSource } from './types.ts';
 
@@ -18,17 +18,19 @@ export interface EuroleagueParse extends ParsedSource {
 }
 
 /**
- * Podržan je samo ovaj štampani kalendar: 380 redova, 10 po kolu, redosled kola 1–38.
+ * Podržan je samo ovaj štampani kalendar: 380 redova, 10 po kolu, kola 1–38.
  * GMT kolona je UTC. LOCAL je sat dvorane, ne Beograd.
- * Kolo se ne izvodi iz rednog broja. Bez stvarnog ROUND naslova uz red, kolo ostaje prazno.
+ * Kolo je ROUND naslov iznad reda na istoj strani. Y raste naviše.
+ * Redosled u toku i indeks reda nisu kolo. Bez naslova iznad, kolo ostaje prazno.
  */
 export async function parseEuroleaguePdf(bytes: Uint8Array, fetchedAt: string): Promise<EuroleagueParse> {
   const started = performance.now();
   if (bytes.length < 5 || new TextDecoder().decode(bytes.subarray(0, 5)) !== '%PDF-') {
     return emptyEuroleague(performance.now() - started, 'Dokument ne počinje sa %PDF.');
   }
-  const lines = await extractPdfTextLines(bytes);
-  const rows = readRows(lines);
+  const items = await extractPdfTextItems(bytes);
+  const lines = items.length > 0 ? items.map((item) => item.text) : await extractPdfTextLines(bytes);
+  const rows = items.length > 0 ? readPositionedRows(items) : readRows(lines);
   const durationMs = performance.now() - started;
   const byRound = new Map<number, number>();
   const clubRounds = { partizan: new Set<number>(), zvezda: new Set<number>() };
@@ -99,6 +101,71 @@ export async function parseEuroleaguePdf(bytes: Uint8Array, fetchedAt: string): 
     ],
     evidence: `Evroliga regularna sezona PDF: redova ${rows.length}, kola ${byRound.size}, Partizan kola ${clubRounds.partizan.size}, Zvezda kola ${clubRounds.zvezda.size}. GMT je UTC, LOCAL je dvorana. Plej-of nije u ovom dokumentu. Javno preuzimanje nije dozvola za redistribuciju. ${workerNote}`,
   };
+}
+
+function readPositionedRows(items: readonly PdfTextItem[]): Array<{
+  round: number | null;
+  heading: boolean;
+  day: string;
+  month: string;
+  year: string;
+  local: string;
+  gmt: string;
+  home: string;
+  away: string;
+}> {
+  const pages = new Map<number, PdfTextItem[]>();
+  for (const item of items) {
+    const list = pages.get(item.page) ?? [];
+    list.push(item);
+    pages.set(item.page, list);
+  }
+  const rows = [];
+  for (const pageItems of pages.values()) {
+    const headings = pageItems.flatMap((item) => {
+      const match = /^ROUND\s+(\d+)$/.exec(item.text.trim());
+      if (!match) return [];
+      const round = Number(match[1]);
+      return round >= 1 && round <= 38 ? [{ round, y: item.y }] : [];
+    });
+    const bands = new Map<string, PdfTextItem[]>();
+    for (const item of pageItems) {
+      const key = item.y.toFixed(1);
+      const list = bands.get(key) ?? [];
+      list.push(item);
+      bands.set(key, list);
+    }
+    for (const band of bands.values()) {
+      const dateItem = band.find((item) => item.x < 240 && DATE.test(item.text));
+      const date = dateItem ? DATE.exec(dateItem.text) : null;
+      if (!dateItem || !date) continue;
+      const clocks = band.filter((item) => CLOCK.test(item.text)).sort((left, right) => left.x - right.x);
+      const names = band
+        .filter((item) => item.x >= 330 && !CLOCK.test(item.text) && !DATE.test(item.text) && !/^ROUND\s+\d+$/.test(item.text))
+        .sort((left, right) => left.x - right.x);
+      const local = clocks[0]?.text ?? '';
+      const gmt = clocks[1]?.text ?? '';
+      const home = names[0]?.text ?? '';
+      const away = names[names.length - 1]?.text ?? '';
+      if (!CLOCK.test(local) || !CLOCK.test(gmt) || !home || !away || home === away) continue;
+      const month = MONTHS[date[2] ?? ''];
+      if (!month) continue;
+      const above = headings.filter((heading) => heading.y > dateItem.y).sort((left, right) => left.y - right.y);
+      const round = above[0]?.round ?? null;
+      rows.push({
+        round,
+        heading: round !== null,
+        day: date[1] ?? '',
+        month,
+        year: date[3] ?? '',
+        local,
+        gmt,
+        home,
+        away,
+      });
+    }
+  }
+  return rows;
 }
 
 function readRows(lines: readonly string[]): Array<{

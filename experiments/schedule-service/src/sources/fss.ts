@@ -50,16 +50,17 @@ export function parseFssSuperliga(html: string, fetchedAt: string): ParsedSource
       }),
     );
   }
-  const seen = new Set<string>();
   const unique: ObservedFixtureDraft[] = [];
   let conflict = false;
+  let repeated = 0;
   for (const draft of drafts) {
-    if (seen.has(draft.providerFixtureId)) {
-      conflict = true;
+    const previous = unique.find((item) => item.providerFixtureId === draft.providerFixtureId);
+    if (!previous) {
+      unique.push(draft);
       continue;
     }
-    seen.add(draft.providerFixtureId);
-    unique.push(draft);
+    repeated += 1;
+    if (!sameFixture(previous, draft)) conflict = true;
   }
   const seasonTitle = /2026\s*[/.-]\s*27|26\s*[/.-]\s*27/.test(foldName(html));
   const datesInSeason = unique.every((draft) => {
@@ -94,8 +95,23 @@ export function parseFssSuperliga(html: string, fetchedAt: string): ParsedSource
         providerIds: {},
       },
     ],
-    evidence: `FSS Superliga: blokova ${unique.length}, kola ${[...rounds].sort((a, b) => a - b).join(',') || 'nema'}. Nema zone, pa UTC ostaje prazan. Budući 00:00 nije termin. Identitet je domaćin-gost, kolo je metadata. Duplikat para, naslov van 2026/27 ili kola koja nisu tačno 1–26 sa jednim mečom našeg kluba po kolu nisu potpuna strana. Stranica nema stabilan URL utakmice. Dozvola nije utvrđena.`,
+    evidence: `FSS Superliga: blokova ${unique.length}, kola ${[...rounds].sort((a, b) => a - b).join(',') || 'nema'}. Nema zone, pa UTC ostaje prazan. Budući 00:00 nije termin. Identitet je domaćin-gost, kolo je metadata. ${duplicateNote(conflict, repeated)} Naslov van 2026/27 ili kola koja nisu tačno 1–26 sa jednim mečom našeg kluba po kolu nisu potpuna strana. Stranica nema stabilan URL utakmice. Dozvola nije utvrđena.`,
   };
+}
+
+function sameFixture(left: ObservedFixtureDraft, right: ObservedFixtureDraft): boolean {
+  return left.round === right.round
+    && left.scheduledLocalDate === right.scheduledLocalDate
+    && left.printedLocalTime === right.printedLocalTime
+    && left.status === right.status
+    && left.homeTeamId === right.homeTeamId
+    && left.awayTeamId === right.awayTeamId;
+}
+
+function duplicateNote(conflict: boolean, repeated: number): string {
+  if (conflict) return 'Isti par ima različite podatke.';
+  if (repeated > 0) return 'Isti pregled istog para je odbačen.';
+  return '';
 }
 
 function slugPart(name: string): string {
