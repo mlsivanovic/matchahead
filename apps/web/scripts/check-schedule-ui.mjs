@@ -47,6 +47,14 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+async function waitForRequests(count, timeoutMs = 15000) {
+  const start = Date.now();
+  while (apiState.requests.length < count) {
+    if (Date.now() - start > timeoutMs) throw new Error(`server nije video ${count} zahteva`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 function fixtureFor(teamId, overrides = {}) {
   const sport = teamId.startsWith('basketball') ? 'basketball' : 'football';
   return {
@@ -91,6 +99,38 @@ function unknownTimeFixture(teamId) {
   });
 }
 
+/**
+ * Zajednički derbi: isti stabilni id, isti sadržaj i revizija u snimcima oba
+ * fudbalska kluba. Unificirana agenda ga sme pokazati tačno jednom, kao
+ * najraniju sledeću utakmicu.
+ */
+function derbyFixture() {
+  return {
+    id: `football:primer-liga:Superliga:${SEASON}:primer-liga:fx-derby`,
+    sport: 'football',
+    competitionId: 'Superliga',
+    seasonId: SEASON,
+    homeTeamId: 'football:rs:crvena-zvezda',
+    awayTeamId: 'football:rs:partizan',
+    startsAtUtc: '2026-10-04T17:00:00.000Z',
+    scheduledLocalDate: '2026-10-04',
+    sourceTimeZone: 'Europe/Belgrade',
+    timeConfirmed: true,
+    previousStartsAtUtc: null,
+    previousScheduledLocalDate: null,
+    status: 'scheduled',
+    venue: 'Derbi arena',
+    round: 'Derbi',
+    sourceUrl: 'https://primer-liga.example/raspored/superliga-26-27-derbi',
+    provider: 'primer-liga',
+    providerFixtureId: 'fx-derby',
+    fetchedAt: CHECKED_AT,
+    sourceUpdatedAt: null,
+    contentHash: 'derby-2',
+    revision: 2,
+  };
+}
+
 function envelopeFor(teamId, mode) {
   const sport = teamId.startsWith('basketball') ? 'basketball' : 'football';
   const name = teamId.includes('partizan') ? 'Partizan' : 'Crvena zvezda';
@@ -129,13 +169,20 @@ function envelopeFor(teamId, mode) {
     ],
     changes: [],
   };
-  if (mode === 'verified') {
+  if (mode === 'verified' || mode === 'verified-allowed') {
     const confirmed = fixtureFor(teamId);
     const tbd = unknownTimeFixture(teamId);
     base.kind = 'verified-schedule';
-    base.result.futureFixtures = [confirmed, tbd];
-    base.result.nextFixture = confirmed;
-    base.result.nextConfirmedFixture = confirmed;
+    if (teamId === 'football:rs:crvena-zvezda' || teamId === 'football:rs:partizan') {
+      const derby = derbyFixture();
+      base.result.futureFixtures = [derby, confirmed, tbd];
+      base.result.nextFixture = derby;
+      base.result.nextConfirmedFixture = derby;
+    } else {
+      base.result.futureFixtures = [confirmed, tbd];
+      base.result.nextFixture = confirmed;
+      base.result.nextConfirmedFixture = confirmed;
+    }
     base.result.coverage = [
       {
         id: `${teamId}:Superliga:${SEASON}:primer-liga`, teamId, competitionId: 'Superliga', seasonId: SEASON,
@@ -153,6 +200,24 @@ function envelopeFor(teamId, mode) {
       },
     ];
     base.changes = [{ fixtureId: confirmed.id, revision: 1, kind: 'new' }];
+    if (mode === 'verified-allowed') {
+      // Stvarni server za objavljenu ligu nosi allowed: osnova za opoziv tok.
+      base.result.coverage[0].publication = 'allowed';
+    }
+  } else if (mode === 'revoked') {
+    // Opoziv prava: izvoru je uskraćena objava, server ne vraća njegove utakmice.
+    base.kind = 'source-blocked';
+    base.result.checkedAt = null;
+    base.result.lastSuccessAt = null;
+    base.result.coverage = [
+      {
+        id: `${teamId}:Superliga:${SEASON}:primer-liga`, teamId, competitionId: 'Superliga', seasonId: SEASON,
+        provider: 'primer-liga', providerCompetitionId: null, verdict: 'unverified', scheduleAvailability: 'unknown',
+        freeAccessConfirmed: null, futureFixturesAvailable: null, timePrecision: null,
+        postponementObserved: null, cancellationObserved: null, publication: 'forbidden',
+        requestsPerRefresh: 0, evidence: 'Organizator uskratio pravo objave; raniji snimak ovog izvora se ne vraća.', checkedAt: '2026-10-01',
+      },
+    ];
   } else if (mode === 'blocked') {
     const retained = fixtureFor(teamId);
     base.kind = 'source-blocked';
@@ -467,24 +532,200 @@ try {
     () => document.querySelector('[data-schedule-kind]')?.getAttribute('data-schedule-kind') === 'verified-schedule',
   );
 
+  // Drugi klub: isti derbi u oba snimka sme u agendu tačno jednom.
+  await page.evaluate((name) => {
+    const section = document.querySelector('section[aria-label="Raspored na zahtev"]');
+    if (!section) throw new Error('nema sekcije rasporeda');
+    const clubGroup = [...section.querySelectorAll('[role="group"]')].find((group) => group.getAttribute('aria-label') === 'Klub');
+    if (!clubGroup) throw new Error('nema grupe klubova');
+    const target = [...clubGroup.querySelectorAll('button')].find((button) => (button.textContent ?? '').includes(name));
+    if (!target) throw new Error(`nema kluba ${name}`);
+    target.click();
+  }, 'Partizan');
+  await clickFinderButton(page, 'Pronađi utakmice');
+  await page.waitForFunction(
+    () => document.querySelector('[data-schedule-kind]')?.getAttribute('data-schedule-kind') === 'verified-schedule',
+  );
+  console.log('PASS: pronalaženje drugog kluba');
+
   await page.evaluate(() => {
-    const first = document.querySelector('.club-list button');
-    if (!first) throw new Error('nema kluba za praćenje');
-    first.click();
+    const buttons = [...document.querySelectorAll('.club-list button')].filter((button) => (button.textContent ?? '').trim() === 'Prati');
+    if (buttons.length < 2) throw new Error(`nema dva kluba za praćenje: ${buttons.length}`);
+    buttons.forEach((button) => button.click());
   });
-  await page.waitForFunction(() => [...document.querySelectorAll('.club-list button')].some((button) => (button.textContent ?? '').includes('Pratim')));
-  await openRoute(page, '#/moje', 'mine');
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.club-list button')].filter((button) => (button.textContent ?? '').includes('Pratim')).length >= 2,
+  );
+
+  await openRoute(page, '#/', 'home');
   await page.waitForSelector('[data-server-agenda]');
   const agendaProvenance = await page.$eval('[data-server-agenda]', (element) => element.dataset.provenance);
   assert(agendaProvenance === CHECKED_AT, `agenda poreklo nije tačno: ${agendaProvenance}`);
   assert((await bodyText(page)).includes('Pronađene utakmice'), 'nema serverske sekcije u agendi');
-  assert(await overflow(page) <= 1, 'preliv na mojim utakmicama');
-  await openRoute(page, '#/', 'home');
+  // Derbi je najraniji (4. oktobar pre 5. oktobra): u Sledećoj je tačno jednom.
+  // Isti red se normalno ponavlja i u nedeljnoj sekciji — unificirana agenda
+  // ga drži kao jedan red po id-u, pa se ovde broji unutar sekcije Sledeća.
+  const nextDerby = await page.evaluate(() => {
+    const root = document.querySelector('[data-server-agenda]');
+    if (!root) throw new Error('nema serverske agende');
+    const head = [...root.querySelectorAll('h2')].find((element) => (element.textContent ?? '').includes('Sledeća utakmica'));
+    if (!head) throw new Error('nema sekcije Sledeća utakmica');
+    let count = 0;
+    let node = head.nextElementSibling;
+    while (node && node.tagName !== 'H2') {
+      if (node.tagName === 'ARTICLE' && (node.textContent ?? '').includes('Derbi arena')) count += 1;
+      node = node.nextElementSibling;
+    }
+    return count;
+  });
+  assert(nextDerby === 1, `derbi se u Sledećoj vidi ${nextDerby} puta, mora tačno jednom`);
+  const homeText = await page.$eval('[data-server-agenda]', (element) => element.textContent ?? '');
+  assert(homeText.includes('Derbi arena'), 'najranija sledeća utakmica nije derbi');
+  assert(await overflow(page) <= 1, 'preliv na početnoj sa server agendom');
+  console.log('PASS: početna — unificirana agenda, derbi jednom, najraniji next');
+
+  await openRoute(page, '#/moje', 'mine');
   await page.waitForSelector('[data-server-agenda]');
-  console.log('PASS: agenda i početna pokazuju serverske utakmice sa poreklom');
+  await page.select('#agenda-club', 'football:rs:partizan');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert((await bodyText(page)).includes('Derbi arena'), 'filter kluba Partizan sakrio derbi');
+  await page.select('#agenda-club', 'all');
+  await page.evaluate(() => {
+    const group = document.querySelector('[role="group"][aria-label="Filter sporta"]');
+    if (!group) throw new Error('nema filtera sporta');
+    const target = [...group.querySelectorAll('button')].find((button) => (button.textContent ?? '').includes('Košarka'));
+    if (!target) throw new Error('nema filtera košarke');
+    target.click();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert((await bodyText(page)).includes('Nema serverskih utakmica za ovaj filter.'), 'filter košarke nije ispraznio serversku agendu');
+  await page.evaluate(() => {
+    const group = document.querySelector('[role="group"][aria-label="Filter sporta"]');
+    [...group.querySelectorAll('button')].find((button) => (button.textContent ?? '').trim() === 'Svi').click();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await page.select('#agenda-competition', 'Superliga');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert((await bodyText(page)).includes('Derbi arena'), 'filter takmičenja Superliga sakrio derbi');
+  await page.select('#agenda-competition', 'all');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  // Grupe statusa su disjunktne: derbi je u celoj agendi tačno jedan red.
+  const mineDerby = await page.$$eval('[data-server-agenda] article.card', (cards) =>
+    cards.filter((card) => (card.textContent ?? '').includes('Derbi arena')).length);
+  assert(mineDerby === 1, `derbi se u Mojim vidi ${mineDerby} puta, mora tačno jednom`);
+  const unknownCard = await page.$$eval('[data-server-agenda] article.card', (cards) =>
+    cards.map((card) => card.textContent ?? '').find((text) => text.includes('Termin nije potvrđen')) ?? null);
+  assert(unknownCard !== null, 'nema nepoznatog termina u agendi');
+  assert(!/\d{1,2}:\d{2}/.test(unknownCard), `nepoznat termin nosi sat: ${unknownCard.slice(0, 120)}`);
+  assert(await overflow(page) <= 1, 'preliv na mojim utakmicama');
+  console.log('PASS: moje — filteri kluba i takmičenja, nepoznat termin bez 00:00');
+
+  await openRoute(page, '#/klubovi', 'clubs');
+  await page.waitForSelector('section[aria-label="Raspored na zahtev"]');
+  await page.setOfflineMode(true);
+  const offlineBefore = apiState.requests.length;
+  await clickFinderButton(page, 'Pronađi utakmice');
+  await page.waitForSelector('[role="alert"]');
+  assert((await bodyText(page)).includes('Nema mreže'), 'nema offline poruke');
+  assert((await finderKind(page)) === 'verified-schedule', 'offline obrisao prikaz');
+  assert(apiState.requests.length === offlineBefore, 'offline pozvao server');
+  await page.setOfflineMode(false);
+  console.log('PASS: offline čuva prikaz bez poziva');
+
+  const narrow = await browser.newPage();
+  narrow.setDefaultTimeout(15000);
+  await narrow.setViewport({ width: 360, height: 740, deviceScaleFactor: 1 });
+  const narrowText = async () => narrow.$eval('body', (element) => element.innerText);
+  const narrowOverflow = async () => narrow.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  // Nova kartica ima prazan sessionStorage: praćenja se biraju ponovo, snimci su deljeni.
+  await narrow.goto(`${originUI}/repo/#/klubovi`, { waitUntil: 'load' });
+  await narrow.waitForSelector('section[aria-label="Raspored na zahtev"]');
+  await narrow.evaluate(() => {
+    const buttons = [...document.querySelectorAll('.club-list button')].filter((button) => (button.textContent ?? '').trim() === 'Prati');
+    if (buttons.length < 2) throw new Error('nema dva kluba za praćenje na 360px');
+    buttons.forEach((button) => button.click());
+  });
+  await narrow.evaluate((target) => {
+    location.hash = target;
+  }, '#/');
+  await narrow.waitForSelector('[data-server-agenda]');
+  const narrowDerby = await narrow.evaluate(() => {
+    const root = document.querySelector('[data-server-agenda]');
+    if (!root) throw new Error('nema serverske agende na 360px');
+    const head = [...root.querySelectorAll('h2')].find((element) => (element.textContent ?? '').includes('Sledeća utakmica'));
+    if (!head) throw new Error('nema sekcije Sledeća utakmica na 360px');
+    let count = 0;
+    let node = head.nextElementSibling;
+    while (node && node.tagName !== 'H2') {
+      if (node.tagName === 'ARTICLE' && (node.textContent ?? '').includes('Derbi arena')) count += 1;
+      node = node.nextElementSibling;
+    }
+    return count;
+  });
+  assert(narrowDerby === 1, `derbi na 360px u Sledećoj: ${narrowDerby} puta`);
+  assert(await narrowOverflow() <= 1, 'preliv na 360px početnoj');
+  await narrow.evaluate((target) => {
+    location.hash = target;
+  }, '#/moje');
+  await narrow.waitForFunction(
+    () => document.querySelector('main')?.dataset.screen === 'mine'
+      && document.querySelector('[data-server-agenda]') !== null,
+  );
+  assert(await narrowOverflow() <= 1, 'preliv na 360px mojim utakmicama');
+  assert((await narrowText()).includes('Pronađene utakmice'), 'nema serverske agende na 360px');
+  await narrow.close();
+  console.log('PASS: 360px — oba kluba, derbi jednom, bez preliva');
+
+  // Opoziv: allowed snimci oba kluba, pa forbidden za isti par briše svuda.
+  // Prikaz je već verified pa se kraj ne čeka po vrsti, već po broju zahteva.
+  apiState.mode = 'verified-allowed';
+  await openRoute(page, '#/klubovi', 'clubs');
+  await page.waitForSelector('section[aria-label="Raspored na zahtev"]');
+  await page.evaluate(() => {
+    const section = document.querySelector('section[aria-label="Raspored na zahtev"]');
+    const clubGroup = [...section.querySelectorAll('[role="group"]')].find((group) => group.getAttribute('aria-label') === 'Klub');
+    [...clubGroup.querySelectorAll('button')].find((button) => (button.textContent ?? '').includes('Crvena zvezda')).click();
+  });
+  let pendingBefore = apiState.requests.length;
+  await clickFinderButton(page, 'Pronađi utakmice');
+  await waitForRequests(pendingBefore + 1);
+  await page.waitForFunction(
+    () => document.querySelector('[data-schedule-kind]')?.getAttribute('data-schedule-kind') === 'verified-schedule',
+  );
+  await page.evaluate(() => {
+    const section = document.querySelector('section[aria-label="Raspored na zahtev"]');
+    const clubGroup = [...section.querySelectorAll('[role="group"]')].find((group) => group.getAttribute('aria-label') === 'Klub');
+    [...clubGroup.querySelectorAll('button')].find((button) => (button.textContent ?? '').includes('Partizan')).click();
+  });
+  pendingBefore = apiState.requests.length;
+  await clickFinderButton(page, 'Pronađi utakmice');
+  await waitForRequests(pendingBefore + 1);
+  await page.waitForFunction(
+    () => document.querySelector('[data-schedule-kind]')?.getAttribute('data-schedule-kind') === 'verified-schedule',
+  );
+  apiState.mode = 'revoked';
+  await page.evaluate(() => {
+    const section = document.querySelector('section[aria-label="Raspored na zahtev"]');
+    const clubGroup = [...section.querySelectorAll('[role="group"]')].find((group) => group.getAttribute('aria-label') === 'Klub');
+    [...clubGroup.querySelectorAll('button')].find((button) => (button.textContent ?? '').includes('Crvena zvezda')).click();
+  });
+  await clickFinderButton(page, 'Pronađi utakmice');
+  await page.waitForFunction(
+    () => document.querySelector('[data-schedule-kind]')?.getAttribute('data-schedule-kind') === 'source-blocked',
+  );
+  await openRoute(page, '#/', 'home');
+  await page.waitForFunction(() => !document.querySelector('[data-server-agenda]'));
+  assert((await bodyText(page)).includes('Nema serverskih utakmica za praćene klubove'), 'opoziv nije ispraznio agendu');
+  const partizanStored = await page.evaluate(() => {
+    const raw = localStorage.getItem('matchahead.device.schedule.football:rs:partizan:2026-2027');
+    if (!raw) return -1;
+    return JSON.parse(raw).response.result.futureFixtures.length;
+  });
+  assert(partizanStored === 0, `opoziv nije očistio drugi klub: ${partizanStored}`);
+  console.log('PASS: opoziv briše izvor iz svih klupskih snimaka');
 
   const sawValid = apiState.requests.filter((entry) => entry.valid);
-  assert(sawValid.length >= 5, `server video ${sawValid.length} ispravnih zahteva`);
+  assert(sawValid.length >= 10, `server video ${sawValid.length} ispravnih zahteva`);
   assert(sawValid.some((entry) => entry.refresh === false), 'nema find bez refresh');
   assert(sawValid.every((entry) => entry.authorized === false), 'neprijavljen klijent poslao Authorization');
   console.log('PASS: svi zahtevi na klik, ugovor tela ispravan, bez lažnog tokena');

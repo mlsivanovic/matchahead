@@ -20,7 +20,12 @@ import { sportLabel } from '../logic/clubs.ts';
 import { routeHash } from '../logic/routes.ts';
 import { competitionName, isScheduleStale, type DemoSchedule } from '../logic/schedule.ts';
 import type { LastGoodSchedule } from '../logic/schedule-store.ts';
-import { scheduleKindLabel, ServerFixtureCard } from './ScheduleFinder.tsx';
+import {
+  buildUnifiedServerAgenda,
+  unifiedServerCompetitions,
+  unifiedServerProvenance,
+  unifiedServerTeams,
+} from '../logic/server-agenda.ts';
 import {
   ALL_FILTER_VALUE,
   EMPTY_AGENDA_FILTER,
@@ -33,6 +38,7 @@ import {
   sportFilterChange,
   teamDisplayName,
   type AgendaFilter,
+  type NamedRef,
 } from './PersonalAgendaHelpers.ts';
 
 /**
@@ -76,7 +82,18 @@ export function PersonalAgendaHome(props: PersonalAgendaHomeProps) {
     () => (schedule ? buildUserAgenda(schedule.fixtures, followed, manualFixtureIds) : []),
     [schedule, followed, manualFixtureIds],
   );
+  // Stvarna glavna agenda: jedan unificirani skup proverenih utakmica
+  // (derbi jednom, najviša revizija), ne odvojene kopije po snimku.
+  const serverAgenda = useMemo(
+    () => buildUnifiedServerAgenda(serverSnapshots, followed, manualFixtureIds),
+    [serverSnapshots, followed, manualFixtureIds],
+  );
+  const hasServer = serverAgenda.length > 0;
+  const serverTeams = useMemo(() => unifiedServerTeams(serverSnapshots), [serverSnapshots]);
+  const serverCompetitions = useMemo(() => unifiedServerCompetitions(serverSnapshots), [serverSnapshots]);
+  const provenance = useMemo(() => unifiedServerProvenance(serverSnapshots), [serverSnapshots]);
   const next = useMemo(() => nextAgendaFixtures(agenda, now), [agenda, now]);
+  const serverNext = useMemo(() => nextAgendaFixtures(serverAgenda, now), [serverAgenda, now]);
   const today = localDateInZone(now, timeZone);
   const weekDays = useMemo(() => new Set(weekDatesAfter(today)), [today]);
   const todayEntries = useMemo(
@@ -91,18 +108,163 @@ export function PersonalAgendaHome(props: PersonalAgendaHomeProps) {
       }),
     [agenda, timeZone, weekDays],
   );
+  const serverTodayEntries = useMemo(
+    () => serverAgenda.filter((entry) => fixtureCalendarDate(entry.fixture, timeZone) === today),
+    [serverAgenda, timeZone, today],
+  );
+  const serverWeekEntries = useMemo(
+    () =>
+      serverAgenda.filter((entry) => {
+        const date = fixtureCalendarDate(entry.fixture, timeZone);
+        return date !== null && weekDays.has(date);
+      }),
+    [serverAgenda, timeZone, weekDays],
+  );
 
   return (
     <section>
       <h1>Početna</h1>
-      <p className="lead">Tvoja agenda: praćeni klubovi i ručni DEMO izbori. Sve utakmice su izmišljene.</p>
-      {schedule ? (
-        <AgendaFreshness schedule={schedule} now={now} timeZone={timeZone} online={online} />
-      ) : null}
+      {hasServer ? (
+        <p className="lead">Tvoja agenda: praćeni klubovi i ručni izbori. Proverene utakmice su sa servera.</p>
+      ) : (
+        <p className="lead">Tvoja agenda: praćeni klubovi i ručni DEMO izbori. Sve utakmice su izmišljene.</p>
+      )}
       {error ? <p className="warning" role="alert">{error}</p> : null}
-      {!schedule && !error ? <p>Učitavam DEMO raspored.</p> : null}
-      {schedule ? (
+      {!schedule && !error && !hasServer ? <p>Učitavam DEMO raspored.</p> : null}
+      {hasServer ? (
         <>
+          <div data-server-agenda="unified" data-provenance={provenance ?? undefined}>
+            <ServerProvenanceLine provenance={provenance} timeZone={timeZone} />
+            <h2>Sledeća utakmica</h2>
+            {serverNext.length === 0 ? (
+              <p>Nema predstojeće serverske utakmice sa potvrđenim terminom u tvojoj agendi.</p>
+            ) : (
+              <>
+                {serverNext.length > 1 ? <p className="meta">Još {serverNext.length - 1} u isto vreme.</p> : null}
+                {serverNext.map((entry) => (
+                  <ServerAgendaEntryCard
+                    key={entry.fixture.id}
+                    entry={entry}
+                    teams={serverTeams}
+                    competitions={serverCompetitions}
+                    timeZone={timeZone}
+                    now={now}
+                    followed={followed}
+                    manualFixtureIds={manualFixtureIds}
+                    onToggleManual={onToggleManual}
+                  />
+                ))}
+              </>
+            )}
+            <h2>Danas</h2>
+            {serverTodayEntries.length === 0 ? (
+              <p>Nema serverske utakmice iz tvoje agende za današnji datum.</p>
+            ) : (
+              serverTodayEntries.map((entry) => (
+                <ServerAgendaEntryCard
+                  key={entry.fixture.id}
+                  entry={entry}
+                  teams={serverTeams}
+                  competitions={serverCompetitions}
+                  timeZone={timeZone}
+                  now={now}
+                  followed={followed}
+                  manualFixtureIds={manualFixtureIds}
+                  onToggleManual={onToggleManual}
+                />
+              ))
+            )}
+            <h2>Narednih sedam dana</h2>
+            {serverWeekEntries.length === 0 ? (
+              <p>Nema serverske utakmice iz tvoje agende u narednih sedam dana.</p>
+            ) : (
+              serverWeekEntries.map((entry) => (
+                <ServerAgendaEntryCard
+                  key={entry.fixture.id}
+                  entry={entry}
+                  teams={serverTeams}
+                  competitions={serverCompetitions}
+                  timeZone={timeZone}
+                  now={now}
+                  followed={followed}
+                  manualFixtureIds={manualFixtureIds}
+                  onToggleManual={onToggleManual}
+                />
+              ))
+            )}
+          </div>
+          {schedule ? (
+            <section aria-label="DEMO podaci">
+              <h2>DEMO podaci (izolovano)</h2>
+              <p className="meta">Sintetičke utakmice, odvojene od proverenog rasporeda iznad.</p>
+              <AgendaFreshness schedule={schedule} now={now} timeZone={timeZone} online={online} />
+              {agenda.length === 0 ? (
+                <p>
+                  DEMO agenda je prazna. Izaberi klub na ekranu <a href={routeHash('clubs')}>Klubovi</a> ili
+                  ručno dodaj DEMO utakmicu na ekranu <a href={routeHash('mine')}>Moje utakmice</a>.
+                </p>
+              ) : null}
+              <h2>Sledeća DEMO utakmica</h2>
+              {next.length === 0 ? (
+                <p>Nema predstojeće DEMO utakmice sa potvrđenim terminom u tvojoj agendi.</p>
+              ) : (
+                <>
+                  {next.length > 1 ? <p className="meta">Još {next.length - 1} u isto vreme.</p> : null}
+                  {next.map((entry) => (
+                    <AgendaEntryCard
+                      key={entry.fixture.id}
+                      entry={entry}
+                      schedule={schedule}
+                      timeZone={timeZone}
+                      now={now}
+                      followed={followed}
+                      manualFixtureIds={manualFixtureIds}
+                      onToggleManual={onToggleManual}
+                    />
+                  ))}
+                </>
+              )}
+              <h2>Danas (DEMO)</h2>
+              {todayEntries.length === 0 ? (
+                <p>Nema DEMO utakmice iz tvoje agende za današnji datum.</p>
+              ) : (
+                todayEntries.map((entry) => (
+                  <AgendaEntryCard
+                    key={entry.fixture.id}
+                    entry={entry}
+                    schedule={schedule}
+                    timeZone={timeZone}
+                    now={now}
+                    followed={followed}
+                    manualFixtureIds={manualFixtureIds}
+                    onToggleManual={onToggleManual}
+                  />
+                ))
+              )}
+              <h2>Narednih sedam dana (DEMO)</h2>
+              {weekEntries.length === 0 ? (
+                <p>Nema DEMO utakmice iz tvoje agende u narednih sedam dana.</p>
+              ) : (
+                weekEntries.map((entry) => (
+                  <AgendaEntryCard
+                    key={entry.fixture.id}
+                    entry={entry}
+                    schedule={schedule}
+                    timeZone={timeZone}
+                    now={now}
+                    followed={followed}
+                    manualFixtureIds={manualFixtureIds}
+                    onToggleManual={onToggleManual}
+                  />
+                ))
+              )}
+            </section>
+          ) : null}
+        </>
+      ) : null}
+      {!hasServer && schedule ? (
+        <>
+          <AgendaFreshness schedule={schedule} now={now} timeZone={timeZone} online={online} />
           {agenda.length === 0 ? (
             <p>
               Tvoja agenda je prazna. Izaberi klub na ekranu <a href={routeHash('clubs')}>Klubovi</a> ili
@@ -163,13 +325,9 @@ export function PersonalAgendaHome(props: PersonalAgendaHomeProps) {
               />
             ))
           )}
-          <ServerAgendaSection
-            snapshots={serverSnapshots}
-            timeZone={timeZone}
-            followed={followed}
-            manualFixtureIds={manualFixtureIds}
-            onToggleManual={onToggleManual}
-          />
+          {serverSnapshots.length > 0 ? (
+            <p className="meta">Nema serverskih utakmica za praćene klubove. Pronađi raspored na ekranu Klubovi.</p>
+          ) : null}
         </>
       ) : null}
     </section>
@@ -178,6 +336,7 @@ export function PersonalAgendaHome(props: PersonalAgendaHomeProps) {
 
 export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
   const { schedule, now, timeZone, online, followed, manualFixtureIds, onToggleManual, draftNote, onDraft } = props;
+  const serverSnapshots = props.serverSnapshots ?? [];
   const [filter, setFilter] = useState<AgendaFilter>(EMPTY_AGENDA_FILTER);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -185,30 +344,50 @@ export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
     () => (schedule ? buildUserAgenda(schedule.fixtures, followed, manualFixtureIds) : []),
     [schedule, followed, manualFixtureIds],
   );
-  const sportEntries = useMemo(() => entriesForSport(agenda, filter.sport), [agenda, filter.sport]);
+  // Stvarna glavna agenda: filteri (sport/klub/takmičenje) i grupe statusa
+  // rade nad unificiranim proverenim skupom kada postoji.
+  const serverAgenda = useMemo(
+    () => buildUnifiedServerAgenda(serverSnapshots, followed, manualFixtureIds),
+    [serverSnapshots, followed, manualFixtureIds],
+  );
+  const hasServer = serverAgenda.length > 0;
+  const serverTeams = useMemo(() => unifiedServerTeams(serverSnapshots), [serverSnapshots]);
+  const serverCompetitions = useMemo(() => unifiedServerCompetitions(serverSnapshots), [serverSnapshots]);
+  const provenance = useMemo(() => unifiedServerProvenance(serverSnapshots), [serverSnapshots]);
+  const mainAgenda = hasServer ? serverAgenda : agenda;
+  const mainTeams: readonly NamedRef[] = hasServer ? serverTeams : (schedule?.teams ?? []);
+  const mainCompetitions: readonly NamedRef[] = hasServer ? serverCompetitions : (schedule?.competitions ?? []);
+  const sportEntries = useMemo(() => entriesForSport(mainAgenda, filter.sport), [mainAgenda, filter.sport]);
   const clubOptions = useMemo(
-    () => (schedule ? clubOptionsForAgenda(sportEntries, schedule.teams) : []),
-    [sportEntries, schedule],
+    () => clubOptionsForAgenda(sportEntries, mainTeams),
+    [sportEntries, mainTeams],
   );
   const competitionOptions = useMemo(
-    () => (schedule ? competitionOptionsForAgenda(sportEntries, schedule.competitions) : []),
-    [sportEntries, schedule],
+    () => competitionOptionsForAgenda(sportEntries, mainCompetitions),
+    [sportEntries, mainCompetitions],
   );
-  const filtered = useMemo(() => applyAgendaFilters(agenda, filter), [agenda, filter]);
+  const filtered = useMemo(() => applyAgendaFilters(mainAgenda, filter), [mainAgenda, filter]);
   const groups = useMemo(() => groupUserAgenda(filtered, now), [filtered, now]);
+  // DEMO ostaje izolovan ispod glavne agende, sa istim filterom.
+  const demoFiltered = useMemo(() => applyAgendaFilters(agenda, filter), [agenda, filter]);
+  const demoGroups = useMemo(() => groupUserAgenda(demoFiltered, now), [demoFiltered, now]);
 
   return (
     <section>
       <h1>Moje utakmice</h1>
-      <p className="lead">Hronološka DEMO agenda: unija praćenih klubova i ručnih izbora. Jedna utakmica je jedan red.</p>
+      {hasServer ? (
+        <p className="lead">Hronološka agenda: unija praćenih klubova i ručnih izbora. Jedna utakmica je jedan red.</p>
+      ) : (
+        <p className="lead">Hronološka DEMO agenda: unija praćenih klubova i ručnih izbora. Jedna utakmica je jedan red.</p>
+      )}
       {!online ? <p className="warning">Van mreže. Prikaz je iz poslednjeg učitavanja i ne donosi sveže termine.</p> : null}
-      {!schedule ? <p>Učitavam DEMO raspored.</p> : null}
-      {schedule ? (
+      {!schedule && !hasServer ? <p>Učitavam DEMO raspored.</p> : null}
+      {hasServer || schedule ? (
         <>
-          {agenda.length === 0 ? (
+          {mainAgenda.length === 0 ? (
             <p>
               Nema utakmica u agendi. Izaberi klub na ekranu <a href={routeHash('clubs')}>Klubovi</a> ili
-              ručno dodaj DEMO utakmicu iz kataloga ispod.
+              ručno dodaj utakmicu iz kataloga ispod.
             </p>
           ) : null}
           <div className="filters" role="group" aria-label="Filter sporta">
@@ -244,84 +423,198 @@ export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
               </select>
             </div>
           </div>
-          {agenda.length > 0 && filtered.length === 0 ? <p>Nema DEMO utakmice za ovaj filter.</p> : null}
-          <AgendaGroup
-            title="Predstojeće"
-            entries={groups.upcoming}
-            schedule={schedule}
-            timeZone={timeZone}
-            now={now}
-            followed={followed}
-            manualFixtureIds={manualFixtureIds}
-            onToggleManual={onToggleManual}
-            expandedId={expandedId}
-            onToggleDetail={setExpandedId}
-          />
-          <AgendaGroup
-            title="Termin naknadno"
-            entries={groups.toBeAnnounced}
-            schedule={schedule}
-            timeZone={timeZone}
-            now={now}
-            followed={followed}
-            manualFixtureIds={manualFixtureIds}
-            onToggleManual={onToggleManual}
-            expandedId={expandedId}
-            onToggleDetail={setExpandedId}
-          />
-          <AgendaGroup
-            title="Odloženo ili otkazano"
-            entries={groups.disrupted}
-            schedule={schedule}
-            timeZone={timeZone}
-            now={now}
-            followed={followed}
-            manualFixtureIds={manualFixtureIds}
-            onToggleManual={onToggleManual}
-            expandedId={expandedId}
-            onToggleDetail={setExpandedId}
-          />
-          <AgendaGroup
-            title="Arhiva"
-            entries={groups.archive}
-            schedule={schedule}
-            timeZone={timeZone}
-            now={now}
-            followed={followed}
-            manualFixtureIds={manualFixtureIds}
-            onToggleManual={onToggleManual}
-            expandedId={expandedId}
-            onToggleDetail={setExpandedId}
-          />
-          <ServerAgendaSection
-            snapshots={props.serverSnapshots ?? []}
-            timeZone={timeZone}
-            followed={followed}
-            manualFixtureIds={manualFixtureIds}
-            onToggleManual={onToggleManual}
-          />
-          <h2>Ručni izbor iz DEMO kataloga</h2>
-          <p className="meta">Katalog je nezavisan od praćenih klubova: svaku DEMO utakmicu možeš dodati ili ukloniti ručno.</p>
-          <ul className="agenda-catalog">
-            {schedule.fixtures.map((fixture) => {
-              const state = catalogRowState(fixture, followed, manualFixtureIds);
-              return (
-                <li key={fixture.id} className="card">
-                  <p className="kicker">
-                    <span className="demo">DEMO</span>
-                    <span>{sportLabel(fixture.sport)}</span>
-                    <span>{competitionName(schedule, fixture.competitionId)}</span>
-                  </p>
-                  <p><strong>{fixtureTitle(fixture, schedule.teams)}</strong></p>
-                  <p>{kickoffText(fixture, timeZone)}</p>
-                  <button type="button" aria-pressed={state.manuallySelected} onClick={() => onToggleManual(fixture.id)}>
-                    {state.toggleLabel}
-                  </button>
-                  {state.toggleNote ? <p className="meta">{state.toggleNote}</p> : null}
-                </li>
-              );
-            })}
-          </ul>
+          {mainAgenda.length > 0 && filtered.length === 0 ? (
+            <p>{hasServer ? 'Nema serverskih utakmica za ovaj filter.' : 'Nema DEMO utakmice za ovaj filter.'}</p>
+          ) : null}
+          {hasServer ? (
+            <div data-server-agenda="unified" data-provenance={provenance ?? undefined}>
+              <ServerProvenanceLine provenance={provenance} timeZone={timeZone} />
+              <ServerAgendaGroup
+                title="Predstojeće"
+                entries={groups.upcoming}
+                teams={serverTeams}
+                competitions={serverCompetitions}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <ServerAgendaGroup
+                title="Termin naknadno"
+                entries={groups.toBeAnnounced}
+                teams={serverTeams}
+                competitions={serverCompetitions}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <ServerAgendaGroup
+                title="Odloženo ili otkazano"
+                entries={groups.disrupted}
+                teams={serverTeams}
+                competitions={serverCompetitions}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <ServerAgendaGroup
+                title="Arhiva"
+                entries={groups.archive}
+                teams={serverTeams}
+                competitions={serverCompetitions}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+            </div>
+          ) : null}
+          {!hasServer && schedule ? (
+            <>
+              <AgendaGroup
+                title="Predstojeće"
+                entries={groups.upcoming}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <AgendaGroup
+                title="Termin naknadno"
+                entries={groups.toBeAnnounced}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <AgendaGroup
+                title="Odloženo ili otkazano"
+                entries={groups.disrupted}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <AgendaGroup
+                title="Arhiva"
+                entries={groups.archive}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+            </>
+          ) : null}
+          {hasServer && schedule ? (
+            <section aria-label="DEMO agenda">
+              <h2>DEMO agenda (izolovano)</h2>
+              <p className="meta">Sintetičke utakmice, odvojene od proverene agende iznad. Isti filter važi i ovde.</p>
+              <AgendaGroup
+                title="Predstojeće (DEMO)"
+                entries={demoGroups.upcoming}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <AgendaGroup
+                title="Termin naknadno (DEMO)"
+                entries={demoGroups.toBeAnnounced}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <AgendaGroup
+                title="Odloženo ili otkazano (DEMO)"
+                entries={demoGroups.disrupted}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+              <AgendaGroup
+                title="Arhiva (DEMO)"
+                entries={demoGroups.archive}
+                schedule={schedule}
+                timeZone={timeZone}
+                now={now}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={onToggleManual}
+                expandedId={expandedId}
+                onToggleDetail={setExpandedId}
+              />
+            </section>
+          ) : null}
+          {schedule ? (
+            <>
+              <h2>Ručni izbor iz DEMO kataloga</h2>
+              <p className="meta">Katalog je nezavisan od praćenih klubova: svaku DEMO utakmicu možeš dodati ili ukloniti ručno.</p>
+              <ul className="agenda-catalog">
+                {schedule.fixtures.map((fixture) => {
+                  const state = catalogRowState(fixture, followed, manualFixtureIds);
+                  return (
+                    <li key={fixture.id} className="card">
+                      <p className="kicker">
+                        <span className="demo">DEMO</span>
+                        <span>{sportLabel(fixture.sport)}</span>
+                        <span>{competitionName(schedule, fixture.competitionId)}</span>
+                      </p>
+                      <p><strong>{fixtureTitle(fixture, schedule.teams)}</strong></p>
+                      <p>{kickoffText(fixture, timeZone)}</p>
+                      <button type="button" aria-pressed={state.manuallySelected} onClick={() => onToggleManual(fixture.id)}>
+                        {state.toggleLabel}
+                      </button>
+                      {state.toggleNote ? <p className="meta">{state.toggleNote}</p> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
           <div className="note" data-draft-dirty={draftNote.trim().length > 0 ? 'true' : 'false'}>
             <label htmlFor="draft-note">Beleška uz događaj</label>
             <textarea
@@ -497,60 +790,151 @@ function FilterButton(props: { pressed: boolean; onClick: () => void; children: 
 }
 
 /**
- * Faza 05: serverske utakmice u ličnoj agendi. Svaki snimak nosi tačno
- * poreklo (režim i poslednju uspešnu proveru); bez uspešnog pronalaženja
- * nema sekcije. Derbi deduplikacija radi preko buildUserAgenda: ista
- * utakmica je jedan red čak i kada se prate oba kluba.
+ * Faza 05: tačno poreklo unificirane agende — poslednja uspešna provera
+ * proverenih snimaka. Bez uspešnog pronalaženja nema sekcije.
  */
-export function ServerAgendaSection(props: {
-  snapshots: readonly LastGoodSchedule[];
+export function ServerProvenanceLine(props: { provenance: string | null; timeZone: string }) {
+  const { provenance, timeZone } = props;
+  return (
+    <p className="meta">
+      <strong>Pronađene utakmice</strong> · Proveren raspored ·{' '}
+      {provenance ? (
+        <>poslednja uspešna provera: <time dateTime={provenance}>{formatFetchedAt(provenance, timeZone)}</time>.</>
+      ) : (
+        <>još nema uspešne provere izvora.</>
+      )}
+    </p>
+  );
+}
+
+/** Jedan red unificirane serverske agende: bez DEMO oznake, sa izvorom i razlozima. */
+export function ServerAgendaEntryCard(props: {
+  entry: AgendaEntry;
+  teams: readonly NamedRef[];
+  competitions: readonly NamedRef[];
   timeZone: string;
+  now: number;
   followed: readonly string[];
   manualFixtureIds: readonly string[];
   onToggleManual: (fixtureId: string) => void;
+  expanded?: boolean;
+  onToggleDetail?: () => void;
 }) {
-  const { snapshots, timeZone, followed, manualFixtureIds, onToggleManual } = props;
-  const agendaSnapshots = useMemo(
-    () => snapshots.map((snapshot) => ({
-      snapshot,
-      entries: buildUserAgenda(snapshot.response.result.futureFixtures, followed, manualFixtureIds),
-    })).filter((group) => group.entries.length > 0),
-    [snapshots, followed, manualFixtureIds],
+  const { entry, timeZone, now } = props;
+  const { fixture } = entry;
+  const countdown = countdownLabel(fixture, now);
+  const manual = catalogRowState(fixture, props.followed, props.manualFixtureIds);
+  const competitionName = props.competitions.find((item) => item.id === fixture.competitionId)?.name ?? fixture.competitionId;
+  const detailId = `server-agenda-detail-${fixture.id}`;
+  const showDetail = props.expanded === true && typeof props.onToggleDetail === 'function';
+  return (
+    <article className="card">
+      <p className="kicker">
+        <span>{sportLabel(fixture.sport)}</span>
+        <span>{competitionName}</span>
+      </p>
+      <h3>{fixtureTitle(fixture, props.teams)}</h3>
+      <p>{kickoffText(fixture, timeZone)}</p>
+      {countdown ? <p className="countdown">{countdown}</p> : null}
+      <p className="meta">
+        <span>{scheduleStatusLabel(fixture, now)}</span>
+        {fixture.venue ? <span>{fixture.venue}</span> : null}
+        {fixture.round ? <span>{fixture.round}</span> : null}
+      </p>
+      <ul className="agenda-reasons" aria-label="Razlozi uključivanja u agendu">
+        {entry.reasons.map((reason, index) => (
+          <li key={`${reason.kind}-${index}`}>{reasonLabel(reason, props.teams)}</li>
+        ))}
+      </ul>
+      <p className="meta">
+        Izvor:{' '}
+        <a href={fixture.sourceUrl} data-source-url={fixture.sourceUrl} rel="noreferrer">
+          {fixture.provider}
+        </a>
+      </p>
+      <div className="agenda-actions">
+        <button type="button" aria-pressed={manual.manuallySelected} onClick={() => props.onToggleManual(fixture.id)}>
+          {manual.toggleLabel}
+        </button>
+        {props.onToggleDetail ? (
+          <button type="button" aria-expanded={showDetail} aria-controls={detailId} onClick={props.onToggleDetail}>
+            {showDetail ? 'Sakrij detalj' : 'Detalj'}
+          </button>
+        ) : null}
+      </div>
+      {manual.toggleNote ? <p className="meta">{manual.toggleNote}</p> : null}
+      {showDetail ? (
+        <div className="agenda-detail" id={detailId} role="region" aria-label={`Detalj: ${fixtureTitle(fixture, props.teams)}`}>
+          <dl>
+            <div>
+              <dt>Takmičenje</dt>
+              <dd>{competitionName}</dd>
+            </div>
+            <div>
+              <dt>Sezona</dt>
+              <dd>{fixture.seasonId}</dd>
+            </div>
+            <div>
+              <dt>Domaćin</dt>
+              <dd>{teamDisplayName(fixture.homeTeamId, props.teams)}</dd>
+            </div>
+            <div>
+              <dt>Gost</dt>
+              <dd>{teamDisplayName(fixture.awayTeamId, props.teams)}</dd>
+            </div>
+            {fixture.venue ? (
+              <div>
+                <dt>Mesto</dt>
+                <dd>{fixture.venue}</dd>
+              </div>
+            ) : null}
+            {fixture.round ? (
+              <div>
+                <dt>Kolo</dt>
+                <dd>{fixture.round}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
+      ) : null}
+    </article>
   );
-  if (snapshots.length === 0) return null;
+}
+
+function ServerAgendaGroup(props: {
+  title: string;
+  entries: readonly AgendaEntry[];
+  teams: readonly NamedRef[];
+  competitions: readonly NamedRef[];
+  timeZone: string;
+  now: number;
+  followed: readonly string[];
+  manualFixtureIds: readonly string[];
+  onToggleManual: (fixtureId: string) => void;
+  expandedId: string | null;
+  onToggleDetail: (fixtureId: string | null) => void;
+}) {
+  if (props.entries.length === 0) return null;
   return (
     <>
-      <h2>Pronađene utakmice</h2>
-      {agendaSnapshots.length === 0 ? (
-        <p>Nema serverskih utakmica za praćene klubove. Pronađi raspored na ekranu Klubovi.</p>
-      ) : null}
-      {agendaSnapshots.map(({ snapshot, entries }) => {
-        const teamName = snapshot.response.teams.find((team) => team.id === snapshot.teamId)?.name ?? snapshot.teamId;
-        const competitions = new Map(snapshot.response.competitions.map((competition) => [competition.id, competition.name]));
-        return (
-          <div key={`${snapshot.teamId}:${snapshot.seasonId}`} data-server-agenda={snapshot.teamId} data-provenance={snapshot.checkedAt ?? undefined}>
-            <p className="meta">
-              <strong>{teamName}</strong> · {scheduleKindLabel(snapshot.kind)} ·{' '}
-              {snapshot.checkedAt ? (
-                <>poslednja uspešna provera: <time dateTime={snapshot.checkedAt}>{formatFetchedAt(snapshot.checkedAt, timeZone)}</time>.</>
-              ) : (
-                <>još nema uspešne provere izvora.</>
-              )}
-            </p>
-            {entries.map((entry) => (
-              <ServerFixtureCard
-                key={entry.fixture.id}
-                fixture={entry.fixture}
-                competitionName={competitions.get(entry.fixture.competitionId) ?? entry.fixture.competitionId}
-                timeZone={timeZone}
-                demo={false}
-                tracked
-                onToggleManual={onToggleManual}
-              />
-            ))}
-          </div>
-        );
-      })}
+      <h2>{props.title}</h2>
+      {props.entries.map((entry) => (
+        <ServerAgendaEntryCard
+          key={entry.fixture.id}
+          entry={entry}
+          teams={props.teams}
+          competitions={props.competitions}
+          timeZone={props.timeZone}
+          now={props.now}
+          followed={props.followed}
+          manualFixtureIds={props.manualFixtureIds}
+          onToggleManual={props.onToggleManual}
+          expanded={props.expandedId === entry.fixture.id}
+          onToggleDetail={() =>
+            props.onToggleDetail(props.expandedId === entry.fixture.id ? null : entry.fixture.id)
+          }
+        />
+      ))}
     </>
   );
 }

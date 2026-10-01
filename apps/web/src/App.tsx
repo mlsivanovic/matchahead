@@ -164,9 +164,13 @@ export function App() {
       void controller.toggleFollow(teamId);
       return;
     }
-    const next = localFollowed.includes(teamId) ? localFollowed.filter((id) => id !== teamId) : [...localFollowed, teamId];
-    writeFollowedTeamIds(browserStore(sessionStorage), next);
-    setLocalFollowed(readFollowedTeamIds(browserStore(sessionStorage)));
+    // Funkcionalna dopuna: brzi uzastopni klikovi (dvoklik) ne smeju da se
+    // pregaze zastarelim zatvaranjem — svaki klik dopunjuje prethodni.
+    setLocalFollowed((previous) => {
+      const next = previous.includes(teamId) ? previous.filter((id) => id !== teamId) : [...previous, teamId];
+      writeFollowedTeamIds(browserStore(sessionStorage), next);
+      return readFollowedTeamIds(browserStore(sessionStorage));
+    });
   }
 
   function toggleManual(fixtureId: string) {
@@ -174,11 +178,13 @@ export function App() {
       void controller.toggleManual(fixtureId);
       return;
     }
-    const next = localManuals.includes(fixtureId)
-      ? localManuals.filter((id) => id !== fixtureId)
-      : [...localManuals, fixtureId];
-    writeManualFixtureIds(browserStore(sessionStorage), next);
-    setLocalManuals(readManualFixtureIds(browserStore(sessionStorage)));
+    setLocalManuals((previous) => {
+      const next = previous.includes(fixtureId)
+        ? previous.filter((id) => id !== fixtureId)
+        : [...previous, fixtureId];
+      writeManualFixtureIds(browserStore(sessionStorage), next);
+      return readManualFixtureIds(browserStore(sessionStorage));
+    });
   }
 
   function changeDraft(value: string) {

@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import type { FindFixturesResult } from '../../../packages/domain/src/find-fixtures.ts';
 import { INITIAL_SEASON_ID } from '../../../packages/domain/src/schedule-api.ts';
+import type { CoverageStatus, Fixture } from '../../../packages/domain/src/types.ts';
 import {
+  FIND_TIMEOUT_MS,
   isRealCalendarDate,
   isStrictInstant,
   normalizeApiBaseUrl,
@@ -15,6 +17,11 @@ import {
 import { currentScheduleIdToken } from '../src/logic/schedule-auth.ts';
 import { readScheduleServerConfig } from '../src/logic/schedule-config.ts';
 import {
+  buildUnifiedServerAgenda,
+  unifiedVerifiedFixtures,
+} from '../src/logic/server-agenda.ts';
+import {
+  purgeRevokedSnapshots,
   readLastAttemptAt,
   readLastGood,
   refreshCooldown,
@@ -25,6 +32,7 @@ import {
 import { clearUserLocalContent, memoryStore } from '../src/logic/user-local.ts';
 
 const TEAM = 'football:rs:crvena-zvezda';
+const PARTIZAN = 'football:rs:partizan';
 const SEASON = INITIAL_SEASON_ID;
 
 function result(overrides: Partial<FindFixturesResult> = {}): FindFixturesResult {
@@ -265,9 +273,12 @@ test('pogrešan odgovor servera je greška, ne prazan prikaz', async () => {
 });
 
 test('neobjavljeno takmičenje i nepoznat termin prolaze kao pokrivenost, ne kao utakmica', () => {
+  const tbd = fixture({ startsAtUtc: null, timeConfirmed: false, status: 'time_tbd', scheduledLocalDate: null });
   const parsed = parseFindResponse(envelope({
     result: result({
-      futureFixtures: [fixture({ startsAtUtc: null, timeConfirmed: false, status: 'time_tbd', scheduledLocalDate: null })],
+      futureFixtures: [tbd],
+      nextFixture: tbd,
+      nextConfirmedFixture: null,
       coverage: [coverage()],
     }),
   }));
@@ -439,6 +450,377 @@ test('prekinut zahtev pri zameni naloga se nikad ne upisuje', async () => {
     }),
     (error: unknown) => error instanceof ScheduleApiError && error.code === 'aborted',
   );
+});
+
+test('podrazumevani rok je 20 s do kraja čitanja tela', () => {
+  assert.equal(FIND_TIMEOUT_MS, 20000);
+});
+
+test('zaglavlja 200 pa viseće telo daje timeout u kratkom roku', async () => {
+  // Mock ignoriše signal i nikad ne razrešava telo: trka roka svejedno puca.
+  const hanging = new Promise<unknown>(() => {});
+  const stalledBody = (async () => ({
+    status: 200,
+    ok: true,
+    headers: { get: (_name: string) => 'application/json' },
+    json: () => hanging,
+  })) as unknown as typeof fetch;
+  const started = Date.now();
+  await assert.rejects(
+    () => postFindFixtures({
+      baseUrl: BASE, idToken: null, sport: 'football', teamId: TEAM,
+      seasonId: SEASON, refresh: false, fetchImpl: stalledBody, timeoutMs: 50,
+    }),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'timeout',
+  );
+  assert.ok(Date.now() - started < 5000, 'timeout visećeg tela mora stići brzo, bez blokade UI');
+});
+
+test('prekid posle zaglavlja (odjava u letu) daje aborted, ne kasni upis', async () => {
+  const external = new AbortController();
+  // Mock poštuje signal: telo visi dok spoljni prekid ne stigne.
+  const signalHonoring = (async (_url: unknown, init?: { signal?: AbortSignal }) => ({
+    status: 200,
+    ok: true,
+    headers: { get: (_name: string) => 'application/json' },
+    json: () => new Promise<unknown>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('prekinuto', 'AbortError')), { once: true });
+    }),
+  })) as unknown as typeof fetch;
+  const pending = postFindFixtures({
+    baseUrl: BASE, idToken: 'token-123', sport: 'football', teamId: TEAM,
+    seasonId: SEASON, refresh: false, signal: external.signal, timeoutMs: 5000, fetchImpl: signalHonoring,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  external.abort();
+  await assert.rejects(
+    () => pending,
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'aborted',
+  );
+});
+
+test('kasni odgovor posle odjave se nikad ne vraća kao uspeh', async () => {
+  const external = new AbortController();
+  const late = envelope();
+  const lateBody = (async (_url: unknown, init?: { signal?: AbortSignal }) => ({
+    status: 200,
+    ok: true,
+    headers: { get: (_name: string) => 'application/json' },
+    json: () => new Promise<unknown>((resolve) => {
+      const timer = setTimeout(() => resolve(late), 80);
+      init?.signal?.addEventListener('abort', () => clearTimeout(timer), { once: true });
+    }),
+  })) as unknown as typeof fetch;
+  const pending = postFindFixtures({
+    baseUrl: BASE, idToken: 'token-123', sport: 'football', teamId: TEAM,
+    seasonId: SEASON, refresh: false, signal: external.signal, timeoutMs: 5000, fetchImpl: lateBody,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  external.abort();
+  await assert.rejects(
+    () => pending,
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'aborted',
+  );
+});
+
+const DERBY_ID = 'football:Superliga:2026-2027:demo-liga:fx-derby';
+
+function derbyFixture(revision: number): Fixture {
+  return fixture({
+    id: DERBY_ID,
+    homeTeamId: TEAM,
+    awayTeamId: PARTIZAN,
+    revision,
+    contentHash: `derby-${revision}`,
+    fetchedAt: '2026-10-01T08:00:00.000Z',
+  });
+}
+
+function clubSnapshot(
+  teamId: string,
+  fixtures: Fixture[],
+  coverageRows: CoverageStatus[] = [],
+  kind: 'verified-schedule' | 'source-blocked' = 'verified-schedule',
+): LastGoodSchedule {
+  const sport = teamId.startsWith('basketball') ? 'basketball' : 'football';
+  const name = teamId.includes('partizan') ? 'Partizan' : 'Crvena zvezda';
+  const firstConfirmed = fixtures.find((entry) => entry.timeConfirmed) ?? null;
+  const checkedAt = kind === 'verified-schedule' ? '2026-10-01T08:00:00.000Z' : null;
+  const response = parseFindResponse({
+    kind,
+    result: {
+      teamId,
+      sport,
+      seasonId: SEASON,
+      cacheStatus: 'fetched',
+      upstreamRequests: 1,
+      checkedAt,
+      lastAttemptAt: '2026-10-01T08:00:00.000Z',
+      lastSuccessAt: checkedAt,
+      claimsNoMatches: false,
+      futureFixtures: fixtures,
+      nextFixture: fixtures[0] ?? null,
+      nextConfirmedFixture: firstConfirmed,
+      coverage: coverageRows,
+    },
+    teams: [
+      {
+        id: teamId, sport, name: `FK ${name}`, shortName: name,
+        country: 'RS', city: 'Beograd', aliases: [name], providerIds: {},
+      },
+    ],
+    competitions: [
+      { id: 'Superliga', sport, name: 'Superliga', scope: 'domestic', country: 'RS', aliases: [], providerIds: {} },
+    ],
+    manifests: [
+      {
+        provider: 'demo-liga', competitionId: 'Superliga', seasonId: SEASON,
+        lastAttemptAt: '2026-10-01T08:00:00.000Z', lastSuccessAt: '2026-10-01T08:00:00.000Z',
+        lastChangeAt: null, staleAfterHours: 24,
+      },
+    ],
+    changes: [],
+  });
+  return {
+    teamId, sport, seasonId: SEASON,
+    kind, response,
+    checkedAt, storedAt: '2026-10-01T08:05:00.000Z',
+  };
+}
+
+test('derbi iz dva snimka postoji jednom, sa najvišom revizijom bez obzira na redosled', () => {
+  const zvezda = clubSnapshot(TEAM, [derbyFixture(2), fixture({})]);
+  const partizan = clubSnapshot(PARTIZAN, [derbyFixture(3)]);
+  for (const ordered of [[zvezda, partizan], [partizan, zvezda]]) {
+    const unified = unifiedVerifiedFixtures(ordered);
+    const derbies = unified.filter((entry) => entry.id === DERBY_ID);
+    assert.equal(derbies.length, 1, 'derbi se ne sme duplirati po snimku');
+    assert.equal(derbies[0]!.revision, 3, 'pobeđuje najviša konzistentna revizija');
+  }
+});
+
+test('unificirana agenda spaja praćenja oba kluba bez duplikata', () => {
+  const zvezda = clubSnapshot(TEAM, [derbyFixture(2), fixture({})]);
+  const partizan = clubSnapshot(PARTIZAN, [derbyFixture(3)]);
+  const entries = buildUnifiedServerAgenda([zvezda, partizan], [TEAM, PARTIZAN], []);
+  const derbies = entries.filter((entry) => entry.fixture.id === DERBY_ID);
+  assert.equal(derbies.length, 1);
+  assert.equal(derbies[0]!.reasons.filter((reason) => reason.kind === 'followed_team').length, 2);
+  assert.ok(entries.length >= 2, 'lični i derbi redovi ostaju u agendi');
+});
+
+test('forbidden opoziv briše izvor iz svih snimaka; unknown čuva prikaz', () => {
+  const store = memoryStore();
+  writeLastGood(store, clubSnapshot(TEAM, [fixture({})]));
+  writeLastGood(store, clubSnapshot(PARTIZAN, [
+    fixture({ id: 'football:Superliga:2026-2027:demo-liga:fx-p', homeTeamId: PARTIZAN, awayTeamId: TEAM }),
+  ]));
+  const revoked = parseFindResponse(envelope({
+    kind: 'source-blocked',
+    result: result({
+      checkedAt: null,
+      lastSuccessAt: null,
+      futureFixtures: [],
+      nextFixture: null,
+      nextConfirmedFixture: null,
+      coverage: [coverage({ competitionId: 'Superliga', publication: 'forbidden', scheduleAvailability: 'unknown' })],
+    }),
+  }));
+  const purged = purgeRevokedSnapshots(store, revoked, SEASON);
+  assert.equal(purged.prunedSnapshots, 2);
+  assert.equal(purged.prunedFixtures, 2);
+  assert.equal(readLastGood(store, TEAM, SEASON)!.response.result.futureFixtures.length, 0);
+  assert.equal(readLastGood(store, TEAM, SEASON)!.checkedAt, null);
+  assert.equal(readLastGood(store, PARTIZAN, SEASON)!.response.result.futureFixtures.length, 0);
+
+  const kept = memoryStore();
+  writeLastGood(kept, clubSnapshot(TEAM, [fixture({})]));
+  const transient = parseFindResponse(envelope({
+    kind: 'source-blocked',
+    result: result({
+      checkedAt: null,
+      lastSuccessAt: null,
+      futureFixtures: [],
+      nextFixture: null,
+      nextConfirmedFixture: null,
+      coverage: [coverage({ competitionId: 'Superliga', publication: 'unknown', scheduleAvailability: 'source_error' })],
+    }),
+  }));
+  assert.deepEqual(purgeRevokedSnapshots(kept, transient, SEASON), { prunedSnapshots: 0, prunedFixtures: 0 });
+  assert.equal(readLastGood(kept, TEAM, SEASON)!.response.result.futureFixtures.length, 1);
+});
+
+test('opozvani izvor ne ulazi u unificiranu agendu', () => {
+  // Opoziv važi globalno: provereni snimak nosi derbi (demo-liga), ali drugi
+  // klub javlja forbidden za taj izvor — derbi ispada svuda, a utakmica
+  // drugog dozvoljenog izvora ostaje.
+  const clean = clubSnapshot(TEAM, [
+    derbyFixture(2),
+    fixture({ provider: 'druga-liga', sourceUrl: 'https://druga-liga.example/raspored/superliga' }),
+  ]);
+  const revoked = clubSnapshot(PARTIZAN, [derbyFixture(1)], [
+    coverage({ teamId: PARTIZAN, competitionId: 'Superliga', provider: 'demo-liga', publication: 'forbidden', scheduleAvailability: 'unknown' }),
+  ], 'source-blocked');
+  const unified = unifiedVerifiedFixtures([clean, revoked]);
+  assert.ok(!unified.some((entry) => entry.id === DERBY_ID), 'opozvani derbi ne sme da curi iz drugog snimka');
+  assert.equal(unified.length, 1);
+});
+
+test('allowed pa unknown je opoziv u unificiranoj agendi i u trajnom stanju', () => {
+  const allowedRow = (teamId: string) => coverage({
+    teamId, competitionId: 'Superliga', provider: 'demo-liga',
+    publication: 'allowed', scheduleAvailability: 'published',
+  });
+  const unknownRow = (teamId: string) => coverage({
+    teamId, competitionId: 'Superliga', provider: 'demo-liga',
+    publication: 'unknown', scheduleAvailability: 'unknown',
+  });
+  // Unificirana agenda: drugi klub spušta prethodno dozvoljeni par na unknown.
+  const clean = clubSnapshot(TEAM, [derbyFixture(2)], [allowedRow(TEAM)]);
+  const downgraded = clubSnapshot(PARTIZAN, [derbyFixture(1)], [unknownRow(PARTIZAN)], 'source-blocked');
+  assert.deepEqual(unifiedVerifiedFixtures([clean, downgraded]), []);
+  // Trajno stanje: isti prelaz briše par iz svih snimaka sezone.
+  const store = memoryStore();
+  writeLastGood(store, clubSnapshot(TEAM, [fixture({})], [allowedRow(TEAM)]));
+  writeLastGood(store, clubSnapshot(PARTIZAN, [
+    fixture({ id: 'football:Superliga:2026-2027:demo-liga:fx-p', homeTeamId: PARTIZAN, awayTeamId: TEAM }),
+  ], [allowedRow(PARTIZAN)]));
+  const downgradeResponse = parseFindResponse(envelope({
+    kind: 'source-blocked',
+    result: result({
+      checkedAt: null,
+      lastSuccessAt: null,
+      futureFixtures: [],
+      nextFixture: null,
+      nextConfirmedFixture: null,
+      coverage: [unknownRow(TEAM)],
+    }),
+  }));
+  const purged = purgeRevokedSnapshots(store, downgradeResponse, SEASON);
+  assert.equal(purged.prunedSnapshots, 2);
+  assert.equal(readLastGood(store, TEAM, SEASON)!.response.result.futureFixtures.length, 0);
+  assert.equal(readLastGood(store, PARTIZAN, SEASON)!.response.result.futureFixtures.length, 0);
+});
+
+test('ista revizija sa različitim sadržajem se ne objavljuje', () => {
+  const zvezda = clubSnapshot(TEAM, [derbyFixture(2)]);
+  const conflict = {
+    ...derbyFixture(2),
+    contentHash: 'derby-2-druga-verzija',
+    startsAtUtc: '2026-10-06T17:00:00.000Z',
+    scheduledLocalDate: '2026-10-06',
+  };
+  const partizan = clubSnapshot(PARTIZAN, [conflict]);
+  const unified = unifiedVerifiedFixtures([zvezda, partizan]);
+  assert.ok(!unified.some((entry) => entry.id === DERBY_ID), 'konflikt se ne sme objaviti proizvoljnim izborom');
+  assert.deepEqual(buildUnifiedServerAgenda([zvezda, partizan], [TEAM, PARTIZAN], []), []);
+});
+
+function validVerifiedBody() {
+  const confirmed = fixture({});
+  return envelope({
+    result: result({
+      futureFixtures: [confirmed],
+      nextFixture: confirmed,
+      nextConfirmedFixture: confirmed,
+    }),
+  });
+}
+
+test('semantika odgovora odbija nedosledne revizije, izvore, odnose i next pokazivače', () => {
+  const mutateResult = (change: (draft: FindFixturesResult) => void) => {
+    const body = validVerifiedBody() as { result: FindFixturesResult };
+    change(body.result);
+    return body;
+  };
+  const cases: Array<{ name: string; body: unknown }> = [
+    { name: 'negativna revizija', body: mutateResult((draft) => { draft.futureFixtures[0]!.revision = -1; }) },
+    { name: 'razlomljena revizija', body: mutateResult((draft) => { draft.futureFixtures[0]!.revision = 1.5; }) },
+    { name: 'http izvor', body: mutateResult((draft) => { draft.futureFixtures[0]!.sourceUrl = 'http://primer-liga.example/raspored'; }) },
+    { name: 'javascript izvor', body: mutateResult((draft) => { draft.futureFixtures[0]!.sourceUrl = 'javascript:alert(1)'; }) },
+    {
+      name: 'kredencijali u izvoru',
+      body: mutateResult((draft) => { draft.futureFixtures[0]!.sourceUrl = 'https://korisnik:lozinka@primer-liga.example/raspored'; }),
+    },
+    { name: 'pogrešan sport utakmice', body: mutateResult((draft) => { draft.futureFixtures[0]!.sport = 'basketball'; }) },
+    { name: 'pogrešna sezona utakmice', body: mutateResult((draft) => { draft.futureFixtures[0]!.seasonId = '2025-2026'; }) },
+    { name: 'nepoznato takmičenje utakmice', body: mutateResult((draft) => { draft.futureFixtures[0]!.competitionId = 'Nepostojeća'; }) },
+    {
+      name: 'utakmica tuđih klubova',
+      body: mutateResult((draft) => {
+        draft.futureFixtures[0]!.homeTeamId = 'football:rs:neko-treci';
+        draft.futureFixtures[0]!.awayTeamId = 'football:rs:neko-cetvrti';
+      }),
+    },
+    {
+      name: 'potvrđen termin bez trenutka',
+      body: mutateResult((draft) => { draft.futureFixtures[0]!.startsAtUtc = null; }),
+    },
+    {
+      name: 'nepotvrđen termin sa trenutkom',
+      body: mutateResult((draft) => {
+        draft.futureFixtures[0]!.timeConfirmed = false;
+        draft.futureFixtures[0]!.status = 'time_tbd';
+      }),
+    },
+    {
+      name: 'next pokazuje van spiska',
+      body: mutateResult((draft) => { draft.nextFixture = fixture({ id: 'izmišljen-id' }); }),
+    },
+    {
+      name: 'nextConfirmed izmišljen uz postojeći potvrđeni',
+      body: mutateResult((draft) => { draft.nextConfirmedFixture = null; }),
+    },
+    {
+      name: 'pokrivenost tuđeg tima',
+      body: mutateResult((draft) => { draft.coverage = [coverage({ teamId: PARTIZAN })]; }),
+    },
+    { name: 'negativan brojač', body: mutateResult((draft) => { draft.upstreamRequests = -1; }) },
+  ];
+  for (const entry of cases) {
+    assert.throws(
+      () => parseFindResponse(entry.body),
+      (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+      `propust: ${entry.name}`,
+    );
+  }
+  const forbidden = validVerifiedBody() as { result: FindFixturesResult };
+  forbidden.result.coverage = [coverage({ publication: 'forbidden' })];
+  assert.throws(
+    () => parseFindResponse(forbidden),
+    (error: unknown) => error instanceof ScheduleApiError,
+    'verified uz forbidden publication',
+  );
+  const syntheticLeak = validVerifiedBody() as { result: FindFixturesResult };
+  syntheticLeak.result.futureFixtures[0]!.provider = 'demo';
+  assert.throws(
+    () => parseFindResponse(syntheticLeak),
+    (error: unknown) => error instanceof ScheduleApiError,
+    'verified uz sintetički trag',
+  );
+});
+
+test('sintetički režim sme sintetički izvor, ali nikad javascript', () => {
+  const demoFixture = fixture({ provider: 'demo', sourceUrl: 'synthetic://demo/1' });
+  const parsed = parseFindResponse(envelope({
+    kind: 'synthetic-demo',
+    result: result({
+      futureFixtures: [demoFixture],
+      nextFixture: demoFixture,
+      nextConfirmedFixture: demoFixture,
+    }),
+  }));
+  assert.equal(parsed.kind, 'synthetic-demo');
+  const badFixture = fixture({ sourceUrl: 'javascript:alert(1)' });
+  const bad = envelope({
+    kind: 'synthetic-demo',
+    result: result({
+      futureFixtures: [badFixture],
+      nextFixture: badFixture,
+      nextConfirmedFixture: badFixture,
+    }),
+  });
+  assert.throws(() => parseFindResponse(bad), (error: unknown) => error instanceof ScheduleApiError);
 });
 
 test('mrežni pad i tajmaut su server, ne izmišljen uspeh', async () => {

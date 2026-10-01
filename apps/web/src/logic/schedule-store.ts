@@ -2,6 +2,7 @@ import { DEFAULT_ON_DEMAND_POLICY } from '../../../../packages/domain/src/find-f
 import type { FindFixturesHttpSuccess } from '../../../../packages/domain/src/schedule-api.ts';
 
 import { parseFindResponse } from './schedule-api.ts';
+import { allowedProviderKeys, revokedKeysFromCoverage, revokedPairKey } from './server-agenda.ts';
 import type { KeyValueStore } from './user-local.ts';
 
 /**
@@ -146,4 +147,61 @@ export function listLastGood(store: KeyValueStore, seasonId: string): LastGoodSc
 /** Ključevi ovog modula ostaju na uređaju i preživljavaju zamenu naloga. */
 export function isDeviceScheduleKey(key: string): boolean {
   return key.startsWith(DEVICE_KEY_PREFIX);
+}
+
+export interface RevocationPurge {
+  prunedSnapshots: number;
+  prunedFixtures: number;
+}
+
+/**
+ * Revokacija je izvor prava na uređaju: svaki odgovor koji paru
+ * izvor+takmičenje izričito uskrati pravo (forbidden/restricted) ili ga
+ * prethodno dozvoljenog spusti na nedozvoljen (allowed→unknown) briše
+ * utakmice tog para iz SVIH lokalnih snimaka sezone, ne samo iz svog kluba.
+ * Stare poverene kopije ne smeju da cure posle opoziva. Par koji odgovor ne
+ * pominje nije opoziv. Next pokazivači očišćenih snimaka se ponovo izvode;
+ * ispražnjen snimak gubi checkedAt umesto da izmišlja uspeh.
+ */
+export function purgeRevokedSnapshots(
+  store: KeyValueStore,
+  response: FindFixturesHttpSuccess,
+  seasonId: string,
+): RevocationPurge {
+  const stored = listLastGood(store, seasonId);
+  const revoked = revokedKeysFromCoverage(
+    response.result.coverage,
+    allowedProviderKeys(stored),
+  );
+  if (revoked.size === 0) return { prunedSnapshots: 0, prunedFixtures: 0 };
+  let prunedSnapshots = 0;
+  let prunedFixtures = 0;
+  for (const entry of stored) {
+    const before = entry.response.result.futureFixtures.length;
+    const kept = entry.response.result.futureFixtures.filter(
+      (fixture) => !revoked.has(revokedPairKey(fixture.provider, fixture.competitionId)),
+    );
+    if (kept.length === before) continue;
+    const emptied = kept.length === 0;
+    const pruned: LastGoodSchedule = {
+      ...entry,
+      response: {
+        ...entry.response,
+        result: {
+          ...entry.response.result,
+          futureFixtures: kept,
+          nextFixture: kept[0] ?? null,
+          nextConfirmedFixture: kept.find((fixture) => fixture.timeConfirmed) ?? null,
+          checkedAt: emptied ? null : entry.response.result.checkedAt,
+          lastSuccessAt: emptied ? null : entry.response.result.lastSuccessAt,
+        },
+      },
+      checkedAt: emptied ? null : entry.checkedAt,
+    };
+    parseFindResponse(pruned.response);
+    store.setItem(entryKey(pruned.teamId, pruned.seasonId), JSON.stringify(pruned));
+    prunedSnapshots += 1;
+    prunedFixtures += before - kept.length;
+  }
+  return { prunedSnapshots, prunedFixtures };
 }

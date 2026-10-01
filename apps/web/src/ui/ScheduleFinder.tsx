@@ -20,7 +20,12 @@ import {
 } from '../logic/schedule-api.ts';
 import { scheduleServerDisabledMessage } from '../logic/schedule-config.ts';
 import {
+  unifiedServerTeams,
+  unifiedVerifiedFixtures,
+} from '../logic/server-agenda.ts';
+import {
   listLastGood,
+  purgeRevokedSnapshots,
   readLastGood,
   refreshCooldown,
   writeLastAttemptAt,
@@ -87,12 +92,19 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
   // stanje i ne ulazi u agendu — ne sme da zameni provereno stanje.
   const [ephemeral, setEphemeral] = useState<{ teamId: string; response: FindFixturesHttpSuccess } | null>(null);
   const pending = useRef<AbortController | null>(null);
+  // Monotoni redni broj: samo najsvežije pronalaženje sme da upiše ili prijavi
+  // grešku. Zastareli odgovor (dvoklik, izbor kluba/sporta, zamena naloga)
+  // nikad ne prepisuje noviji prikaz niti token.
+  const seq = useRef(0);
 
   useEffect(() => () => {
+    seq.current += 1;
     pending.current?.abort();
+    pending.current = null;
   }, []);
 
   function abortPending() {
+    seq.current += 1;
     pending.current?.abort();
     pending.current = null;
   }
@@ -126,6 +138,10 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
   }, [ephemeral, activeTeamId, sport, lastGood]);
 
   function pickSport(next: Sport) {
+    // Izbor sporta prekida let: kasni odgovor za stari sport se ne upisuje.
+    seq.current += 1;
+    pending.current?.abort();
+    pending.current = null;
     setSport(next);
     const first = selectableTeams(next)[0];
     if (first) setTeamId(first.id);
@@ -134,12 +150,21 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
   }
 
   function pickTeam(next: string) {
+    // Izbor kluba prekida let: kasni odgovor za stari klub se ne upisuje.
+    seq.current += 1;
+    pending.current?.abort();
+    pending.current = null;
     setTeamId(next);
     setError(null);
     setEphemeral(null);
   }
 
   const find = useCallback(async (refresh: boolean) => {
+    // Dvoklik/ponovni klik: prethodni let se prekida i nikad ne prepisuje noviji.
+    pending.current?.abort();
+    pending.current = null;
+    const current = seq.current + 1;
+    seq.current = current;
     if (!apiBase) {
       setError(scheduleServerDisabledMessage());
       return;
@@ -158,14 +183,20 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     try {
       writeLastAttemptAt(store, activeTeamId, INITIAL_SEASON_ID, attemptAt);
     } catch {
+      if (seq.current !== current) return;
       setWorking(false);
       setError('Neispravan izbor kluba.');
       return;
     }
     const controller = new AbortController();
     pending.current = controller;
+    const isCurrent = () => seq.current === current && pending.current === controller && !controller.signal.aborted;
     try {
       const idToken = await getIdToken();
+      // Token uzet pre zamene naloga je zastareo: ne šalje se i ne upisuje.
+      if (!isCurrent()) {
+        throw new ScheduleApiError('aborted', 'Nalog je promenjen; zahtev je prekinut i nije upisan.');
+      }
       const response = await postFindFixtures({
         baseUrl: apiBase,
         idToken,
@@ -176,7 +207,13 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
         online,
         signal: controller.signal,
       });
+      // Kasni odgovor posle odjave/zamene ili novijeg klika se nikad ne upisuje.
+      if (!isCurrent()) {
+        throw new ScheduleApiError('aborted', 'Nalog je promenjen; zahtev je prekinut i nije upisan.');
+      }
       if (response.kind === 'synthetic-demo') {
+        // DEMO ostaje efemeran: prikazuje se, ali se nikad ne upisuje u
+        // trajno stanje i ne ulazi u agendu.
         setEphemeral({ teamId: activeTeamId, response });
       } else {
         writeLastGood(store, {
@@ -188,15 +225,21 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
           checkedAt: response.result.checkedAt,
           storedAt: new Date().toISOString(),
         });
+        // Opoziv važi odmah za celu sezonu, ne samo za ovaj klub.
+        purgeRevokedSnapshots(store, response, INITIAL_SEASON_ID);
       }
     } catch (reason) {
+      // Zastareli let ćuti: greška starog klika ne sme da pregazi noviji prikaz.
+      if (seq.current !== current) return;
       setError(reason instanceof ScheduleApiError
         ? reason.message
         : 'Pronalaženje nije uspelo. Prikaz je iz poslednjeg sačuvanog stanja.');
     } finally {
-      if (pending.current === controller) pending.current = null;
-      setWorking(false);
-      setTick((value) => value + 1);
+      if (pending.current === controller && seq.current === current) {
+        pending.current = null;
+        setWorking(false);
+        setTick((value) => value + 1);
+      }
     }
   }, [apiBase, getIdToken, store, activeTeamId, sport, online]);
 
@@ -401,22 +444,14 @@ export function ServerFixtureCard(props: {
   );
 }
 
+/**
+ * Kompatibilnost: jedinstveni skup iz server-agenda (najviša revizija po
+ * id-u, derbi jednom, bez opozvanih izvora). Zadržano ime za postojeće uvoze.
+ */
 export function serverFixturesForAgenda(snapshots: readonly LastGoodSchedule[]): Fixture[] {
-  const byId = new Map<string, Fixture>();
-  for (const snapshot of snapshots) {
-    for (const fixture of snapshot.response.result.futureFixtures) {
-      if (!byId.has(fixture.id)) byId.set(fixture.id, fixture);
-    }
-  }
-  return [...byId.values()];
+  return unifiedVerifiedFixtures(snapshots);
 }
 
 export function serverTeamsForAgenda(snapshots: readonly LastGoodSchedule[]): Array<{ id: string; name: string }> {
-  const byId = new Map<string, string>();
-  for (const snapshot of snapshots) {
-    for (const team of snapshot.response.teams) {
-      if (!byId.has(team.id)) byId.set(team.id, team.name);
-    }
-  }
-  return [...byId.entries()].map(([id, name]) => ({ id, name }));
+  return unifiedServerTeams(snapshots);
 }
