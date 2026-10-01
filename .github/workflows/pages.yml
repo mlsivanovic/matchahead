@@ -31,6 +31,11 @@ jobs:
       - name: Install
         working-directory: apps/web
         run: npm ci
+      - name: Check domain contracts
+        run: node scripts/check-data-contracts.mjs
+      - name: Check web behavior
+        working-directory: apps/web
+        run: npm run check
       - name: Build
         working-directory: apps/web
         env:
@@ -44,6 +49,8 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          # Javna HTTPS adresa phase-05 servera; sportski ključevi ne idu u build.
+          VITE_SCHEDULE_API_URL: ${{ vars.VITE_SCHEDULE_API_URL }}
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4

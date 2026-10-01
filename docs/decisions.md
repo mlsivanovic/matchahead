@@ -109,6 +109,24 @@ Migracija: nema korisničke baze.
 
 Svaku novu odluku zabeleži sa datumom, brojem zadatka, razlogom, dokazima, posledicama i eventualnom migracijom. Ne prepisuj neproveren predlog kao potvrđenu odluku.
 
+## Odluka 05A — pokušaj i poslednji uspeh, 1. oktobar 2026.
+
+HTTP ugovor je `POST /api/find-fixtures` sa sportom, jednim od četiri tima,
+sezonom `2026-2027` i boolean `refresh`. Server računa vreme. Zajednički tipovi
+žive u `packages/domain/src/schedule-api.ts`; početni commit `0a9ad3f`, integrisan
+kao `076c5fc`. Domenska provera: 28/28 PASS.
+
+`FindFixturesResult.checkedAt` sada dopušta `null`: nema izmišljene uspešne
+provere pre prvog objavljenog dozvoljenog feed-a. Posle toga označava poslednji
+snimak sa bar jednim uspešnim feed-om, a pojedinačni izvori imaju odvojene
+`lastAttemptAt`, `lastSuccessAt` i `lastChangeAt` u manifestu. Poslednji pokušaj
+služi ograničavanju poziva i pri neuspehu ne pomera poslednji uspeh.
+
+Klijent mora da prihvati null i prikaže da uspešna provera još ne postoji.
+Migracija nema korisničke podatke; raniji sportski keš bez dokaza uspeha ne
+dobija novi izmišljeni timestamp. Ova odluka ne otvara produkciono korišćenje
+izvora i ne označava fazu 05 DONE.
+
 ## Odluka 04 — checkpoint prvog talasa, 30. septembar 2026.
 
 Run `run_b1cd86cb71c5`. Razlog: orkestracioni krug je završen bez finalnih dokaza klijenta/push-a; checkpoint mora biti IN_PROGRESS i tačan, bez izmišljenog uspeha.
