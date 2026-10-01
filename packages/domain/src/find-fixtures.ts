@@ -86,6 +86,13 @@ export interface FindCacheRecord {
   storedAt: string;
   fixtures: Fixture[];
   coverage: CoverageStatus[];
+  /** Poslednji pokušaj. Nije dokaz da je izvor uspeo. */
+  lastAttemptAt?: string | null;
+  /**
+   * Poslednji snimak u kome je objavljen bar jedan dozvoljen feed.
+   * null dok takav snimak ne postoji. Neuspeh i potpuna blokada ga ne pomeraju.
+   */
+  lastSuccessAt?: string | null;
 }
 
 export interface FindCacheStore {
@@ -99,8 +106,17 @@ export interface FindFixturesResult {
   seasonId: string;
   cacheStatus: FindCacheStatus;
   upstreamRequests: number;
-  /** Trenutak poslednjeg stvarnog čitanja izvora, ne trenutak čitanja keša. */
-  checkedAt: string;
+  /**
+   * Trenutak poslednjeg snimka koji je objavio bar jedan dozvoljen feed.
+   * null dok takav snimak ne postoji. Pokušaj koji ništa nije objavio,
+   * timeout i izvor koji nije allowed ne izmišljaju ovaj trenutak.
+   * Ovo nije svežina jednog izvora: nju čuva SourceManifest.
+   */
+  checkedAt: string | null;
+  /** Poslednji pokušaj čitanja, uključujući neuspeh. null samo na praznom kešu bez pokušaja. */
+  lastAttemptAt: string | null;
+  /** Isto značenje kao checkedAt. Odvojeno je da se ne pomeša sa lastAttemptAt. */
+  lastSuccessAt: string | null;
   /** Prazan odgovor nikad ne postaje tvrdnja da utakmica nema. */
   claimsNoMatches: false;
   futureFixtures: Fixture[];
@@ -148,17 +164,31 @@ export function findFixtures(input: {
   const ageMinutes = cached ? minutesBetween(cached.storedAt, query.now) : null;
 
   if (cached && ageMinutes !== null && ageMinutes >= 0) {
-    const withinReuse = !query.refresh && ageMinutes < policy.reuseWithinMinutes;
-    const throttled = query.refresh && ageMinutes < policy.minRefreshMinutes;
+    const successAt = cached.lastSuccessAt ?? null;
+    const successAge = successAt === null ? null : minutesBetween(successAt, query.now);
+    const attemptAt = cached.lastAttemptAt ?? cached.storedAt;
+    const attemptAge = minutesBetween(attemptAt, query.now);
+    const withinReuse =
+      !query.refresh &&
+      successAge !== null &&
+      successAge >= 0 &&
+      successAge < policy.reuseWithinMinutes;
+    const throttled =
+      attemptAge !== null &&
+      attemptAge >= 0 &&
+      attemptAge < policy.minRefreshMinutes &&
+      (query.refresh || successAt === null);
     if (withinReuse || throttled) {
       return present({
         team,
         query,
         fixtures: cached.fixtures,
         coverage: cached.coverage,
-        cacheStatus: throttled ? 'throttled' : 'reused',
+        cacheStatus: withinReuse ? 'reused' : 'throttled',
         upstreamRequests: 0,
-        checkedAt: cached.storedAt,
+        checkedAt: successAt,
+        lastAttemptAt: cached.lastAttemptAt ?? null,
+        lastSuccessAt: successAt,
       });
     }
   }
@@ -167,6 +197,7 @@ export function findFixtures(input: {
   const merged: Fixture[] = [];
   const coverage: CoverageStatus[] = [];
   let upstreamRequests = 0;
+  let publishedAny = false;
   const seenFeed = new Set<string>();
 
   for (const feed of input.feeds) {
@@ -279,13 +310,18 @@ export function findFixtures(input: {
         cancellationObserved: fixtures.some((fixture) => fixture.status === 'cancelled'),
       }),
     );
+    publishedAny = true;
   }
 
+  const lastAttemptAt = query.now;
+  const lastSuccessAt = publishedAny ? query.now : (cached?.lastSuccessAt ?? null);
   const record: FindCacheRecord = {
     key,
-    storedAt: query.now,
+    storedAt: publishedAny ? query.now : (cached?.storedAt ?? query.now),
     fixtures: merged,
     coverage,
+    lastAttemptAt,
+    lastSuccessAt,
   };
   input.cache.set(key, record);
   return present({
@@ -295,7 +331,9 @@ export function findFixtures(input: {
     coverage,
     cacheStatus: 'fetched',
     upstreamRequests,
-    checkedAt: query.now,
+    checkedAt: lastSuccessAt,
+    lastAttemptAt,
+    lastSuccessAt,
   });
 }
 
@@ -306,7 +344,9 @@ function present(input: {
   coverage: readonly CoverageStatus[];
   cacheStatus: FindCacheStatus;
   upstreamRequests: number;
-  checkedAt: string;
+  checkedAt: string | null;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
 }): FindFixturesResult {
   const futureFixtures = input.fixtures
     .filter((fixture) => isFuture(fixture, input.query))
@@ -319,6 +359,8 @@ function present(input: {
     cacheStatus: input.cacheStatus,
     upstreamRequests: input.upstreamRequests,
     checkedAt: input.checkedAt,
+    lastAttemptAt: input.lastAttemptAt,
+    lastSuccessAt: input.lastSuccessAt,
     claimsNoMatches: false,
     futureFixtures,
     nextFixture: futureFixtures[0] ?? null,

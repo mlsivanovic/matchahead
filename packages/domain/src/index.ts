@@ -110,3 +110,18 @@ export type {
   ObservedFixtureDraft,
   OnDemandCachePolicy,
 } from './find-fixtures.ts';
+export {
+  FIND_FIXTURES_HTTP_PATH,
+  INITIAL_SEASON_ID,
+  findFixturesHttpStatus,
+  readFindFixturesHttpRequest,
+} from './schedule-api.ts';
+export type {
+  FindFixturesHttpError,
+  FindFixturesHttpErrorCode,
+  FindFixturesHttpRequest,
+  FindFixturesHttpSuccess,
+  FindFixturesResponseKind,
+  ScheduleChange,
+  ScheduleChangeKind,
+} from './schedule-api.ts';

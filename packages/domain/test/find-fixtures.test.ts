@@ -388,6 +388,55 @@ test('kvota na zahtev: keš štedi, razmak od 15 minuta ne staje u 100', () => {
   assert.equal(fitsDailyQuota(perFind, 50), true);
 });
 
+test('neuspeh bez prethodnog snimka ne dobija checkedAt, a posle uspeha ga ne pomera', () => {
+  const blocked = feeds().map((feed) => ({ ...feed, failure: 'timeout' as const, pages: [] }));
+  const first = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: blocked,
+    cache: memoryCache(),
+    policy: dataset.policy,
+  });
+  assert.equal(first.checkedAt, null);
+  assert.equal(first.lastSuccessAt, null);
+  assert.equal(first.lastAttemptAt, dataset.query.now);
+  assert.equal(first.futureFixtures.length, 0);
+
+  const cache = memoryCache();
+  const success = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: feeds(),
+    cache,
+    policy: dataset.policy,
+  });
+  assert.equal(success.checkedAt, dataset.query.now);
+  assert.equal(success.lastSuccessAt, success.checkedAt);
+
+  const failed = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:20:00Z', refresh: true }),
+    feeds: blocked,
+    cache,
+    policy: dataset.policy,
+  });
+  assert.equal(failed.checkedAt, success.checkedAt);
+  assert.equal(failed.lastSuccessAt, success.lastSuccessAt);
+  assert.equal(failed.lastAttemptAt, '2027-01-15T12:20:00Z');
+  assert.ok(failed.futureFixtures.some((fixture) => fixture.providerFixtureId === 'syn-confirmed'));
+
+  const held = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:25:00Z', refresh: true }),
+    feeds: [],
+    cache,
+    policy: dataset.policy,
+  });
+  assert.equal(held.cacheStatus, 'throttled');
+  assert.equal(held.checkedAt, success.checkedAt);
+  assert.equal(held.upstreamRequests, 0);
+});
+
 test('drugi provajder sa istim parom i datumom nije isti ID', () => {
   const result = findFixtures({
     team: team('football:rs:partizan'),
