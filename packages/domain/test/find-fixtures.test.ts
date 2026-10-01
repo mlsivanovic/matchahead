@@ -607,6 +607,89 @@ test('opoziv dozvole unutar 15 minuta i unutar 6 sati ne vraća stari snimak', (
   assert.equal(partial.futureFixtures.some((fixture) => fixture.status === 'cancelled'), false);
 });
 
+test('opoziv skida ceo izvor i kod drugog kluba, ne samo derbi', () => {
+  const cache = memoryCache();
+  const zvezdaTeam: Team = {
+    ...team('football:rs:partizan'),
+    id: 'football:rs:crvena-zvezda',
+    name: 'FK Crvena zvezda',
+    shortName: 'Crvena zvezda',
+    aliases: ['Crvena zvezda', 'FK Crvena zvezda'],
+  };
+  const guest = 'football:xx:sinteticki-gost';
+  const other = 'football:xx:drugi-gost';
+  const league = derbyFeed('2027-03-02T16:00:00Z', '2027-03-02', '17:00');
+  const base = league.pages[0]!.fixtures[0]!;
+  league.pages[0]!.fixtures.push(
+    { ...base, providerFixtureId: 'syn-partizan-gost', awayTeamId: guest, homeTeamId: 'football:rs:partizan' },
+    {
+      ...base,
+      providerFixtureId: 'syn-zvezda-gost',
+      homeTeamId: 'football:rs:crvena-zvezda',
+      awayTeamId: other,
+      startsAtUtc: '2027-03-04T16:00:00Z',
+      scheduledLocalDate: '2027-03-04',
+    },
+  );
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  findFixtures({
+    team: zvezdaTeam,
+    query: footballQuery({ teamId: 'football:rs:crvena-zvezda', now: '2027-01-15T12:00:30Z' }),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  const before = cache.get('__matchahead_canonical__');
+  assert.equal(before?.fixtures.some((fixture) => fixture.providerFixtureId === 'syn-zvezda-gost'), true);
+
+  const hidden = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:01:00Z', refresh: true }),
+    feeds: [{ ...league, publication: 'forbidden' }],
+    cache,
+    policy: dataset.policy,
+  });
+  assert.equal(hidden.futureFixtures.length, 0);
+  const zvezdaSnapshot = cache.get('football:rs:crvena-zvezda:2026-2027');
+  assert.equal(zvezdaSnapshot?.fixtures.length, 0);
+  assert.equal(zvezdaSnapshot?.lastSuccessAt, null);
+  const canonical = cache.get('__matchahead_canonical__');
+  assert.equal(canonical?.fixtures.length, 0);
+
+  const later = memoryCache();
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: [league],
+    cache: later,
+    policy: dataset.policy,
+  });
+  findFixtures({
+    team: zvezdaTeam,
+    query: footballQuery({ teamId: 'football:rs:crvena-zvezda', now: '2027-01-15T12:00:30Z' }),
+    feeds: [league],
+    cache: later,
+    policy: dataset.policy,
+  });
+  const outside = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:20:00Z', refresh: true }),
+    feeds: [{ ...league, publication: 'unknown' }],
+    cache: later,
+    policy: dataset.policy,
+  });
+  assert.equal(outside.cacheStatus, 'fetched');
+  assert.equal(outside.futureFixtures.length, 0);
+  assert.equal(later.get('football:rs:crvena-zvezda:2026-2027')?.fixtures.length, 0);
+  assert.equal(later.get('__matchahead_canonical__')?.fixtures.length, 0);
+});
+
 test('derbi deli reviziju između keševa oba kluba', () => {
   const cache = memoryCache();
   const derby = derbyFeed('2027-03-02T16:00:00Z', '2027-03-02', '17:00');

@@ -181,7 +181,7 @@ export function findFixtures(input: {
       attemptAge < policy.minRefreshMinutes &&
       (query.refresh || successAt === null);
     if (withinReuse || throttled) {
-      const drift = revokedDuringCacheHit(team, cached, input.feeds, query.seasonId);
+      const drift = revokedDuringCacheHit(team, cached, input.feeds, query.seasonId, input.cache);
       if (drift === null) {
         return present({
           team,
@@ -257,7 +257,7 @@ export function findFixtures(input: {
           extra: 'Izvor nije označen kao dozvoljen za upis u MatchAhead. Odgovor nije učitan. Raniji snimak ovog izvora se ne vraća.',
         }),
       );
-      for (const fixture of kept) droppedIds.add(fixture.id);
+      for (const id of fixtureIdsForFeed(input.cache, canonical, feed)) droppedIds.add(id);
       continue;
     }
 
@@ -388,6 +388,7 @@ export function findFixtures(input: {
 
   for (const id of droppedIds) canonical.delete(id);
   syncCanonical(input.cache, canonical, key, droppedIds);
+  if (droppedIds.size > 0) clearRevokedSnapshots(input.cache, key, droppedIds, input.feeds);
   const retainedPrevious = !publishedAny && merged.length > 0;
   const lastAttemptAt = query.now;
   const lastSuccessAt = publishedAny ? query.now : retainedPrevious ? (cached?.lastSuccessAt ?? null) : null;
@@ -506,20 +507,48 @@ function materialize(team: Team, draft: ObservedFixtureDraft, previous: Fixture 
 
 const CANONICAL_KEY = '__matchahead_canonical__';
 
+/** Sve utakmice jednog para provajder+takmičenje, uključujući tuđi snimak. */
+function fixtureIdsForFeed(
+  cache: FindCacheStore,
+  canonical: ReadonlyMap<string, Fixture>,
+  feed: CompetitionFeed,
+): string[] {
+  const ids = new Set<string>();
+  const take = (fixtures: readonly Fixture[]) => {
+    for (const fixture of fixtures) {
+      if (
+        fixture.competitionId === feed.competitionId &&
+        fixture.provider === feed.provider &&
+        fixture.seasonId === feed.seasonId
+      ) {
+        ids.add(fixture.id);
+      }
+    }
+  };
+  take([...canonical.values()]);
+  take(cache.get(CANONICAL_KEY)?.fixtures ?? []);
+  for (const teamKey of cache.get(CANONICAL_KEY)?.teamKeys ?? []) {
+    take(cache.get(teamKey)?.fixtures ?? []);
+  }
+  return [...ids];
+}
+
 /**
  * Keš pogodak i dalje mora da vidi trenutnu dozvolu. Prazan spisak feedova
  * znači da pozivalac nije doneo politiku i ne sme sam od sebe da obriše snimak.
- * Feed čija dozvola više nije `allowed` skida svoje utakmice odmah, i unutar
- * prozora od 6 sati i unutar 15 minuta.
+ * Feed čija dozvola više nije `allowed` skida ceo par provajder+takmičenje iz
+ * svih snimaka i kanonskog zapisa, ne samo utakmice traženog kluba.
  */
 function revokedDuringCacheHit(
   team: Team,
   cached: FindCacheRecord,
   feeds: readonly CompetitionFeed[],
   seasonId: string,
+  cache: FindCacheStore,
 ): { droppedIds: Set<string>; coverage: CoverageStatus[] } | null {
   const seen = new Set<string>();
   const droppedIds = new Set<string>();
+  const canonical = readCanonical(cache);
   let coverage = cached.coverage;
   let changed = false;
   for (const feed of feeds) {
@@ -532,11 +561,7 @@ function revokedDuringCacheHit(
     }
     seen.add(feedKey);
     if (feed.publication === 'allowed') continue;
-    for (const fixture of cached.fixtures) {
-      if (fixture.competitionId === feed.competitionId && fixture.provider === feed.provider) {
-        droppedIds.add(fixture.id);
-      }
-    }
+    for (const id of fixtureIdsForFeed(cache, canonical, feed)) droppedIds.add(id);
     const nextCoverage = coverage.map((row) => {
       if (row.competitionId !== feed.competitionId || row.provider !== feed.provider || row.seasonId !== feed.seasonId) {
         return row;
