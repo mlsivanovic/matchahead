@@ -16,3 +16,8 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 pubsub-debug.log
+
+# Local Worker/Durable Object state and schedule-service probe output
+.wrangler/
+.dev.vars
+experiments/schedule-service/dist/
