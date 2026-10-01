@@ -67,6 +67,7 @@ export function readLastGood(store: KeyValueStore, teamId: string, seasonId: str
     const response = parseFindResponse(parsed.response);
     if (response.kind !== parsed.kind) return null;
     if (response.result.teamId !== teamId || response.result.seasonId !== seasonId) return null;
+    if (response.result.sport !== parsed.sport || response.result.checkedAt !== parsed.checkedAt) return null;
     return { ...parsed, response } as LastGoodSchedule;
   } catch {
     return null;
@@ -80,8 +81,15 @@ export function readLastGood(store: KeyValueStore, teamId: string, seasonId: str
 export function writeLastGood(store: KeyValueStore, entry: LastGoodSchedule): void {
   if (!isSafeKey(entry.teamId, entry.seasonId)) throw new Error('Neispravan ključ rasporeda.');
   if (entry.kind === 'synthetic-demo' as string) throw new Error('DEMO se ne upisuje u trajno stanje.');
-  parseFindResponse(entry.response);
-  store.setItem(entryKey(entry.teamId, entry.seasonId), JSON.stringify(entry));
+  const response = parseFindResponse(entry.response);
+  if (response.result.teamId !== entry.teamId
+    || response.result.sport !== entry.sport
+    || response.result.seasonId !== entry.seasonId
+    || response.kind !== entry.kind
+    || response.result.checkedAt !== entry.checkedAt) {
+    throw new Error('Metapodaci snimka ne pripadaju odgovoru servera.');
+  }
+  store.setItem(entryKey(entry.teamId, entry.seasonId), JSON.stringify({ ...entry, response }));
 }
 
 /** Trenutak poslednjeg klika (uspeo ili ne) — osnova kuldauna za „Osveži”. */
@@ -174,6 +182,9 @@ export function purgeRevokedSnapshots(
     allowedProviderKeys(stored),
   );
   if (revoked.size === 0) return { prunedSnapshots: 0, prunedFixtures: 0 };
+  const policies = new Map(response.result.coverage
+    .filter((row) => row.seasonId === seasonId && revoked.has(revokedPairKey(row.provider, row.competitionId)))
+    .map((row) => [revokedPairKey(row.provider, row.competitionId), row]));
   let prunedSnapshots = 0;
   let prunedFixtures = 0;
   for (const entry of stored) {
@@ -181,14 +192,40 @@ export function purgeRevokedSnapshots(
     const kept = entry.response.result.futureFixtures.filter(
       (fixture) => !revoked.has(revokedPairKey(fixture.provider, fixture.competitionId)),
     );
-    if (kept.length === before) continue;
-    const emptied = kept.length === 0;
+    const coverage = entry.response.result.coverage.map((row) => {
+      const policy = policies.get(revokedPairKey(row.provider, row.competitionId));
+      if (!policy) return row;
+      return {
+        ...row,
+        publication: policy.publication,
+        verdict: 'unverified' as const,
+        scheduleAvailability: 'unknown' as const,
+        futureFixturesAvailable: null,
+        timePrecision: null,
+        postponementObserved: null,
+        cancellationObserved: null,
+        requestsPerRefresh: 0,
+        evidence: policy.evidence,
+        checkedAt: policy.checkedAt,
+      };
+    });
+    if (kept.length === before && JSON.stringify(coverage) === JSON.stringify(entry.response.result.coverage)) continue;
+    const blocked = !coverage.some((row) => row.publication === 'allowed');
+    const emptied = kept.length === 0 && (before > 0 || blocked);
+    const droppedIds = new Set(entry.response.result.futureFixtures
+      .filter((fixture) => revoked.has(revokedPairKey(fixture.provider, fixture.competitionId)))
+      .map((fixture) => fixture.id));
+    const kind = blocked ? 'source-blocked' : entry.kind;
     const pruned: LastGoodSchedule = {
       ...entry,
+      kind,
       response: {
         ...entry.response,
+        kind,
+        changes: blocked ? [] : entry.response.changes.filter((change) => !droppedIds.has(change.fixtureId)),
         result: {
           ...entry.response.result,
+          coverage,
           futureFixtures: kept,
           nextFixture: kept[0] ?? null,
           nextConfirmedFixture: kept.find((fixture) => fixture.timeConfirmed) ?? null,

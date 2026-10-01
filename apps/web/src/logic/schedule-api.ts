@@ -725,7 +725,13 @@ export async function postFindFixtures(input: PostFindFixturesInput): Promise<Fi
     if (!response.ok) {
       throw new ScheduleApiError('server', serverMessage(body) ?? `Server je vratio status ${response.status}.`, response.status);
     }
-    return parseFindResponse(body);
+    const parsed = parseFindResponse(body);
+    if (parsed.result.teamId !== input.teamId
+      || parsed.result.sport !== input.sport
+      || parsed.result.seasonId !== input.seasonId) {
+      fail('result (odgovor ne pripada traženom sportu, klubu i sezoni)');
+    }
+    return parsed;
   } finally {
     clearTimeout(timer);
     input.signal?.removeEventListener('abort', onExternalAbort);

@@ -138,3 +138,11 @@ network-only; jedan worker, bez push/FCM promena.
   allowed→unknown unutar keš prozora, kanonski derbi, odbijanje
   konfliktnih/malformisanih feedova, stvarni kalendarski trenuci).
 - Nepoznat termin se nigde ne prikazuje kao `00:00`/`ponoć`.
+
+## Koordinatorska dopuna posle integracije
+
+Muse korekcije su integrisane kao `6871a5e` (samo vlasnički klijent iz `7fa387a`) i `eb4a71f` (`2e16659`). Koordinator je zatim reprodukovao još dve greške namenskim regresijama koje padaju na prethodnom kodu: validan odgovor za drugi traženi klub/sezonu i neusklađeni metapodaci mogli su da zamene prethodni dobar snimak. `postFindFixtures` sada zahteva tačno poklapanje sporta/kluba/sezone sa zahtevom; upis i čitanje proveravaju poklapanje metapodataka sa telom, vrstom i dokazom provere.
+
+Proširene regresije opoziva takođe su prvo pokazale da je drugi klupski snimak zadržavao `publication: allowed` posle uklanjanja utakmica. Opoziv sada usklađuje pokrivenost u svim snimcima, čisti indeks povučenih promena i vraća `source-blocked` kada više nema dozvoljenog izvora. Nepovezani dozvoljeni izvori se čuvaju.
+
+Nezavisna koordinatorska provera dopune: web 113/113 exit 0 (39 schedule-client), TypeScript čist; Node 22 takođe 113/113 exit 0. PWA 11 scenarija PASS na prethodnom integrisanom UI-ju; browser tok je ponovljen posle strožeg validatora i usklađivanja politike: 16/16 PASS, exit 0. Blokirani snimci se prosleđuju graditelju agende radi opoziva/praznog stanja; on i dalje bira samo proverene utakmice. Konačni serverski boundary i Gemini QA se još čekaju; ove provere nisu dokaz živog produkcionog izvora.

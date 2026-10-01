@@ -185,8 +185,8 @@ test('bez prijave nema Authorization zaglavlja, poziv i dalje ide na server', as
   await postFindFixtures({
     baseUrl: BASE,
     idToken: null,
-    sport: 'basketball',
-    teamId: 'basketball:rs:partizan',
+    sport: 'football',
+    teamId: TEAM,
     seasonId: SEASON,
     refresh: true,
     fetchImpl: stubFetch(200, envelope({ kind: 'source-blocked' }), seen),
@@ -682,6 +682,11 @@ test('forbidden opoziv briše izvor iz svih snimaka; unknown čuva prikaz', () =
   assert.equal(readLastGood(store, TEAM, SEASON)!.response.result.futureFixtures.length, 0);
   assert.equal(readLastGood(store, TEAM, SEASON)!.checkedAt, null);
   assert.equal(readLastGood(store, PARTIZAN, SEASON)!.response.result.futureFixtures.length, 0);
+  for (const teamId of [TEAM, PARTIZAN]) {
+    const snapshot = readLastGood(store, teamId, SEASON)!;
+    assert.equal(snapshot.response.result.coverage[0]!.publication, 'forbidden');
+    assert.equal(snapshot.kind, 'source-blocked');
+  }
 
   const kept = memoryStore();
   writeLastGood(kept, clubSnapshot(TEAM, [fixture({})]));
@@ -753,6 +758,11 @@ test('allowed pa unknown je opoziv u unificiranoj agendi i u trajnom stanju', ()
   assert.equal(purged.prunedSnapshots, 2);
   assert.equal(readLastGood(store, TEAM, SEASON)!.response.result.futureFixtures.length, 0);
   assert.equal(readLastGood(store, PARTIZAN, SEASON)!.response.result.futureFixtures.length, 0);
+  for (const teamId of [TEAM, PARTIZAN]) {
+    const snapshot = readLastGood(store, teamId, SEASON)!;
+    assert.equal(snapshot.response.result.coverage[0]!.publication, 'unknown');
+    assert.equal(snapshot.kind, 'source-blocked');
+  }
 });
 
 test('ista revizija sa različitim sadržajem se ne objavljuje', () => {
@@ -1169,4 +1179,42 @@ test('duplirani ključevi imenika se odbijaju', () => {
     (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
     'dupliran tim prošao',
   );
+});
+
+
+test('validan odgovor za drugi klub ili sezonu ne može zameniti traženi raspored', async () => {
+  const bodies = [
+    envelope({ result: result({ teamId: PARTIZAN }) }),
+    envelope({
+      result: result({ seasonId: '2025-2026' }),
+      manifests: [],
+      changes: [],
+    }),
+  ];
+  for (const body of bodies) {
+    // Telo je interno konzistentno; jedino ne pripada stvarnom zahtevu.
+    parseFindResponse(body);
+    await assert.rejects(
+      () => postFindFixtures({
+        baseUrl: BASE, idToken: null, sport: 'football', teamId: TEAM,
+        seasonId: SEASON, refresh: false, fetchImpl: stubFetch(200, body, []),
+      }),
+      (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    );
+  }
+});
+
+test('neusklađeni metapodaci snimka čuvaju poslednji dobar zapis', () => {
+  const store = memoryStore();
+  const good = clubSnapshot(TEAM, [fixture({})]);
+  writeLastGood(store, good);
+  for (const wrong of [
+    { ...good, response: parseFindResponse(envelope({ result: result({ teamId: PARTIZAN }) })) },
+    { ...good, sport: 'basketball' },
+    { ...good, checkedAt: null },
+    { ...good, kind: 'source-blocked' as const },
+  ]) {
+    assert.throws(() => writeLastGood(store, wrong));
+    assert.deepEqual(readLastGood(store, TEAM, SEASON), good);
+  }
 });

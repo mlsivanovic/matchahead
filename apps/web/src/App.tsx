@@ -88,12 +88,9 @@ export function App() {
     finder.abortPending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountIdentity]);
-  // Agendu grade samo provereni snimci: blokada i DEMO se u njoj ne
-  // prikazuju kao pouzdane utakmice (DEMO ionako nije u trajnom stanju).
-  const verifiedSnapshots = useMemo(
-    () => finder.snapshots.filter((snapshot) => snapshot.kind === 'verified-schedule'),
-    [finder.snapshots],
-  );
+  // Graditelj agende bira samo proverene utakmice, ali prima i blokirane
+  // snimke radi politike opoziva i jasnog praznog stanja posle blokade.
+  const serverSnapshots = finder.snapshots;
 
   useEffect(() => {
     setUpdateBlocker(() => composingFromDocument(document));
@@ -231,7 +228,7 @@ export function App() {
             followed={followed}
             manualFixtureIds={manualFixtureIds}
             onToggleManual={toggleManual}
-            serverSnapshots={verifiedSnapshots}
+            serverSnapshots={serverSnapshots}
           />
         ) : null}
         {route === 'mine' ? (
@@ -245,7 +242,7 @@ export function App() {
             onToggleManual={toggleManual}
             draftNote={draftNote}
             onDraft={changeDraft}
-            serverSnapshots={verifiedSnapshots}
+            serverSnapshots={serverSnapshots}
           />
         ) : null}
         {route === 'clubs' ? (
