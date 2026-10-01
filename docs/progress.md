@@ -79,3 +79,10 @@ Verzija specifikacije: 2.0
 ## Sledeći zadatak
 
 - 04 klijent (ekran + browser adapter na jezgru) i integracija 04+06 — preko koordinatora, na ovom jezgru. Push faza 02 ostaje BLOCKED za živu isporuku. Faza 05 ostaje BLOCKED. Faze 07–12 su planirane, nisu implementirane. Finalni dokazi klijenta/push-a/pregleda se čekaju od koordinatora.
+
+## Istraživanje izlaska iz blokade 05 — 1. oktobar 2026.
+
+- Predlog i izvori: `docs/phase-05-source-proposal.md`. Preporuka su adapteri po takmičenju, ligaški HTML kao glavni kandidat i klupske dopune; AI eventualno pomaže pri razvoju/parserima vesti, bez AI API zavisnosti u prvoj verziji.
+- Stvarna mrežna proba: ABA `/calendar/26/1/` HTTP 200; jednokratni Python HTML parser izdvojio 36 redova za PAR/CZV kroz 18 kola. FSS, oba FK i oba KK dostupni preko HTTP-a. KK Partizanova tabela Evrolige prikazuje 2025/26; KK Zvezdin kompletan budući raspored nije izdvojen. Evroliga Game Center je u web proveri vratio 403.
+- Faza 05 ostaje BLOCKED: nisu potvrđeni svi izvori, potpunost svih takmičenja, zone i načini korišćenja. HTTP pristup i ekstrakcija ABA nisu dokaz produkcione dozvole niti završene integracije. Predložena izolovana proba adaptera i pojašnjenje uslova su naredni koraci, ne već prihvaćena promena odluka 01/01B.
+- Promenjena je samo dokumentacija. Nema produkcionog adaptera, unosa stvarnih utakmica u javni raspored, deploya ni slanja upita izvorima. Aplikacioni testovi nisu ponavljani jer kod nije menjan; provere paginacije, kvarova i serverskog CPU vremena tek predstoje.
