@@ -44,7 +44,7 @@ Statusi usklađeni sa `ScheduleAvailability` enumom iz `packages/domain/src/type
 |---|---|---|---|---|---|---|---|
 | Fudbal | FK Partizan | Superliga Srbije | Regularni deo (kola 1–26) | FSS HTML | `published` | `date_only` | FSS objavljuje 26 kola; buduća kola imaju `00:00` placeholder (`startsAtUtc: null`). |
 | Fudbal | FK Crvena zvezda | Superliga Srbije | Regularni deo (kola 1–26) | FSS HTML | `published` | `date_only` | FSS raspored; buduća kola imaju `00:00` placeholder (`startsAtUtc: null`). |
-| Fudbal | FK Crvena zvezda | UEFA Liga konferencije | Ligaška faza (6 kola) | FK CZV sajt | `published` | `utc_confirmed` (kolo 1)<br>`date_only` (kasnija) | 1. kolo (Lugano, 15.10. 18:45) objavljeno na sajtu kluba. Kasnija kola bez ispisanog sata ostaju `date_only`. |
+| Fudbal | FK Crvena zvezda | UEFA Liga konferencije | Ligaška faza (6 kola) | FK CZV sajt | `published` | `unconfirmed_clock` (kolo 1)<br>`date_only` (kasnija) | 1. kolo (Lugano, 15.10. 18:45) navodi lokalni sat bez vremenske zone (`startsAtUtc: null`). Kasnija kola bez ispisanog sata ostaju `date_only`. |
 | Fudbal | FK Partizan | Evropska takmičenja | 2026/27 | — | `unknown` | `unknown` | U odsustvu verifikovane primarne stranice o eliminaciji/učešću, status je `unknown`. |
 | Fudbal | Oba FK | Kup Srbije | 2026/27 | — | `unknown` | `unknown` | U odsustvu zvaničnog rasporeda/žreba sa primarnim URL-om, status je `unknown`. |
 | Košarka | KK Partizan | ABA Liga | Regularna grupna faza (18 kola) | ABA HTML | `published` | `date_only` / `unconfirmed_clock` | Od 18 mečeva, samo 7 ima sat, 25 ima samo datum, a 4 su `TBA`. Za sve važi `startsAtUtc: null`. |
@@ -78,10 +78,10 @@ Prema domenskom ugovoru (`packages/domain/src/types.ts`):
 - Sat `00:00` je placeholder koji označava da tačan termin nije delegiran.
 - **Pravilo obrade:** `startsAtUtc = null`, `scheduledLocalDate = "2026-10-10"`, `status = "time_tbd"`.
 
-### 4.3. FK Crvena zvezda: Konfliktna polja na stranici i nevalidnost regex heuristike
+### 4.3. FK Crvena zvezda: Uočeni konflikt polja na stranici i nevalidnost regex heuristike
 - Hero sekcija sajta prikazuje `10.10.2026 13:00` u okviru widgeta za odbrojavanje, dok tabela rasporeda ispod za isti meč protiv Radničkog 1923 prikazuje `10.10.2026 00:00`.
-- Vrednost `13:00` u hero sekciji je prezentacioni šablon/heuristika interfejsa, a ne dokaz stvarnog termina početka utakmice.
-- Postojanje oprečnih podataka na istoj stranici dokazuje da naivno parsiranje prvog pronađenog sata (npr. regex `\d{2}:\d{2}`) proizvodi netačne podatke. Za utakmice gde je u tabeli navedeno `00:00`, primenjuje se `startsAtUtc = null`, `status = "time_tbd"`.
+- Uočeni konflikt vrednosti na istoj stranici (13:00 naspram 00:00) činjenica je iz izvora, a ne pretpostavka o internim šablonima CMS-a.
+- Ovaj oprečni podatak dokazuje da naivno parsiranje prvog pronađenog sata (npr. regex `\d{2}:\d{2}`) proizvodi netačne podatke. Za utakmice gde je u tabeli navedeno `00:00`, primenjuje se `startsAtUtc = null`, `status = "time_tbd"`.
 
 ### 4.4. Zvanični Euroleague kalendar: Verifikovane GMT satnice
 - Dokument `2026-27_EL_RS_CALENDAR_PRINTABLE.pdf` direktno je povezan u Media Centre saopštenju ([#24407](https://mediacentre.euroleague.net/en/app/2/communication/communication/preview/24407)), što je potvrđeno proverom HTML sadržaja saopštenja.
@@ -104,8 +104,9 @@ Format ID-ja propisan domenskim modelom:
 2. **FSS Superliga:** Buduća kola nemaju izveštaj ID u tabeli. U dvokružnom sistemu od 26 kola svaki par se sastaje tačno jednom na terenu tima A:
    `football:superliga:2026-2027:fss:{homeTeamSlug}-{awayTeamSlug}`.
    Nakon odigravanja, `providerAliases` povezuje zvanični `reportId`.
-3. **Evroliga:** Sezonski ključ na osnovu fiksnog dvokružnog kalendara:
-   `basketball:euroleague:2026-2027:euroleague:r{round}:{homeTeamSlug}-{awayTeamSlug}`.
+3. **Evroliga:** Kanonski ID se gradi isključivo iz parova i domaćinstva u dvokružnom sistemu, bez vezivanja za kolo, kako bi preživeo naknadna pomeranja kola:
+   `basketball:euroleague:2026-2027:euroleague:{homeTeamSlug}-{awayTeamSlug}`.
+   Kolo (`round`) se čuva isključivo u metapodacima objekta (`fixture.round`), dok se provajderski specifični ključevi ili izveštaji mapiraju preko `providerAliases`.
 4. **Deduplikacija derbija:** Pošto se ID gradi deterministički iz parova i takmičenja, večiti derbi dobija identičan `fixture.id` na oba kluba, sprečavajući dupli unos u ličnoj agendi.
 
 ---
@@ -127,9 +128,8 @@ Format ID-ja propisan domenskim modelom:
   - Zakon o izmenama i dopunama ZASP ([„Sl. glasnik RS”, br. 66/2019](https://www.parlament.gov.rs/upload/archive/files/lat/pdf/zakoni/2019/225-19%20-%20Lat.pdf)):
     - **Član 5a stav 4. ZASP (izmene 2019):** *„Zaštita autorskim pravom se ne odnosi na sadržinu baze podataka niti se takvom zaštitom na bilo koji način ograničavaju prava koja postoje na tom sadržaju.”*
 - **Sudska praksa Suda pravde EU (CJEU):**
-  - **C-604/10 *Football Dataco* (2012):** Sud je presudio da baza podataka/raspored uživa autorskopravnu zaštitu samo ako izbor ili raspored podataka predstavlja sopstvenu intelektualnu kreaciju autora (uslov originalnosti). Rasporedi određeni tehničkim pravilima lige taj uslov po pravilu ne ispunjavaju, ali to ne znači da je svaki raspored a priori nezaštićen, već se originalnost ceni od slučaja do slučaja.
-  - **C-203/02 *BHB* i C-444/02 *Fixtures Marketing* (2004):** Investicije u kreiranje rasporeda predstavljaju ulaganje u kreiranje samih podataka takmičenja, a ne u bazu podataka (*sui generis* pravo).
-  - **C-30/14 *Ryanair v PR Aviation* (2015):** Sud je izričito utvrdio da kada baza podataka ne uživa autorskopravnu niti *sui generis* zaštitu, vlasnik sajta zadržava ugovornu slobodu (*freedom of contract*) da **kroz Uslove korišćenja ugovorno zabrani ili ograniči neovlašćeni scraping svojih podataka**.
+  - **C-604/10 *Football Dataco* ([ECLI:EU:C:2012:115](https://curia.europa.eu/juris/liste.jsf?num=C-604/10)):** Sud je presudio da baza podataka/raspored uživa autorskopravnu zaštitu samo ako izbor ili raspored podataka predstavlja sopstvenu intelektualnu kreaciju autora (uslov originalnosti). Rutinski rasporedi određeni tehničkim pravilima lige taj uslov po pravilu ne ispunjavaju, ali to se ceni od slučaja do slučaja i ne predstavlja automatsko izuzeće.
+  - **C-30/14 *Ryanair v PR Aviation* ([ECLI:EU:C:2015:10](https://curia.europa.eu/juris/liste.jsf?num=C-30/14)):** Sud je izričito utvrdio da kada baza podataka ne uživa autorskopravnu niti *sui generis* zaštitu, vlasnik sajta zadržava ugovornu slobodu (*freedom of contract*) da **kroz Uslove korišćenja ugovorno zabrani ili ograniči neovlašćeni scraping svojih podataka**.
   - **Zaključak o praksi CJEU:** Sudska praksa EU ne pruža nikakav opšti „legal clearance” za preuzimanje rasporeda, jer ugovorna ograničenja i uslovi korišćenja ostaju na snazi nezavisno od autorskog statusa baze.
 
 ### 6.3. Operativni status i preporuka

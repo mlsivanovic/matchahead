@@ -263,9 +263,9 @@ async function probeFkCzv() {
     heroCountdownTimeForRadnicki: hasHero1300 ? '13:00' : 'Not found',
     scheduleTableRowTimeForRadnicki: hasTable0000 ? '00:00' : 'Not found',
     conflictingSourceFieldsDemonstrated: Boolean(hasHero1300 && hasTable0000),
-    heuristicObservation: 'Hero section shows 13:00 as an unconfirmed UI countdown heuristic; table row shows 00:00 (placeholder for unconfirmed time). Regex matching 13:00 is an invalid heuristic, not match proof.',
+    observedConflict: 'Hero section shows 13:00 while schedule table row shows 00:00 (placeholder for unconfirmed time). Regex matching 13:00 from hero is an invalid heuristic, not match proof.',
     conferenceLeagueLuganoFixtureFound: hasConferenceLugano,
-    verdict: page.status === 200 && hasConferenceLugano && hasHero1300 && hasTable0000 ? 'PASS (Confirmed Hero Heuristic Conflict vs Table 00:00)' : 'FAIL'
+    verdict: page.status === 200 && hasConferenceLugano && hasHero1300 && hasTable0000 ? 'PASS (Confirmed Observed Conflict: Hero 13:00 vs Table 00:00)' : 'FAIL'
   };
 }
 
