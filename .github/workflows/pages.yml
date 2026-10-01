@@ -27,12 +27,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            experiments/schedule-service/package-lock.json
       - name: Install
         working-directory: apps/web
         run: npm ci
+      - name: Install schedule service checks
+        working-directory: experiments/schedule-service
+        run: npm ci
       - name: Check domain contracts
         run: node scripts/check-data-contracts.mjs
+      - name: Check schedule service
+        run: node scripts/check-schedule-service.mjs
       - name: Check web behavior
         working-directory: apps/web
         run: npm run check
