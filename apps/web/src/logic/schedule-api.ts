@@ -131,10 +131,20 @@ function asNumber(value: unknown, path: string): number {
   return value as number;
 }
 
-/** Ceo broj >= 0: revizije, brojači zahteva, pragovi sati. Revizija 0 je početni snimak. */
+/** Ceo broj >= 0: brojači zahteva, pragovi sati. */
 function asNonNegativeInt(value: unknown, path: string): number {
   const candidate = asNumber(value, path);
   if (!Number.isInteger(candidate) || candidate < 0) fail(path);
+  return candidate;
+}
+
+/**
+ * Pozitivan ceo broj: trajne revizije utakmica i promena. Nov zapis počinje
+ * od 1 (`nextRevision` u domenu); nula nije sačuvana revizija.
+ */
+function asPositiveInt(value: unknown, path: string): number {
+  const candidate = asNumber(value, path);
+  if (!Number.isInteger(candidate) || candidate < 1) fail(path);
   return candidate;
 }
 
@@ -253,8 +263,12 @@ function parseFixture(value: unknown, path: string, kind: FindFixturesResponseKi
   const startsAtUtc = asNullableInstant(value.startsAtUtc, `${path}.startsAtUtc`);
   const timeConfirmed = asBoolean(value.timeConfirmed, `${path}.timeConfirmed`);
   const status = asEnum(value.status, STATUSES, `${path}.status`);
+  const id = asString(value.id, `${path}.id`);
+  if (!id) fail(`${path}.id`);
+  const provider = asString(value.provider, `${path}.provider`);
+  if (!provider) fail(`${path}.provider`);
   const parsed: Fixture = {
-    id: asString(value.id, `${path}.id`),
+    id,
     sport: asEnum(value.sport, SPORTS, `${path}.sport`),
     competitionId: asString(value.competitionId, `${path}.competitionId`),
     seasonId: asString(value.seasonId, `${path}.seasonId`),
@@ -270,12 +284,12 @@ function parseFixture(value: unknown, path: string, kind: FindFixturesResponseKi
     venue: asNullableString(value.venue, `${path}.venue`),
     round: asNullableString(value.round, `${path}.round`),
     sourceUrl: asFixtureSourceUrl(value.sourceUrl, `${path}.sourceUrl`, kind),
-    provider: asString(value.provider, `${path}.provider`),
+    provider,
     providerFixtureId: asNullableString(value.providerFixtureId, `${path}.providerFixtureId`),
     fetchedAt: asInstant(value.fetchedAt, `${path}.fetchedAt`),
     sourceUpdatedAt: asNullableInstant(value.sourceUpdatedAt, `${path}.sourceUpdatedAt`),
     contentHash: asString(value.contentHash, `${path}.contentHash`),
-    revision: asNonNegativeInt(value.revision, `${path}.revision`),
+    revision: asPositiveInt(value.revision, `${path}.revision`),
   };
   assertFixtureTimeConsistency(parsed, path);
   return parsed;
@@ -283,8 +297,15 @@ function parseFixture(value: unknown, path: string, kind: FindFixturesResponseKi
 
 function parseCoverage(value: unknown, path: string): CoverageStatus {
   if (!isRecord(value)) fail(path);
+  const coverageId = asString(value.id, `${path}.id`);
+  if (!coverageId) fail(`${path}.id`);
+  // Dan provere je stvaran kalendarski datum YYYY-MM-DD, ne samo oblik.
+  if (value.checkedAt !== null) {
+    const day = asString(value.checkedAt, `${path}.checkedAt`);
+    if (!isRealCalendarDate(day)) fail(`${path}.checkedAt`);
+  }
   return {
-    id: asString(value.id, `${path}.id`),
+    id: coverageId,
     teamId: asNullableString(value.teamId, `${path}.teamId`),
     competitionId: asString(value.competitionId, `${path}.competitionId`),
     seasonId: asString(value.seasonId, `${path}.seasonId`),
@@ -348,7 +369,11 @@ function parseManifest(value: unknown, path: string): SourceManifest {
     lastAttemptAt: asNullableInstant(value.lastAttemptAt, `${path}.lastAttemptAt`),
     lastSuccessAt: asNullableInstant(value.lastSuccessAt, `${path}.lastSuccessAt`),
     lastChangeAt: asNullableInstant(value.lastChangeAt, `${path}.lastChangeAt`),
-    staleAfterHours: asNumber(value.staleAfterHours, `${path}.staleAfterHours`),
+    staleAfterHours: (() => {
+      const hours = asNumber(value.staleAfterHours, `${path}.staleAfterHours`);
+      if (hours < 0) fail(`${path}.staleAfterHours`);
+      return hours;
+    })(),
   };
 }
 
@@ -383,23 +408,59 @@ function parseResult(value: unknown, kind: FindFixturesResponseKind): FindFixtur
 }
 
 /**
- * Semantički odnosi preko celog odgovora: sport/tim/sezona moraju da se
- * poklapaju, takmičenja i učesnici moraju da postoje u imenicima, next
- * pokazivači moraju da pokazuju na uređeni vraćeni spisak, a provereni
- * režim ne sme da nosi zabranjenu objavu ni sintetičke tragove.
+ * Kanonski poredak budućeg spiska, ista semantika kao domenski `compareFuture`:
+ * dan (lokalni datum, pa dan iz trenutka, pa nepoznat na kraj), potvrđen
+ * termin pre nepotvrđenog, raniji trenutak pre kasnijeg, stabilni id na kraju.
+ */
+function compareFuture(left: Fixture, right: Fixture): number {
+  const day = (fixture: Fixture): string =>
+    fixture.scheduledLocalDate ?? fixture.startsAtUtc?.slice(0, 10) ?? '9999-12-31';
+  const byDay = day(left).localeCompare(day(right));
+  if (byDay !== 0) return byDay;
+  if (left.timeConfirmed !== right.timeConfirmed) return left.timeConfirmed ? -1 : 1;
+  if (left.startsAtUtc && right.startsAtUtc && left.startsAtUtc !== right.startsAtUtc) {
+    return left.startsAtUtc < right.startsAtUtc ? -1 : 1;
+  }
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+}
+
+/**
+ * Semantički odnosi preko celog odgovora: jedinstveni ključevi imenika,
+ * traženi izborni tim i kad su imenici prazni, učesnici iz imenika sa
+ * poklapanjem sporta, pokrivenost para izvor+takmičenje+sezona sa dozvolom
+ * za svaku vraćenu utakmicu (ali ne za ceo odgovor — delimičan uspeh uz
+ * zabranu drugog takmičenja prolazi), dokaz provere uz vraćene utakmice,
+ * kanonski uređen spisak, next pokazivači jednaki vraćenim podacima, a
+ * provereni režim bez sintetičkih tragova.
  */
 function assertSemanticRelations(parsed: FindFixturesHttpSuccess): void {
   const { result, teams, competitions, manifests } = parsed;
+  const teamById = new Map(teams.map((team) => [team.id, team]));
+  if (teamById.size !== teams.length) fail('teams (dupliran ključ imenika)');
   const competitionById = new Map(competitions.map((competition) => [competition.id, competition]));
+  if (competitionById.size !== competitions.length) fail('competitions (dupliran ključ imenika)');
+  const coverageIds = new Set(result.coverage.map((row) => row.id));
+  if (coverageIds.size !== result.coverage.length) fail('result.coverage (dupliran ključ imenika)');
+  const manifestKeys = new Set(
+    manifests.map((manifest) => `${manifest.provider}␟${manifest.competitionId}␟${manifest.seasonId}`),
+  );
+  if (manifestKeys.size !== manifests.length) fail('manifests (dupliran ključ imenika)');
+  const fixtureIds = new Set(result.futureFixtures.map((fixture) => fixture.id));
+  if (fixtureIds.size !== result.futureFixtures.length) fail('result.futureFixtures (dupliran id utakmice)');
   for (const team of teams) {
+    if (!team.id) fail('teams (prazan id tima)');
     if (team.sport !== result.sport) fail(`teams (${team.id}: sport tima i odgovora se ne poklapaju)`);
   }
   for (const competition of competitions) {
+    if (!competition.id) fail('competitions (prazan id takmičenja)');
     if (competition.sport !== result.sport) fail(`competitions (${competition.id}: sport takmičenja i odgovora se ne poklapaju)`);
   }
-  const requested = teams.find((team) => team.id === result.teamId);
+  // Traženi tim je izborni i kad su imenici prazni; inače mora biti u imeniku.
+  if (!isSelectableTeamId(result.teamId, result.sport)) fail('result.teamId (tim nije među izbornim timovima)');
+  const requested = teamById.get(result.teamId);
   if (teams.length > 0 && !requested) fail('teams (nedostaje traženi tim)');
   if (requested && requested.sport !== result.sport) fail('teams (sport traženog tima i odgovora se ne poklapaju)');
+  const teamByIdOrEmpty = teams.length === 0 ? null : teamById;
   for (let index = 0; index < result.futureFixtures.length; index += 1) {
     const fixture = result.futureFixtures[index]!;
     const path = `result.futureFixtures[${index}]`;
@@ -409,6 +470,29 @@ function assertSemanticRelations(parsed: FindFixturesHttpSuccess): void {
       fail(`${path} (utakmica ne pripada traženom timu)`);
     }
     if (!competitionById.has(fixture.competitionId)) fail(`${path}.competitionId`);
+    // Stvarni učesnici postoje u imeniku sa poklapanjem sporta; nepoznat
+    // protivnik posle žreba (awayTeamId null) nije razlog za odbijanje.
+    if (teamByIdOrEmpty === null) fail(`${path} (nema imenika učesnika uz vraćene utakmice)`);
+    for (const participant of [fixture.homeTeamId, fixture.awayTeamId]) {
+      if (participant === null) continue;
+      const known = teamByIdOrEmpty.get(participant);
+      if (!known) fail(`${path} (učesnik ${participant} nije u imeniku)`);
+      if (known.sport !== result.sport) fail(`${path} (sport učesnika i odgovora se ne poklapaju)`);
+    }
+    // Svaka vraćena utakmica traži pokrivenost svog para izvor+takmičenje+
+    // sezona sa dozvolom objave. Dozvoljena zastarela source_error pokrivenost
+    // (legitimno čuvanje poslednjeg snimka) prolazi; nepoznata, ograničena i
+    // zabranjena za ovaj par ne. Redovi drugih takmičenja smeju sve.
+    const pairRow = result.coverage.find((row) =>
+      row.provider === fixture.provider
+      && row.competitionId === fixture.competitionId
+      && row.seasonId === fixture.seasonId
+      && (row.teamId === null || row.teamId === result.teamId),
+    );
+    if (!pairRow) fail(`${path} (nema pokrivenosti para ${fixture.provider}+${fixture.competitionId})`);
+    else if (pairRow.publication !== 'allowed') {
+      fail(`${path} (par ${fixture.provider}+${fixture.competitionId} nema dozvolu objave)`);
+    }
   }
   for (let index = 0; index < result.coverage.length; index += 1) {
     const row = result.coverage[index]!;
@@ -416,31 +500,48 @@ function assertSemanticRelations(parsed: FindFixturesHttpSuccess): void {
     if (row.teamId !== null && row.teamId !== result.teamId) fail(`${path}.teamId`);
     if (row.seasonId !== result.seasonId) fail(`${path}.seasonId`);
     if (!row.competitionId) fail(`${path}.competitionId`);
+    if (!competitionById.has(row.competitionId)) fail(`${path}.competitionId (takmičenje nije u imeniku)`);
+    if (row.teamId !== null) {
+      const expected = `${row.teamId}:${row.competitionId}:${row.seasonId}:${row.provider}`;
+      if (row.id !== expected) fail(`${path}.id (ključ pokrivenosti se ne poklapa)`);
+    }
   }
   for (let index = 0; index < manifests.length; index += 1) {
     const manifest = manifests[index]!;
     const path = `manifests[${index}]`;
     if (manifest.seasonId !== result.seasonId) fail(`${path}.seasonId`);
     if (!manifest.competitionId) fail(`${path}.competitionId`);
+    if (!competitionById.has(manifest.competitionId)) fail(`${path}.competitionId (takmičenje nije u imeniku)`);
   }
-  // Next pokazivači moraju da pokazuju na uređeni vraćeni spisak, ne na izmišljen red.
+  // Vraćene utakmice nose dokaz provere; prazan spisak bez dokaza je validna
+  // prva blokada, ali blokada bez dokaza ne sme nositi izmišljene utakmice.
+  if (result.futureFixtures.length > 0) {
+    if (result.checkedAt === null) fail('result.checkedAt (utakmice bez dokaza provere)');
+    if (result.lastSuccessAt === null) fail('result.lastSuccessAt (utakmice bez dokaza provere)');
+  }
+  // Budući spisak je kanonski uređen; next pokazivači su jednaki stvarnim
+  // vraćenim podacima i reviziji, ne samo istom id-u.
   const { futureFixtures, nextFixture, nextConfirmedFixture } = result;
+  for (let index = 1; index < futureFixtures.length; index += 1) {
+    if (compareFuture(futureFixtures[index - 1]!, futureFixtures[index]!) > 0) {
+      fail(`result.futureFixtures[${index}] (spisak nije kanonski uređen)`);
+    }
+  }
+  const sameFixture = (left: Fixture, right: Fixture): boolean =>
+    JSON.stringify(left) === JSON.stringify(right);
   if (futureFixtures.length === 0) {
     if (nextFixture !== null) fail('result.nextFixture');
     if (nextConfirmedFixture !== null) fail('result.nextConfirmedFixture');
   } else {
-    if (nextFixture === null || nextFixture.id !== futureFixtures[0]!.id) fail('result.nextFixture');
+    if (nextFixture === null || !sameFixture(nextFixture, futureFixtures[0]!)) fail('result.nextFixture');
     const firstConfirmed = futureFixtures.find((fixture) => fixture.timeConfirmed) ?? null;
     if (firstConfirmed === null) {
       if (nextConfirmedFixture !== null) fail('result.nextConfirmedFixture');
-    } else if (nextConfirmedFixture === null || nextConfirmedFixture.id !== firstConfirmed.id) {
+    } else if (nextConfirmedFixture === null || !sameFixture(nextConfirmedFixture, firstConfirmed)) {
       fail('result.nextConfirmedFixture');
     }
   }
   if (parsed.kind === 'verified-schedule') {
-    for (const row of result.coverage) {
-      if (row.publication === 'forbidden') fail('result.coverage (zabranjena objava uz provereni režim)');
-    }
     for (const fixture of result.futureFixtures) {
       if (fixture.provider === 'demo') fail('result.futureFixtures (sintetički trag uz provereni režim)');
     }
@@ -464,7 +565,7 @@ export function parseFindResponse(value: unknown): FindFixturesHttpSuccess {
       if (!fixtureId) fail(`${entryPath}.fixtureId`);
       return {
         fixtureId,
-        revision: asNonNegativeInt(entry.revision, `${entryPath}.revision`),
+        revision: asPositiveInt(entry.revision, `${entryPath}.revision`),
         kind: asEnum(entry.kind, CHANGE_KINDS, `${entryPath}.kind`),
       };
     }),

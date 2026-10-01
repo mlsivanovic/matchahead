@@ -25,10 +25,22 @@ Jedini tok podataka od servera do ekrana:
    trenuci sa zonom, vremenska konzistentnost (potvrđen termin ima trenutak,
    `time_tbd` nema izmišljen sat, nikad ponoć kao zamena), HTTPS izvorni
    URL-ovi bez kredencijala/`javascript:` (sintetički režim sme
-   `synthetic:`, nikad `javascript:`), celobrojne revizije ≥ 0, sport/tim/
-   sezona odnosi, takmičenja i učesnici iz imenika, `nextFixture` je prvi a
-   `nextConfirmedFixture` prvi potvrđeni sa vraćenog spiska, provereni režim
-   bez `forbidden` pokrivenosti i bez sintetičkih tragova. Greška bilo gde
+   `synthetic:`, nikad `javascript:`), pozitivne celobrojne revizije
+   utakmica i promena (novi zapis kreće od 1, nula nije sačuvana revizija),
+   jedinstveni ključevi timova/takmičenja/pokrivenosti/manifesti/utakmica,
+   traženi tim izboran i uz prazne imenike, sport/tim/sezona odnosi,
+   takmičenja i pokrivenost iz imenika uz poklapanje ključa, svaki stvarni
+   učesnik u imeniku sa poklapanjem sporta (`awayTeamId: null` posle žreba
+   prolazi), svaka vraćena utakmica uz pokrivenost svog para
+   izvor+takmičenje+sezona sa `publication: allowed` (redovi drugih
+   takmičenja smeju sve — delimičan uspeh uz zabranu drugog takmičenja
+   prolazi; dozvoljena zastarela `source_error` pokrivenost čuva poslednji
+   snimak), vraćene utakmice samo uz ne-null `checkedAt`/`lastSuccessAt`
+   dokaz (prazna blokada sa null ostaje validna prva blokada), budući
+   spisak kanonski uređen (domenska `compareFuture` semantika dan/termin/id),
+   `nextFixture` jednak prvoj a `nextConfirmedFixture` jednakoj prvoj
+   potvrđenoj vraćenoj utakmici po sadržaju i reviziji (ne samo po id-u),
+   provereni režim bez sintetičkih tragova. Greška bilo gde
    je `wrong-response`, ne prazan prikaz. Greške: `401/403` → prijava,
    `429` → kuldaun sa `Retry-After`, pad/tajmaut/pogrešan oblik → poruka +
    zadržan prikaz. Prekinut i zastareli zahtev se nikad ne upisuju.
@@ -88,24 +100,32 @@ network-only; jedan worker, bez push/FCM promena.
 
 ## Komande i rezultati (stvarni izlaz, exit 0)
 
-- `npm run check` u `apps/web`: 103/103 PROŠLO (uključujući 29
-  schedule-client: 17 zatečenih + 12 novih za rok/viseće telo/prekid u
-  letu/kasni odgovor/derbi/reviziju/opoziv/konflikt/semantiku).
+- `npm run check` u `apps/web`: 111/111 PROŠLO (uključujući 37
+  schedule-client: 17 zatečenih + 12 za rok/viseće telo/prekid u
+  letu/kasni odgovor/derbi/reviziju/opoziv/konflikt/semantiku + 8 novih za
+  učesnika u imeniku/jednak next sadržaj/kanonski poredak/delimičan
+  uspeh/zastareli source_error/blokadu bez dokaza/izborni tim uz prazne
+  imenike/duplirane ključeve).
 - `npm run check` u `packages/domain` (sa `f00a06c`/`411225c`): SVI PROŠLI.
 - `tsc --noEmit` u `apps/web`: čist.
 - `node scripts/check-schedule-ui.mjs` (jedinice + `tsc` + 2 builda + pravi
   Chrome 390×844 i 360×740 sa kontrolisanim fixture serverom): SVE PROŠLO,
   16 PASS linija — sekcija bez poziva pre klika; pronalaženje sa tačnim
   poreklom, izvorima, neobjavljenim Kupom i nepoznatim terminom; kuldaun;
-  pad 500 i malformisan odgovor čuvaju prikaz; source-blocked sa
-  `checkedAt: null` (zadržana utakmica, bez lažnog porekla); synthetic-demo
+  pad 500 i malformisan odgovor čuvaju prikaz; source-blocked sa dokazom
+  zadržanog snimka (dozvoljena `source_error` pokrivenost, tačno poreklo);
+  synthetic-demo
   označen i efemeran (reload bez novog poziva); drugi klub; Početna sa
   unificiranom agendom (derbi jednom u Sledećoj, najraniji next);
   Moje sa filterima kluba/takmičenja/sporta (derbi jednom u disjunktnim
   grupama, nepoznat termin bez sata); offline bez poziva uz sačuvan prikaz;
   360px bez preliva; allowed→forbidden opoziv prazni agendu i čisti oba
   klupska snimka; ugovor tela (≥10 ispravnih zahteva na klik, bez lažnog
-  tokena); nekonfigurisan build pošteno onemogućen. Stvarni `exit 0`
+  tokena); nekonfigurisan build pošteno onemogućen. Kontrolisani fixture
+  server od ove isporuke šalje ugovorne sintetičke sadržaje: dozvoljena
+  pokrivenost objavljene Superlige, oba učesnika u imeniku, pozitivne
+  revizije, blokada sa dokazom zadržanog snimka (prazna blokada bez dokaza
+  ostaje pokrivena jediničnim regresijama). Stvarni `exit 0`
   (bez visećih test-procesa).
 
 ## Ograničenja i ostalo za koordinatora

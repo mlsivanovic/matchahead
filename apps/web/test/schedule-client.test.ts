@@ -83,12 +83,16 @@ function fixture(overrides: Partial<import('../../../packages/domain/src/types.t
 }
 
 function coverage(overrides: Partial<import('../../../packages/domain/src/types.ts').CoverageStatus> = {}): import('../../../packages/domain/src/types.ts').CoverageStatus {
+  const teamId = overrides.teamId !== undefined ? overrides.teamId : TEAM;
+  const competitionId = overrides.competitionId ?? 'Kup';
+  const seasonId = overrides.seasonId ?? SEASON;
+  const provider = overrides.provider ?? 'demo-liga';
   return {
-    id: `${TEAM}:Kup:${SEASON}:demo-liga`,
-    teamId: TEAM,
-    competitionId: 'Kup',
-    seasonId: SEASON,
-    provider: 'demo-liga',
+    id: teamId === null ? `null:${competitionId}:${seasonId}:${provider}` : `${teamId}:${competitionId}:${seasonId}:${provider}`,
+    teamId,
+    competitionId,
+    seasonId,
+    provider,
     providerCompetitionId: null,
     verdict: 'confirmed',
     scheduleAvailability: 'unpublished',
@@ -114,9 +118,14 @@ function envelope(overrides: Record<string, unknown> = {}) {
         id: TEAM, sport: 'football', name: 'FK Crvena zvezda', shortName: 'Crvena zvezda',
         country: 'RS', city: 'Beograd', aliases: ['Zvezda'], providerIds: {},
       },
+      {
+        id: PARTIZAN, sport: 'football', name: 'FK Partizan', shortName: 'Partizan',
+        country: 'RS', city: 'Beograd', aliases: ['Partizan'], providerIds: {},
+      },
     ],
     competitions: [
       { id: 'Superliga', sport: 'football', name: 'Superliga', scope: 'domestic', country: 'RS', aliases: [], providerIds: {} },
+      { id: 'Kup', sport: 'football', name: 'Kup', scope: 'domestic', country: 'RS', aliases: [], providerIds: {} },
     ],
     manifests: [
       {
@@ -279,13 +288,13 @@ test('neobjavljeno takmičenje i nepoznat termin prolaze kao pokrivenost, ne kao
       futureFixtures: [tbd],
       nextFixture: tbd,
       nextConfirmedFixture: null,
-      coverage: [coverage()],
+      coverage: [allowedSuperligaRow(), coverage()],
     }),
   }));
   assert.equal(parsed.result.futureFixtures[0]!.startsAtUtc, null);
   assert.equal(parsed.result.futureFixtures[0]!.status, 'time_tbd');
-  assert.equal(parsed.result.coverage[0]!.scheduleAvailability, 'unpublished');
-  assert.equal(parsed.result.coverage[0]!.futureFixturesAvailable, null);
+  assert.equal(parsed.result.coverage[1]!.scheduleAvailability, 'unpublished');
+  assert.equal(parsed.result.coverage[1]!.futureFixturesAvailable, null);
 });
 
 test('source-blocked sme da bude prazan, synthetic-demo ostaje označen', () => {
@@ -546,6 +555,46 @@ function clubSnapshot(
   const name = teamId.includes('partizan') ? 'Partizan' : 'Crvena zvezda';
   const firstConfirmed = fixtures.find((entry) => entry.timeConfirmed) ?? null;
   const checkedAt = kind === 'verified-schedule' ? '2026-10-01T08:00:00.000Z' : null;
+  // Imenik učesnika: traženi tim plus svaki drugi učesnik sa spiska.
+  const participantIds = new Map<string, { id: string; sport: typeof sport; name: string }>();
+  const displayName = (id: string): string => {
+    if (id === teamId) return `FK ${name}`;
+    if (id.includes('partizan')) return 'FK Partizan';
+    if (id.includes('crvena-zvezda')) return 'FK Crvena zvezda';
+    return id;
+  };
+  for (const entry of fixtures) {
+    for (const participant of [entry.homeTeamId, entry.awayTeamId]) {
+      if (participant !== null && !participantIds.has(participant)) {
+        participantIds.set(participant, { id: participant, sport, name: displayName(participant) });
+      }
+    }
+  }
+  if (!participantIds.has(teamId)) {
+    participantIds.set(teamId, { id: teamId, sport, name: `FK ${name}` });
+  }
+  // Ugovorna pokrivenost: svaki par izvor+takmičenje sa spiska nosi dozvolu,
+  // osim parova koje pozivalac izričito opisuje svojim redovima.
+  const describedPairs = new Set(coverageRows.map((row) => `${row.provider}␟${row.competitionId}␟${row.seasonId}`));
+  const impliedCoverage: CoverageStatus[] = [];
+  for (const entry of fixtures) {
+    const pair = `${entry.provider}␟${entry.competitionId}␟${entry.seasonId}`;
+    if (describedPairs.has(pair)) continue;
+    describedPairs.add(pair);
+    impliedCoverage.push(coverage({
+      id: `${teamId}:${entry.competitionId}:${entry.seasonId}:${entry.provider}`,
+      teamId,
+      competitionId: entry.competitionId,
+      seasonId: entry.seasonId,
+      provider: entry.provider,
+      verdict: 'confirmed',
+      scheduleAvailability: 'published',
+      futureFixturesAvailable: true,
+      timePrecision: 'utc_confirmed',
+      publication: 'allowed',
+      evidence: 'Ugovorna pokrivenost za test.',
+    }));
+  }
   const response = parseFindResponse({
     kind,
     result: {
@@ -561,14 +610,15 @@ function clubSnapshot(
       futureFixtures: fixtures,
       nextFixture: fixtures[0] ?? null,
       nextConfirmedFixture: firstConfirmed,
-      coverage: coverageRows,
+      coverage: [...coverageRows, ...impliedCoverage],
     },
-    teams: [
+    teams: [...participantIds.values()].map((participant) => (
       {
-        id: teamId, sport, name: `FK ${name}`, shortName: name,
-        country: 'RS', city: 'Beograd', aliases: [name], providerIds: {},
-      },
-    ],
+        id: participant.id, sport: participant.sport, name: participant.name,
+        shortName: participant.name.replace(/^FK /, ''), country: 'RS', city: 'Beograd',
+        aliases: [participant.name], providerIds: {},
+      }
+    )),
     competitions: [
       { id: 'Superliga', sport, name: 'Superliga', scope: 'domestic', country: 'RS', aliases: [], providerIds: {} },
     ],
@@ -635,6 +685,7 @@ test('forbidden opoziv briše izvor iz svih snimaka; unknown čuva prikaz', () =
 
   const kept = memoryStore();
   writeLastGood(kept, clubSnapshot(TEAM, [fixture({})]));
+  // Prolazna nepoznanica za par koji nikad nije bio dozvoljen (Kup) čuva prikaz.
   const transient = parseFindResponse(envelope({
     kind: 'source-blocked',
     result: result({
@@ -643,7 +694,7 @@ test('forbidden opoziv briše izvor iz svih snimaka; unknown čuva prikaz', () =
       futureFixtures: [],
       nextFixture: null,
       nextConfirmedFixture: null,
-      coverage: [coverage({ competitionId: 'Superliga', publication: 'unknown', scheduleAvailability: 'source_error' })],
+      coverage: [coverage({ scheduleAvailability: 'source_error' })],
     }),
   }));
   assert.deepEqual(purgeRevokedSnapshots(kept, transient, SEASON), { prunedSnapshots: 0, prunedFixtures: 0 });
@@ -658,7 +709,8 @@ test('opozvani izvor ne ulazi u unificiranu agendu', () => {
     derbyFixture(2),
     fixture({ provider: 'druga-liga', sourceUrl: 'https://druga-liga.example/raspored/superliga' }),
   ]);
-  const revoked = clubSnapshot(PARTIZAN, [derbyFixture(1)], [
+  // Opozvani par ne nosi utakmice: server vraća prazan spisak uz zabranu.
+  const revoked = clubSnapshot(PARTIZAN, [], [
     coverage({ teamId: PARTIZAN, competitionId: 'Superliga', provider: 'demo-liga', publication: 'forbidden', scheduleAvailability: 'unknown' }),
   ], 'source-blocked');
   const unified = unifiedVerifiedFixtures([clean, revoked]);
@@ -677,7 +729,8 @@ test('allowed pa unknown je opoziv u unificiranoj agendi i u trajnom stanju', ()
   });
   // Unificirana agenda: drugi klub spušta prethodno dozvoljeni par na unknown.
   const clean = clubSnapshot(TEAM, [derbyFixture(2)], [allowedRow(TEAM)]);
-  const downgraded = clubSnapshot(PARTIZAN, [derbyFixture(1)], [unknownRow(PARTIZAN)], 'source-blocked');
+  // Spušteni par ne nosi utakmice: server vraća prazan spisak uz unknown.
+  const downgraded = clubSnapshot(PARTIZAN, [], [unknownRow(PARTIZAN)], 'source-blocked');
   assert.deepEqual(unifiedVerifiedFixtures([clean, downgraded]), []);
   // Trajno stanje: isti prelaz briše par iz svih snimaka sezone.
   const store = memoryStore();
@@ -716,6 +769,20 @@ test('ista revizija sa različitim sadržajem se ne objavljuje', () => {
   assert.deepEqual(buildUnifiedServerAgenda([zvezda, partizan], [TEAM, PARTIZAN], []), []);
 });
 
+function allowedSuperligaRow(): CoverageStatus {
+  return coverage({
+    id: `${TEAM}:Superliga:${SEASON}:demo-liga`,
+    competitionId: 'Superliga',
+    provider: 'demo-liga',
+    verdict: 'confirmed',
+    scheduleAvailability: 'published',
+    futureFixturesAvailable: true,
+    timePrecision: 'utc_confirmed',
+    publication: 'allowed',
+    evidence: 'Liga objavila raspored uz dozvolu.',
+  });
+}
+
 function validVerifiedBody() {
   const confirmed = fixture({});
   return envelope({
@@ -723,6 +790,7 @@ function validVerifiedBody() {
       futureFixtures: [confirmed],
       nextFixture: confirmed,
       nextConfirmedFixture: confirmed,
+      coverage: [allowedSuperligaRow()],
     }),
   });
 }
@@ -773,9 +841,10 @@ test('semantika odgovora odbija nedosledne revizije, izvore, odnose i next pokaz
     },
     {
       name: 'pokrivenost tuđeg tima',
-      body: mutateResult((draft) => { draft.coverage = [coverage({ teamId: PARTIZAN })]; }),
+      body: mutateResult((draft) => { draft.coverage.push(coverage({ teamId: PARTIZAN })); }),
     },
     { name: 'negativan brojač', body: mutateResult((draft) => { draft.upstreamRequests = -1; }) },
+    { name: 'nulta revizija utakmice', body: mutateResult((draft) => { draft.futureFixtures[0]!.revision = 0; }) },
   ];
   for (const entry of cases) {
     assert.throws(
@@ -784,30 +853,78 @@ test('semantika odgovora odbija nedosledne revizije, izvore, odnose i next pokaz
       `propust: ${entry.name}`,
     );
   }
-  const forbidden = validVerifiedBody() as { result: FindFixturesResult };
-  forbidden.result.coverage = [coverage({ publication: 'forbidden' })];
+  const forbiddenPair = validVerifiedBody() as { result: FindFixturesResult };
+  forbiddenPair.result.coverage = [coverage({
+    id: `${TEAM}:Superliga:${SEASON}:demo-liga`,
+    competitionId: 'Superliga',
+    provider: 'demo-liga',
+    publication: 'forbidden',
+    scheduleAvailability: 'unknown',
+  })];
   assert.throws(
-    () => parseFindResponse(forbidden),
+    () => parseFindResponse(forbiddenPair),
     (error: unknown) => error instanceof ScheduleApiError,
-    'verified uz forbidden publication',
+    'utakmica para uz forbidden publication',
+  );
+  const unknownPair = validVerifiedBody() as { result: FindFixturesResult };
+  unknownPair.result.coverage = [coverage({
+    id: `${TEAM}:Superliga:${SEASON}:demo-liga`,
+    competitionId: 'Superliga',
+    provider: 'demo-liga',
+    publication: 'unknown',
+    scheduleAvailability: 'unknown',
+  })];
+  assert.throws(
+    () => parseFindResponse(unknownPair),
+    (error: unknown) => error instanceof ScheduleApiError,
+    'utakmica para uz unknown publication bez dozvole',
   );
   const syntheticLeak = validVerifiedBody() as { result: FindFixturesResult };
   syntheticLeak.result.futureFixtures[0]!.provider = 'demo';
+  syntheticLeak.result.coverage.push(coverage({
+    id: `${TEAM}:Superliga:${SEASON}:demo`,
+    competitionId: 'Superliga',
+    provider: 'demo',
+    publication: 'allowed',
+    scheduleAvailability: 'published',
+  }));
   assert.throws(
     () => parseFindResponse(syntheticLeak),
     (error: unknown) => error instanceof ScheduleApiError,
     'verified uz sintetički trag',
   );
+  const zeroChange = validVerifiedBody() as { changes: Array<{ fixtureId: string; revision: number; kind: string }> };
+  zeroChange.changes = [{ fixtureId: 'football:aba:Superliga:2026-2027:aba:fx-1', revision: 0, kind: 'new' }];
+  assert.throws(
+    () => parseFindResponse(zeroChange),
+    (error: unknown) => error instanceof ScheduleApiError,
+    'nulta revizija promene',
+  );
+  const fractionalChange = validVerifiedBody() as { changes: Array<{ fixtureId: string; revision: number; kind: string }> };
+  fractionalChange.changes = [{ fixtureId: 'football:aba:Superliga:2026-2027:aba:fx-1', revision: 1.5, kind: 'new' }];
+  assert.throws(
+    () => parseFindResponse(fractionalChange),
+    (error: unknown) => error instanceof ScheduleApiError,
+    'razlomljena revizija promene',
+  );
 });
 
 test('sintetički režim sme sintetički izvor, ali nikad javascript', () => {
   const demoFixture = fixture({ provider: 'demo', sourceUrl: 'synthetic://demo/1' });
+  const demoCoverage = coverage({
+    id: `${TEAM}:Superliga:${SEASON}:demo`,
+    competitionId: 'Superliga',
+    provider: 'demo',
+    publication: 'allowed',
+    scheduleAvailability: 'published',
+  });
   const parsed = parseFindResponse(envelope({
     kind: 'synthetic-demo',
     result: result({
       futureFixtures: [demoFixture],
       nextFixture: demoFixture,
       nextConfirmedFixture: demoFixture,
+      coverage: [demoCoverage],
     }),
   }));
   assert.equal(parsed.kind, 'synthetic-demo');
@@ -818,6 +935,7 @@ test('sintetički režim sme sintetički izvor, ali nikad javascript', () => {
       futureFixtures: [badFixture],
       nextFixture: badFixture,
       nextConfirmedFixture: badFixture,
+      coverage: [allowedSuperligaRow()],
     }),
   });
   assert.throws(() => parseFindResponse(bad), (error: unknown) => error instanceof ScheduleApiError);
@@ -846,5 +964,209 @@ test('mrežni pad i tajmaut su server, ne izmišljen uspeh', async () => {
   await assert.rejects(
     () => postFindFixtures({ baseUrl: BASE, idToken: null, sport: 'football', teamId: TEAM, seasonId: SEASON, refresh: false, online: false, fetchImpl: failing }),
     (error: unknown) => error instanceof ScheduleApiError && error.code === 'offline',
+  );
+});
+
+test('utakmica učesnika koga nema u imeniku se odbija', () => {
+  const stranger = fixture({ homeTeamId: TEAM, awayTeamId: 'football:rs:nepoznat-klub' });
+  assert.throws(
+    () => parseFindResponse(envelope({
+      result: result({
+        futureFixtures: [stranger],
+        nextFixture: stranger,
+        nextConfirmedFixture: stranger,
+        coverage: [allowedSuperligaRow()],
+      }),
+    })),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'nepoznat učesnik prošao imenik',
+  );
+});
+
+test('next pokazivači moraju biti jednaki vraćenim podacima, ne samo isti id', () => {
+  const confirmed = fixture({});
+  const staleCopy = { ...confirmed, revision: confirmed.revision + 1, contentHash: 'zastareo-sadržaj' };
+  assert.throws(
+    () => parseFindResponse(envelope({
+      result: result({
+        futureFixtures: [confirmed],
+        nextFixture: staleCopy,
+        nextConfirmedFixture: confirmed,
+        coverage: [allowedSuperligaRow()],
+      }),
+    })),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'zastarela kopija next pokazivača prošla',
+  );
+  const droppedConfirmed = fixture({});
+  assert.throws(
+    () => parseFindResponse(envelope({
+      result: result({
+        futureFixtures: [droppedConfirmed],
+        nextFixture: droppedConfirmed,
+        nextConfirmedFixture: null,
+        coverage: [allowedSuperligaRow()],
+      }),
+    })),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'ispušten nextConfirmed prošao uz potvrđeni termin',
+  );
+});
+
+test('budući spisak mora biti kanonski uređen po danu, terminu i id-u', () => {
+  const earlier = fixture({
+    id: 'football:aba:Superliga:2026-2027:aba:fx-raniji',
+    startsAtUtc: '2026-10-04T17:00:00.000Z',
+    scheduledLocalDate: '2026-10-04',
+    providerFixtureId: 'fx-raniji',
+  });
+  const later = fixture({});
+  assert.throws(
+    () => parseFindResponse(envelope({
+      result: result({
+        futureFixtures: [later, earlier],
+        nextFixture: later,
+        nextConfirmedFixture: later,
+        coverage: [allowedSuperligaRow()],
+      }),
+    })),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'neuređen budući spisak prošao',
+  );
+  const parsed = parseFindResponse(envelope({
+    result: result({
+      futureFixtures: [earlier, later],
+      nextFixture: earlier,
+      nextConfirmedFixture: earlier,
+      coverage: [allowedSuperligaRow()],
+    }),
+  }));
+  assert.equal(parsed.result.nextFixture!.id, earlier.id);
+});
+
+test('dozvoljeni delimični uspeh uz zabranu drugog takmičenja prolazi', () => {
+  // Nepoznat protivnik posle žreba (awayTeamId null) nije razlog za odbijanje.
+  const drawNull = fixture({ awayTeamId: null });
+  const parsed = parseFindResponse(envelope({
+    kind: 'verified-schedule',
+    result: result({
+      futureFixtures: [drawNull],
+      nextFixture: drawNull,
+      nextConfirmedFixture: drawNull,
+      coverage: [
+        allowedSuperligaRow(),
+        coverage({ publication: 'forbidden', scheduleAvailability: 'unknown' }),
+      ],
+    }),
+  }));
+  assert.equal(parsed.result.futureFixtures.length, 1);
+  assert.equal(parsed.result.futureFixtures[0]!.awayTeamId, null);
+});
+
+test('dozvoljena zastarela source_error pokrivenost čuva poslednji snimak', () => {
+  const kept = fixture({});
+  const parsed = parseFindResponse(envelope({
+    kind: 'source-blocked',
+    result: result({
+      futureFixtures: [kept],
+      nextFixture: kept,
+      nextConfirmedFixture: kept,
+      coverage: [coverage({
+        id: `${TEAM}:Superliga:${SEASON}:demo-liga`,
+        competitionId: 'Superliga',
+        provider: 'demo-liga',
+        publication: 'allowed',
+        scheduleAvailability: 'source_error',
+        evidence: 'Izvor vratio grešku; prethodni raspored ostaje.',
+      })],
+    }),
+  }));
+  assert.equal(parsed.result.futureFixtures.length, 1);
+  assert.equal(parsed.result.checkedAt, '2026-10-01T08:00:00.000Z');
+});
+
+test('blokada bez dokaza ne sme nositi utakmice; prazna je validna', () => {
+  const invented = fixture({});
+  assert.throws(
+    () => parseFindResponse(envelope({
+      kind: 'source-blocked',
+      result: result({
+        checkedAt: null,
+        lastSuccessAt: null,
+        futureFixtures: [invented],
+        nextFixture: invented,
+        nextConfirmedFixture: invented,
+        coverage: [coverage({ scheduleAvailability: 'source_error' })],
+      }),
+    })),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'izmišljene utakmice bez dokaza prošle',
+  );
+  const empty = parseFindResponse(envelope({
+    kind: 'source-blocked',
+    result: result({
+      checkedAt: null,
+      lastSuccessAt: null,
+      futureFixtures: [],
+      nextFixture: null,
+      nextConfirmedFixture: null,
+      coverage: [coverage({ scheduleAvailability: 'source_error' })],
+    }),
+  }));
+  assert.equal(empty.result.checkedAt, null);
+  assert.deepEqual(empty.result.futureFixtures, []);
+});
+
+test('traženi izborni tim važi i uz prazne imenike; neizborni se odbija', () => {
+  const emptyDirs = parseFindResponse(envelope({
+    kind: 'source-blocked',
+    teams: [],
+    competitions: [],
+    manifests: [],
+    result: result({
+      checkedAt: null,
+      lastSuccessAt: null,
+      futureFixtures: [],
+      nextFixture: null,
+      nextConfirmedFixture: null,
+      coverage: [],
+    }),
+  }));
+  assert.equal(emptyDirs.result.teamId, TEAM);
+  assert.throws(
+    () => parseFindResponse(envelope({
+      teams: [],
+      competitions: [],
+      manifests: [],
+      result: result({
+        teamId: 'football:rs:neko-treci',
+        futureFixtures: [],
+        nextFixture: null,
+        nextConfirmedFixture: null,
+        coverage: [],
+      }),
+    })),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'neizborni tim prošao uz prazne imenike',
+  );
+});
+
+test('duplirani ključevi imenika se odbijaju', () => {
+  const dupe = envelope({
+    teams: [
+      {
+        id: TEAM, sport: 'football', name: 'FK Crvena zvezda', shortName: 'Crvena zvezda',
+        country: 'RS', city: 'Beograd', aliases: ['Zvezda'], providerIds: {},
+      },
+      {
+        id: TEAM, sport: 'football', name: 'FK Crvena zvezda', shortName: 'Crvena zvezda',
+        country: 'RS', city: 'Beograd', aliases: ['Zvezda'], providerIds: {},
+      },
+    ],
+  });
+  assert.throws(
+    () => parseFindResponse(dupe),
+    (error: unknown) => error instanceof ScheduleApiError && error.code === 'wrong-response',
+    'dupliran tim prošao',
   );
 });

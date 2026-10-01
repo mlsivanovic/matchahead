@@ -95,7 +95,8 @@ function unknownTimeFixture(teamId) {
     venue: null,
     round: null,
     providerFixtureId: 'fx-tbd',
-    revision: 0,
+    // Trajna revizija počinje od 1; nula nije sačuvana revizija.
+    revision: 1,
   });
 }
 
@@ -131,10 +132,21 @@ function derbyFixture() {
   };
 }
 
+function teamEntry(id) {
+  const teamSport = id.startsWith('basketball') ? 'basketball' : 'football';
+  const teamName = id.includes('partizan') ? 'Partizan' : 'Crvena zvezda';
+  const club = teamSport === 'football' ? `FK ${teamName}` : `KK ${teamName}`;
+  return {
+    id, sport: teamSport, name: club, shortName: teamName, country: 'RS', city: 'Beograd',
+    aliases: [teamName], providerIds: {},
+  };
+}
+
 function envelopeFor(teamId, mode) {
   const sport = teamId.startsWith('basketball') ? 'basketball' : 'football';
-  const name = teamId.includes('partizan') ? 'Partizan' : 'Crvena zvezda';
-  const club = sport === 'football' ? `FK ${name}` : `KK ${name}`;
+  const otherTeamId = sport === 'football'
+    ? (teamId.includes('partizan') ? 'football:rs:crvena-zvezda' : 'football:rs:partizan')
+    : (teamId.includes('partizan') ? 'basketball:rs:crvena-zvezda' : 'basketball:rs:partizan');
   const base = {
     result: {
       teamId,
@@ -151,12 +163,8 @@ function envelopeFor(teamId, mode) {
       nextConfirmedFixture: null,
       coverage: [],
     },
-    teams: [
-      {
-        id: teamId, sport, name: club, shortName: name, country: 'RS', city: 'Beograd',
-        aliases: [name], providerIds: {},
-      },
-    ],
+    // Imenik učesnika: traženi klub i protivnik sa spiska.
+    teams: [teamEntry(teamId), teamEntry(otherTeamId)],
     competitions: [
       { id: 'Superliga', sport, name: 'Superliga', scope: 'domestic', country: 'RS', aliases: [], providerIds: {} },
       { id: 'Kup', sport, name: 'Kup', scope: 'domestic', country: 'RS', aliases: [], providerIds: {} },
@@ -188,8 +196,8 @@ function envelopeFor(teamId, mode) {
         id: `${teamId}:Superliga:${SEASON}:primer-liga`, teamId, competitionId: 'Superliga', seasonId: SEASON,
         provider: 'primer-liga', providerCompetitionId: null, verdict: 'confirmed', scheduleAvailability: 'published',
         freeAccessConfirmed: null, futureFixturesAvailable: true, timePrecision: 'unconfirmed_clock',
-        postponementObserved: null, cancellationObserved: null, publication: 'unknown',
-        requestsPerRefresh: 2, evidence: 'Liga objavila raspored.', checkedAt: '2026-10-01',
+        postponementObserved: null, cancellationObserved: null, publication: 'allowed',
+        requestsPerRefresh: 2, evidence: 'Liga objavila raspored uz dozvolu.', checkedAt: '2026-10-01',
       },
       {
         id: `${teamId}:Kup:${SEASON}:primer-liga`, teamId, competitionId: 'Kup', seasonId: SEASON,
@@ -221,10 +229,11 @@ function envelopeFor(teamId, mode) {
   } else if (mode === 'blocked') {
     const retained = fixtureFor(teamId);
     base.kind = 'source-blocked';
-    // Prva blokada: još nema uspešnog snimka u ovom odgovoru (checkedAt null),
-    // ali zadržana utakmica iz prethodnog stanja ostaje — nije otkazana.
-    base.result.checkedAt = null;
-    base.result.lastSuccessAt = null;
+    // Zastareli snimak: izvor vratio grešku, ali poslednji dobar snimak
+    // ostaje uz dokaz poslednje uspešne provere i dozvoljenu pokrivenost.
+    // Blokada bez dokaza ne sme nositi utakmice (videti 'revoked' režim).
+    base.result.checkedAt = CHECKED_AT;
+    base.result.lastSuccessAt = SUCCESS_AT;
     base.result.futureFixtures = [retained];
     base.result.nextFixture = retained;
     base.result.nextConfirmedFixture = retained;
@@ -233,7 +242,7 @@ function envelopeFor(teamId, mode) {
         id: `${teamId}:Superliga:${SEASON}:primer-liga`, teamId, competitionId: 'Superliga', seasonId: SEASON,
         provider: 'primer-liga', providerCompetitionId: null, verdict: 'unverified', scheduleAvailability: 'source_error',
         freeAccessConfirmed: null, futureFixturesAvailable: null, timePrecision: null,
-        postponementObserved: null, cancellationObserved: null, publication: 'unknown',
+        postponementObserved: null, cancellationObserved: null, publication: 'allowed',
         requestsPerRefresh: 1, evidence: 'Izvor vratio grešku; prethodni raspored ostaje.', checkedAt: '2026-10-01',
       },
     ];
@@ -253,7 +262,7 @@ function envelopeFor(teamId, mode) {
         id: `${teamId}:Superliga:${SEASON}:demo`, teamId, competitionId: 'Superliga', seasonId: SEASON,
         provider: 'demo', providerCompetitionId: null, verdict: 'unverified', scheduleAvailability: 'unknown',
         freeAccessConfirmed: null, futureFixturesAvailable: true, timePrecision: 'utc_confirmed',
-        postponementObserved: null, cancellationObserved: null, publication: 'forbidden',
+        postponementObserved: null, cancellationObserved: null, publication: 'allowed',
         requestsPerRefresh: 0, evidence: 'Sintetički režim za izolovanu proveru.', checkedAt: '2026-10-01',
       },
     ];
@@ -503,12 +512,12 @@ try {
   );
   assert((await bodyText(page)).includes('Izvor blokiran'), 'nema oznake blokade');
   assert((await bodyText(page)).includes('Dvorana testa'), 'blokada nije zadržala prethodnu utakmicu');
-  assert((await bodyText(page)).includes('Još nema uspešne provere izvora'), 'blokada izmišlja uspeh');
+  assert((await bodyText(page)).includes('Poslednja uspešna provera'), 'blokada nema dokaz provere zadržanog snimka');
   assert(
-    (await page.$eval('[data-schedule-kind]', (element) => element.dataset.provenance)) === undefined,
-    'blokada nosi lažno poreklo',
+    (await page.$eval('[data-schedule-kind]', (element) => element.dataset.provenance)) === CHECKED_AT,
+    'blokada ne nosi poreklo poslednjeg snimka',
   );
-  console.log('PASS: source-blocked — pokrivenost, razlog, zadržana utakmica, bez lažnog uspeha');
+  console.log('PASS: source-blocked — pokrivenost, razlog, zadržana utakmica sa dokazom provere');
 
   apiState.mode = 'demo';
   await clickFinderButton(page, 'Pronađi utakmice');
