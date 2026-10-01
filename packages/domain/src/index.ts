@@ -95,6 +95,8 @@ export {
   assertFixtureTime,
   canExportTimedEvent,
   hasKnownDate,
+  isRealCalendarDate,
+  isRealUtcInstant,
   isUntrustedKickoffClock,
   timeErrors,
 } from './time.ts';

@@ -6,12 +6,15 @@ import {
   canExportTimedEvent,
   findFixtures,
   fitsDailyQuota,
+  isRealCalendarDate,
+  isRealUtcInstant,
   isUntrustedKickoffClock,
   maxFreshFindsPerDay,
   minSpacingSeconds,
   requestsForFreshFind,
   selectableTeams,
   isSelectableTeamId,
+  timeErrors,
   upstreamRequestsForClicks,
 } from '../src/index.ts';
 import type {
@@ -19,6 +22,7 @@ import type {
   FindCacheRecord,
   FindCacheStore,
   FindFixturesQuery,
+  ObservedFixtureDraft,
   Team,
 } from '../src/index.ts';
 
@@ -436,6 +440,183 @@ test('neuspeh bez prethodnog snimka ne dobija checkedAt, a posle uspeha ga ne po
   assert.equal(held.checkedAt, success.checkedAt);
   assert.equal(held.upstreamRequests, 0);
 });
+
+test('nemoguć datum i trenutak ne prolaze kalendarsku proveru', () => {
+  assert.equal(isRealCalendarDate('2027-02-30'), false);
+  assert.equal(isRealCalendarDate('2024-02-29'), true);
+  assert.equal(isRealCalendarDate('2027-02-29'), false);
+  assert.equal(isRealUtcInstant('2027-02-30T12:00:00Z'), false);
+  assert.equal(isRealUtcInstant('2027-03-02T99:00:00Z'), false);
+  assert.equal(isRealUtcInstant('0000-00-00T00:00:00Z'), false);
+  assert.equal(isRealUtcInstant('2027-03-02T16:00:00Z'), true);
+  assert.ok(timeErrors({
+    status: 'scheduled',
+    timeConfirmed: true,
+    startsAtUtc: '2027-02-30T16:00:00Z',
+    scheduledLocalDate: '2027-02-30',
+    previousStartsAtUtc: null,
+    previousScheduledLocalDate: null,
+  }).length > 0);
+});
+
+test('sukob istog ID-ja i neispravan tuđi red ne zamenjuju snimak', () => {
+  const cache = memoryCache();
+  const league = feeds()[0];
+  assert.ok(league);
+  const first = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  const original = first.futureFixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.ok(original);
+
+  const conflicted = structuredClone(league);
+  const duplicate = conflicted.pages[1]?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.ok(duplicate);
+  duplicate.startsAtUtc = '2027-03-03T18:00:00Z';
+  duplicate.scheduledLocalDate = '2027-03-03';
+  const rejected = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:20:00Z', refresh: true }),
+    feeds: [conflicted],
+    cache,
+    policy: dataset.policy,
+  });
+  const kept = rejected.futureFixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(kept?.startsAtUtc, original.startsAtUtc);
+  assert.equal(kept?.revision, original.revision);
+  assert.equal(rejected.coverage[0]?.scheduleAvailability, 'source_error');
+
+  const malformed = structuredClone(league);
+  const foreign = malformed.pages[0]?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-other');
+  assert.ok(foreign);
+  foreign.scheduledLocalDate = '2027-02-30';
+  const blocked = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:40:00Z', refresh: true }),
+    feeds: [malformed],
+    cache,
+    policy: dataset.policy,
+  });
+  const still = blocked.futureFixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(still?.revision, original.revision);
+  assert.equal(still?.startsAtUtc, original.startsAtUtc);
+});
+
+test('zabranjen izvor ne vraća ranije dozvoljen snimak', () => {
+  const cache = memoryCache();
+  const league = feeds()[0];
+  assert.ok(league);
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  const hidden = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:20:00Z', refresh: true }),
+    feeds: [{ ...league, publication: 'forbidden' }],
+    cache,
+    policy: dataset.policy,
+  });
+  assert.equal(hidden.futureFixtures.some((fixture) => fixture.providerFixtureId === 'syn-confirmed'), false);
+  assert.equal(hidden.futureFixtures.some((fixture) => fixture.status === 'cancelled'), false);
+  assert.equal(hidden.checkedAt, null);
+  assert.equal(hidden.coverage[0]?.scheduleAvailability, 'unknown');
+});
+
+test('derbi deli reviziju između keševa oba kluba', () => {
+  const cache = memoryCache();
+  const derby = derbyFeed('2027-03-02T16:00:00Z', '2027-03-02', '17:00');
+  const partizan = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: [derby],
+    cache,
+    policy: dataset.policy,
+  });
+  const zvezdaTeam: Team = {
+    ...team('football:rs:partizan'),
+    id: 'football:rs:crvena-zvezda',
+    name: 'FK Crvena zvezda',
+    shortName: 'Crvena zvezda',
+    aliases: ['Crvena zvezda', 'FK Crvena zvezda'],
+  };
+  const zvezda = findFixtures({
+    team: zvezdaTeam,
+    query: footballQuery({ teamId: 'football:rs:crvena-zvezda' }),
+    feeds: [derby],
+    cache,
+    policy: dataset.policy,
+  });
+  const left = partizan.futureFixtures.find((fixture) => fixture.providerFixtureId === 'syn-derby');
+  const right = zvezda.futureFixtures.find((fixture) => fixture.providerFixtureId === 'syn-derby');
+  assert.ok(left && right);
+  assert.equal(left.id, right.id);
+  assert.equal(left.revision, right.revision);
+
+  const moved = derbyFeed('2027-03-03T18:30:00Z', '2027-03-03', '19:30');
+  const again = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:20:00Z', refresh: true }),
+    feeds: [moved],
+    cache,
+    policy: dataset.policy,
+  });
+  const updated = again.futureFixtures.find((fixture) => fixture.providerFixtureId === 'syn-derby');
+  assert.equal(updated?.revision, left.revision + 1);
+  const otherKey = 'football:rs:crvena-zvezda:2026-2027';
+  const stored = cache.get(otherKey);
+  const mirrored = stored?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-derby');
+  assert.equal(mirrored?.revision, updated?.revision);
+  assert.equal(mirrored?.startsAtUtc, '2027-03-03T18:30:00Z');
+  assert.equal(mirrored?.id, left.id);
+});
+
+function derbyFeed(startsAtUtc: string, localDate: string, clock: string): CompetitionFeed {
+  const draft: ObservedFixtureDraft = {
+    sport: 'football',
+    competitionId: 'football:domestic:synthetic-league',
+    seasonId: '2026-2027',
+    homeTeamId: 'football:rs:partizan',
+    awayTeamId: 'football:rs:crvena-zvezda',
+    scheduledLocalDate: localDate,
+    printedLocalTime: clock,
+    startsAtUtc,
+    sourceTimeZone: 'Europe/Belgrade',
+    sourceClaimsTimeConfirmed: true,
+    status: 'scheduled',
+    venue: null,
+    round: 'derbi',
+    sourceUrl: 'synthetic://find-fixtures/derby',
+    provider: 'synthetic',
+    providerFixtureId: 'syn-derby',
+    fetchedAt: '2027-01-15T12:00:00Z',
+    sourceUpdatedAt: null,
+    previousStartsAtUtc: null,
+    previousScheduledLocalDate: null,
+  };
+  return {
+    competitionId: draft.competitionId,
+    seasonId: draft.seasonId,
+    provider: 'synthetic',
+    providerCompetitionId: 'syn-league',
+    publication: 'allowed',
+    organizerMarkedUnpublished: false,
+    teamNotInCompetition: false,
+    failure: 'none',
+    totalPages: 1,
+    pages: [{ page: 1, fixtures: [draft] }],
+    evidence: 'synthetic derbi',
+    sourceUrl: draft.sourceUrl,
+    checkedAt: '2027-01-15',
+  };
+}
 
 test('drugi provajder sa istim parom i datumom nije isti ID', () => {
   const result = findFixtures({

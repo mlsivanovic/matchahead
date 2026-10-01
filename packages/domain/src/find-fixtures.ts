@@ -93,6 +93,8 @@ export interface FindCacheRecord {
    * null dok takav snimak ne postoji. Neuspeh i potpuna blokada ga ne pomeraju.
    */
   lastSuccessAt?: string | null;
+  /** Samo na internom zapisu revizija. Nije deo odgovora ka klijentu. */
+  teamKeys?: string[];
 }
 
 export interface FindCacheStore {
@@ -199,6 +201,8 @@ export function findFixtures(input: {
   let upstreamRequests = 0;
   let publishedAny = false;
   const seenFeed = new Set<string>();
+  const canonical = readCanonical(input.cache);
+  const droppedIds = new Set<string>();
 
   for (const feed of input.feeds) {
     if (feed.seasonId !== query.seasonId) {
@@ -222,10 +226,10 @@ export function findFixtures(input: {
           futureFixturesAvailable: null,
           timePrecision: null,
           requests: 0,
-          extra: 'Izvor nije označen kao dozvoljen za upis u MatchAhead. Odgovor nije učitan.',
+          extra: 'Izvor nije označen kao dozvoljen za upis u MatchAhead. Odgovor nije učitan. Raniji snimak ovog izvora se ne vraća.',
         }),
       );
-      merged.push(...kept);
+      for (const fixture of kept) droppedIds.add(fixture.id);
       continue;
     }
 
@@ -272,7 +276,26 @@ export function findFixtures(input: {
       .slice()
       .sort((left, right) => left.page - right.page)
       .flatMap((page) => page.fixtures);
-    const teamDrafts = flattened.filter((draft) => fixtureInvolvesTeam(draft, team.id));
+    const problems = flattened.flatMap((draft) => observationErrors(draft));
+    const { drafts, conflict } = dedupeDrafts(flattened);
+    if (problems.length > 0 || conflict) {
+      coverage.push(
+        coverageRow(team, feed, {
+          scheduleAvailability: 'source_error',
+          verdict: 'unverified',
+          futureFixturesAvailable: null,
+          timePrecision: null,
+          requests: feed.pages.length,
+          extra: conflict
+            ? 'Isti ID ima dve različite verzije. Ceo odgovor je odbijen i prethodni snimak ostaje.'
+            : 'Odgovor ima neispravan red. Ceo odgovor je odbijen i prethodni snimak ostaje.',
+        }),
+      );
+      merged.push(...kept);
+      continue;
+    }
+
+    const teamDrafts = drafts.filter((draft) => fixtureInvolvesTeam(draft, team.id));
     if (teamDrafts.length === 0) {
       coverage.push(
         coverageRow(team, feed, {
@@ -288,11 +311,35 @@ export function findFixtures(input: {
       continue;
     }
 
-    const { drafts, conflict } = dedupeDrafts(teamDrafts);
     const byId = new Map(kept.map((fixture) => [fixture.id, fixture]));
-    for (const draft of drafts) {
-      const next = materialize(team, draft, byId.get(fixtureIdFromProvider(draft)) ?? null);
+    const published: Fixture[] = [];
+    let malformed = false;
+    for (const draft of teamDrafts) {
+      try {
+        const id = fixtureIdFromProvider(draft);
+        published.push(materialize(team, draft, canonical.get(id) ?? byId.get(id) ?? null));
+      } catch {
+        malformed = true;
+        break;
+      }
+    }
+    if (malformed) {
+      coverage.push(
+        coverageRow(team, feed, {
+          scheduleAvailability: 'source_error',
+          verdict: 'unverified',
+          futureFixturesAvailable: null,
+          timePrecision: null,
+          requests: feed.pages.length,
+          extra: 'Odgovor nije prošao proveru pre objave. Prethodni snimak ostaje.',
+        }),
+      );
+      merged.push(...kept);
+      continue;
+    }
+    for (const next of published) {
       byId.set(next.id, next);
+      canonical.set(next.id, next);
     }
     const fixtures = [...byId.values()];
     merged.push(...fixtures);
@@ -303,9 +350,7 @@ export function findFixtures(input: {
         futureFixturesAvailable: fixtures.some((fixture) => isFuture(fixture, query)),
         timePrecision: precisionOf(fixtures),
         requests: feed.pages.length,
-        extra: conflict
-          ? 'Isti ID u jednom odgovoru ima dve verzije; zadržana je poslednja strana.'
-          : 'Utakmica koja nestane iz novog odgovora ostaje, dok je izvor izričito ne otkaže.',
+        extra: 'Utakmica koja nestane iz novog odgovora ostaje, dok je izvor izričito ne otkaže.',
         postponementObserved: fixtures.some((fixture) => fixture.status === 'postponed'),
         cancellationObserved: fixtures.some((fixture) => fixture.status === 'cancelled'),
       }),
@@ -313,8 +358,11 @@ export function findFixtures(input: {
     publishedAny = true;
   }
 
+  for (const id of droppedIds) canonical.delete(id);
+  syncCanonical(input.cache, canonical, key, droppedIds);
+  const retainedPrevious = !publishedAny && merged.length > 0;
   const lastAttemptAt = query.now;
-  const lastSuccessAt = publishedAny ? query.now : (cached?.lastSuccessAt ?? null);
+  const lastSuccessAt = publishedAny ? query.now : retainedPrevious ? (cached?.lastSuccessAt ?? null) : null;
   const record: FindCacheRecord = {
     key,
     storedAt: publishedAny ? query.now : (cached?.storedAt ?? query.now),
@@ -426,6 +474,83 @@ function materialize(team: Team, draft: ObservedFixtureDraft, previous: Fixture 
     throw new Error(errors.join(' '));
   }
   return applyObservedFixture(previous, next);
+}
+
+const CANONICAL_KEY = '__matchahead_canonical__';
+
+function readCanonical(cache: FindCacheStore): Map<string, Fixture> {
+  const record = cache.get(CANONICAL_KEY);
+  return new Map((record?.fixtures ?? []).map((fixture) => [fixture.id, fixture]));
+}
+
+function syncCanonical(
+  cache: FindCacheStore,
+  fixtures: Map<string, Fixture>,
+  teamKey: string,
+  droppedIds: ReadonlySet<string>,
+): void {
+  const previous = cache.get(CANONICAL_KEY);
+  const teamKeys = new Set(previous?.teamKeys ?? []);
+  teamKeys.add(teamKey);
+  cache.set(CANONICAL_KEY, {
+    key: CANONICAL_KEY,
+    storedAt: previous?.storedAt ?? '1970-01-01T00:00:00Z',
+    fixtures: [...fixtures.values()],
+    coverage: [],
+    lastAttemptAt: previous?.lastAttemptAt ?? null,
+    lastSuccessAt: previous?.lastSuccessAt ?? null,
+    teamKeys: [...teamKeys],
+  });
+  for (const otherKey of teamKeys) {
+    if (otherKey === teamKey) continue;
+    const snapshot = cache.get(otherKey);
+    if (!snapshot) continue;
+    let changed = false;
+    const nextFixtures = snapshot.fixtures.flatMap((fixture) => {
+      if (droppedIds.has(fixture.id)) {
+        changed = true;
+        return [];
+      }
+      const updated = fixtures.get(fixture.id);
+      if (
+        updated &&
+        (updated.revision !== fixture.revision || updated.contentHash !== fixture.contentHash)
+      ) {
+        changed = true;
+        return [updated];
+      }
+      return [fixture];
+    });
+    if (changed) cache.set(otherKey, { ...snapshot, fixtures: nextFixtures });
+  }
+}
+
+function observationErrors(draft: ObservedFixtureDraft): string[] {
+  const errors: string[] = [];
+  try {
+    fixtureIdFromProvider(draft);
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Identitet utakmice nije ispravan.');
+  }
+  const untrusted = isUntrustedKickoffClock({
+    printedLocalTime: draft.printedLocalTime,
+    startsAtUtc: draft.startsAtUtc,
+  });
+  const timeConfirmed = draft.sourceClaimsTimeConfirmed && !untrusted && draft.startsAtUtc !== null;
+  const startsAtUtc = timeConfirmed ? draft.startsAtUtc : null;
+  let status = draft.status;
+  if (!timeConfirmed && status === 'scheduled') status = 'time_tbd';
+  errors.push(
+    ...timeErrors({
+      status,
+      timeConfirmed,
+      startsAtUtc,
+      scheduledLocalDate: draft.scheduledLocalDate,
+      previousStartsAtUtc: draft.previousStartsAtUtc,
+      previousScheduledLocalDate: draft.previousScheduledLocalDate,
+    }),
+  );
+  return errors;
 }
 
 function dedupeDrafts(drafts: readonly ObservedFixtureDraft[]): {
