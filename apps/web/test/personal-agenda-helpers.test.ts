@@ -7,7 +7,9 @@ import {
   catalogRowState,
   clubOptionsForAgenda,
   competitionOptionsForAgenda,
+  entriesForSport,
   reasonLabel,
+  sportFilterChange,
   teamDisplayName,
 } from '../src/ui/PersonalAgendaHelpers.ts';
 import { buildUserAgenda } from '../src/logic/agenda.ts';
@@ -120,6 +122,43 @@ test('filteri: sport, klub i takmičenje', () => {
     applyAgendaFilters(entries, { sport: ALL_FILTER_VALUE, clubId: ALL_FILTER_VALUE, competitionId: 'nepostojeci' }),
     [],
   );
+});
+
+test('promena sporta poništava nekompatibilan izbor kluba i takmičenja', () => {
+  assert.deepEqual(sportFilterChange('basketball'), {
+    sport: 'basketball',
+    clubId: ALL_FILTER_VALUE,
+    competitionId: ALL_FILTER_VALUE,
+  });
+  assert.deepEqual(sportFilterChange('all'), {
+    sport: ALL_FILTER_VALUE,
+    clubId: ALL_FILTER_VALUE,
+    competitionId: ALL_FILTER_VALUE,
+  });
+});
+
+test('opcije kluba i takmičenja važe samo za izabrani sport', () => {
+  const entries = buildUserAgenda(
+    [
+      fx({ id: 'a' }),
+      fx({
+        id: 'b',
+        sport: 'basketball',
+        competitionId: 'basketball:demo:demo-liga',
+        homeTeamId: 'basketball:rs:crvena-zvezda',
+        awayTeamId: null,
+      }),
+    ],
+    ['football:rs:partizan', 'basketball:rs:crvena-zvezda'],
+    [],
+  );
+  const footballOnly = entriesForSport(entries, 'football');
+  assert.deepEqual(footballOnly.map((entry) => entry.fixture.id), ['a']);
+  assert.deepEqual(
+    clubOptionsForAgenda(footballOnly, TEAMS).map((option) => option.id).sort(),
+    ['football:rs:partizan', 'football:xx:demo-rival-sever'].sort(),
+  );
+  assert.deepEqual(entriesForSport(entries, ALL_FILTER_VALUE).map((entry) => entry.fixture.id).sort(), ['a', 'b']);
 });
 
 test('opcije klubova i takmičenja dolaze iz agende', () => {

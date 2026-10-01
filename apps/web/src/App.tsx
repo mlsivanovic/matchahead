@@ -1,21 +1,29 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { timeZoneForDisplay } from '../../../packages/domain/src/user-account.ts';
 import { APP_BUILD } from './build.ts';
+import { AccountController } from './logic/account-controller.ts';
+import { ensureInstallationId } from './logic/firebase-app.ts';
 import { routeHash, routeNavLabel, parseRoute, type RouteId } from './logic/routes.ts';
 import { parseDemoSchedule, type DemoSchedule } from './logic/schedule.ts';
+import { useAccount } from './logic/use-account.ts';
 import {
   browserStore,
   clearUserLocalContent,
   readDevicePrefs,
   readDraftNote,
   readFollowedTeamIds,
+  readManualFixtureIds,
   writeDevicePrefs,
   writeDraftNote,
   writeFollowedTeamIds,
+  writeManualFixtureIds,
   type DevicePrefs,
 } from './logic/user-local.ts';
 import { applyReadyUpdate, composingFromDocument, getUpdateSnapshot, registerProductServiceWorker, setUpdateBlocker, subscribeUpdate } from './pwa/register-sw.ts';
-import { ClubsScreen, HomeScreen, installFlags, MineScreen, SettingsScreen } from './ui/screens.tsx';
+import { AccountPanel } from './ui/AccountPanel.tsx';
+import { PersonalAgendaHome, PersonalAgendaScreen } from './ui/PersonalAgenda.tsx';
+import { ClubsScreen, installFlags, SettingsScreen } from './ui/screens.tsx';
 
 const NAV: RouteId[] = ['home', 'mine', 'clubs', 'settings'];
 
@@ -27,10 +35,34 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [online, setOnline] = useState(() => navigator.onLine);
   const [prefs, setPrefs] = useState<DevicePrefs>(() => readDevicePrefs(browserStore(localStorage)));
-  const [followed, setFollowed] = useState<string[]>(() => readFollowedTeamIds(browserStore(sessionStorage)));
+  const [localFollowed, setLocalFollowed] = useState<string[]>(() => readFollowedTeamIds(browserStore(sessionStorage)));
+  const [localManuals, setLocalManuals] = useState<string[]>(() => readManualFixtureIds(browserStore(sessionStorage)));
   const [draftNote, setDraftNote] = useState(() => readDraftNote(browserStore(sessionStorage)));
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installMode, setInstallMode] = useState(installFlags);
+
+  const controller = useMemo(() => new AccountController(), []);
+  const installationId = useMemo(() => ensureInstallationId(browserStore(localStorage)), []);
+  const { setup, account, signIn, signOut, deleteAccount } = useAccount({
+    controller,
+    fallbackTimeZone: prefs.timeZone,
+    installationId,
+    onLocalClear: (uid) => {
+      clearUserLocalContent(browserStore(localStorage), browserStore(sessionStorage), uid);
+      setLocalFollowed([]);
+      setLocalManuals([]);
+      setDraftNote('');
+    },
+  });
+
+  const signedIn = account.status === 'signed-in';
+  // Agenda prima samo aktivna praćenja i ručne izbore; omiljeni klubovi nikad ne ulaze u utakmice.
+  const followed = signedIn ? account.followedTeamIds : localFollowed;
+  const manualFixtureIds = signedIn ? account.manualFixtureIds : localManuals;
+  // Zona profila je overlay prikaza i ne upisuje se u globalna podešavanja uređaja.
+  const displayTimeZone = signedIn && account.profile
+    ? timeZoneForDisplay(account.profile.timeZone)
+    : prefs.timeZone;
 
   useEffect(() => {
     setUpdateBlocker(() => composingFromDocument(document));
@@ -97,9 +129,25 @@ export function App() {
   }, []);
 
   function toggleFollow(teamId: string) {
-    const next = followed.includes(teamId) ? followed.filter((id) => id !== teamId) : [...followed, teamId];
+    if (signedIn) {
+      void controller.toggleFollow(teamId);
+      return;
+    }
+    const next = localFollowed.includes(teamId) ? localFollowed.filter((id) => id !== teamId) : [...localFollowed, teamId];
     writeFollowedTeamIds(browserStore(sessionStorage), next);
-    setFollowed(readFollowedTeamIds(browserStore(sessionStorage)));
+    setLocalFollowed(readFollowedTeamIds(browserStore(sessionStorage)));
+  }
+
+  function toggleManual(fixtureId: string) {
+    if (signedIn) {
+      void controller.toggleManual(fixtureId);
+      return;
+    }
+    const next = localManuals.includes(fixtureId)
+      ? localManuals.filter((id) => id !== fixtureId)
+      : [...localManuals, fixtureId];
+    writeManualFixtureIds(browserStore(sessionStorage), next);
+    setLocalManuals(readManualFixtureIds(browserStore(sessionStorage)));
   }
 
   function changeDraft(value: string) {
@@ -114,7 +162,8 @@ export function App() {
 
   function clearSession() {
     clearUserLocalContent(browserStore(localStorage), browserStore(sessionStorage), null);
-    setFollowed([]);
+    setLocalFollowed([]);
+    setLocalManuals([]);
     setDraftNote('');
   }
 
@@ -136,14 +185,26 @@ export function App() {
       ) : null}
       <main id="sadrzaj" data-screen={route} tabIndex={-1}>
         {route === 'home' ? (
-          <HomeScreen schedule={schedule} error={error} now={now} timeZone={prefs.timeZone} online={online} followed={followed} />
+          <PersonalAgendaHome
+            schedule={schedule}
+            error={error}
+            now={now}
+            timeZone={displayTimeZone}
+            online={online}
+            followed={followed}
+            manualFixtureIds={manualFixtureIds}
+            onToggleManual={toggleManual}
+          />
         ) : null}
         {route === 'mine' ? (
-          <MineScreen
+          <PersonalAgendaScreen
             schedule={schedule}
-            timeZone={prefs.timeZone}
             now={now}
+            timeZone={displayTimeZone}
+            online={online}
             followed={followed}
+            manualFixtureIds={manualFixtureIds}
+            onToggleManual={toggleManual}
             draftNote={draftNote}
             onDraft={changeDraft}
           />
@@ -154,6 +215,21 @@ export function App() {
             prefs={prefs}
             onPrefs={changePrefs}
             onClear={clearSession}
+            account={(
+              <AccountPanel
+                setup={setup}
+                account={account}
+                onSignIn={signIn}
+                onSignOut={signOut}
+                onToggleFavorite={(teamId) => {
+                  void controller.toggleFavorite(teamId);
+                }}
+                onSavePrefs={(next) => {
+                  void controller.savePrefs(next);
+                }}
+                onDeleteAccount={deleteAccount}
+              />
+            )}
             install={{
               standalone: installMode.standalone,
               ios: installMode.ios,
@@ -183,4 +259,3 @@ function useHashRoute(): RouteId {
   }, []);
   return parseRoute(hash);
 }
-

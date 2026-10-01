@@ -60,8 +60,9 @@ export function formatFetchedAt(fetchedAt: string, timeZone: string): string {
   return formatKickoff(fetchedAt, timeZone);
 }
 
-/** Potvrđen budući termin. Prošli početak ne postaje uživo. Nepotvrđen sat nema odbrojavanje. */
+/** Potvrđen budući termin. Prošli početak ne postaje uživo. Nepotvrđen sat nema odbrojavanje. Izričit live nema odbrojavanje: status se bezbedno prikazuje kao početak po rasporedu, pa buduće odbrojavanje uz njega ne sme da protivreči. */
 export function countdownLabel(fixture: Fixture, nowMs: number): string | null {
+  if (fixture.status === 'live') return null;
   if (!fixture.timeConfirmed || fixture.startsAtUtc === null) return null;
   if (fixture.status === 'finished' || fixture.status === 'cancelled' || fixture.status === 'abandoned') return null;
   const delta = Date.parse(fixture.startsAtUtc) - nowMs;

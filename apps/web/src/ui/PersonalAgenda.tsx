@@ -26,7 +26,9 @@ import {
   catalogRowState,
   clubOptionsForAgenda,
   competitionOptionsForAgenda,
+  entriesForSport,
   reasonLabel,
+  sportFilterChange,
   teamDisplayName,
   type AgendaFilter,
 } from './PersonalAgendaHelpers.ts';
@@ -171,13 +173,14 @@ export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
     () => (schedule ? buildUserAgenda(schedule.fixtures, followed, manualFixtureIds) : []),
     [schedule, followed, manualFixtureIds],
   );
+  const sportEntries = useMemo(() => entriesForSport(agenda, filter.sport), [agenda, filter.sport]);
   const clubOptions = useMemo(
-    () => (schedule ? clubOptionsForAgenda(agenda, schedule.teams) : []),
-    [agenda, schedule],
+    () => (schedule ? clubOptionsForAgenda(sportEntries, schedule.teams) : []),
+    [sportEntries, schedule],
   );
   const competitionOptions = useMemo(
-    () => (schedule ? competitionOptionsForAgenda(agenda, schedule.competitions) : []),
-    [agenda, schedule],
+    () => (schedule ? competitionOptionsForAgenda(sportEntries, schedule.competitions) : []),
+    [sportEntries, schedule],
   );
   const filtered = useMemo(() => applyAgendaFilters(agenda, filter), [agenda, filter]);
   const groups = useMemo(() => groupUserAgenda(filtered, now), [filtered, now]);
@@ -197,9 +200,9 @@ export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
             </p>
           ) : null}
           <div className="filters" role="group" aria-label="Filter sporta">
-            <FilterButton pressed={filter.sport === 'all'} onClick={() => setFilter({ ...filter, sport: 'all' })}>Svi</FilterButton>
-            <FilterButton pressed={filter.sport === 'football'} onClick={() => setFilter({ ...filter, sport: 'football' })}>Fudbal</FilterButton>
-            <FilterButton pressed={filter.sport === 'basketball'} onClick={() => setFilter({ ...filter, sport: 'basketball' })}>Košarka</FilterButton>
+            <FilterButton pressed={filter.sport === 'all'} onClick={() => setFilter(sportFilterChange('all'))}>Svi</FilterButton>
+            <FilterButton pressed={filter.sport === 'football'} onClick={() => setFilter(sportFilterChange('football'))}>Fudbal</FilterButton>
+            <FilterButton pressed={filter.sport === 'basketball'} onClick={() => setFilter(sportFilterChange('basketball'))}>Košarka</FilterButton>
           </div>
           <div className="agenda-selects">
             <div>
@@ -301,9 +304,9 @@ export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
             })}
           </ul>
           <div className="note" data-draft-dirty={draftNote.trim().length > 0 ? 'true' : 'false'}>
-            <label htmlFor="agenda-draft-note">Beleška uz događaj</label>
+            <label htmlFor="draft-note">Beleška uz događaj</label>
             <textarea
-              id="agenda-draft-note"
+              id="draft-note"
               value={draftNote}
               onChange={(event) => onDraft(event.target.value)}
               rows={4}

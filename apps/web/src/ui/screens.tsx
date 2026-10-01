@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { Sport } from '../../../../packages/domain/src/types.ts';
 import { APP_BUILD } from '../build.ts';
@@ -214,6 +214,7 @@ export function SettingsScreen(props: {
   prefs: DevicePrefs;
   onPrefs: (prefs: DevicePrefs) => void;
   onClear: () => void;
+  account?: ReactNode;
   install: {
     standalone: boolean;
     ios: boolean;
@@ -222,7 +223,8 @@ export function SettingsScreen(props: {
   };
 }) {
   const zones = ['Europe/Belgrade', 'Europe/Zagreb', 'Europe/London', 'UTC'];
-  const timeZone = zones.includes(props.prefs.timeZone) ? props.prefs.timeZone : 'Europe/Belgrade';
+  // Zona uređaja van skraćene liste čuva se kao izabrana opcija.
+  const deviceZones = zones.includes(props.prefs.timeZone) ? zones : [props.prefs.timeZone, ...zones];
   return (
     <section>
       <h1>Podešavanja</h1>
@@ -258,13 +260,19 @@ export function SettingsScreen(props: {
       <label htmlFor="zone">Vremenska zona</label>
       <select
         id="zone"
-        value={timeZone}
+        value={props.prefs.timeZone}
         onChange={(event) => props.onPrefs({ ...props.prefs, timeZone: event.target.value })}
       >
-        {zones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+        {deviceZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
       </select>
-      <h2>Nalog</h2>
-      <p>Google prijava nije deo ove faze. Lični unos ove sesije nije nalog i ne čuva se trajno po korisniku dok prijava ne postoji.</p>
+      {props.account ?? (
+        <>
+          <h2>Nalog</h2>
+          <p>Google prijava nije deo ove faze. Lični unos ove sesije nije nalog i ne čuva se trajno po korisniku dok prijava ne postoji.</p>
+        </>
+      )}
+      <h2>Lokalna sesija</h2>
+      <p>Lokalna praćenja i ručni DEMO izbori ostaju samo u ovoj sesiji i jasno su lokalni.</p>
       <button type="button" onClick={props.onClear}>Obriši lokalni sadržaj ove sesije</button>
       <p className="meta" data-app-build={APP_BUILD}>Izdanje {APP_BUILD}. Zona prikaza: {props.prefs.timeZone}.</p>
     </section>

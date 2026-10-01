@@ -1,4 +1,5 @@
 import { isSelectableTeamId } from '../../../../packages/domain/src/selectable-teams.ts';
+import { FIXTURE_DOC_ID_PATTERN } from '../../../../packages/domain/src/user-account.ts';
 
 export const SESSION_PREFIX = 'matchahead.session.';
 export const USER_PREFIX = 'matchahead.user.';
@@ -63,6 +64,27 @@ export function readFollowedTeamIds(session: KeyValueStore): string[] {
 export function writeFollowedTeamIds(session: KeyValueStore, teamIds: readonly string[]): void {
   const unique = [...new Set(teamIds.filter((id) => isSelectableTeamId(id)))];
   session.setItem(`${SESSION_PREFIX}followedTeamIds`, JSON.stringify(unique));
+}
+
+/**
+ * Lokalni DEMO ručni izbori: ostaju u sesiji, jasno su lokalni i
+ * nikad se ne šalju na server. Ulogovani nalog koristi Firestore.
+ */
+export function readManualFixtureIds(session: KeyValueStore): string[] {
+  const raw = session.getItem(`${SESSION_PREFIX}manualFixtureIds`);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === 'string' && FIXTURE_DOC_ID_PATTERN.test(id));
+  } catch {
+    return [];
+  }
+}
+
+export function writeManualFixtureIds(session: KeyValueStore, fixtureIds: readonly string[]): void {
+  const unique = [...new Set(fixtureIds.filter((id) => FIXTURE_DOC_ID_PATTERN.test(id)))];
+  session.setItem(`${SESSION_PREFIX}manualFixtureIds`, JSON.stringify(unique));
 }
 
 export function readDraftNote(session: KeyValueStore): string {

@@ -216,6 +216,12 @@ test('bezbedan status: prošla po rasporedu, nikad izvedeno uživo ili završeno
   assert.equal(countdownLabel(liveClaim, NOW), null);
 });
 
+test('izričit live nema odbrojavanje ni uz budući potvrđen termin', () => {
+  const liveFuture = fx({ id: 'live-buduci', status: 'live', startsAtUtc: '2026-09-30T17:00:00Z' });
+  assert.equal(scheduleStatusLabel(liveFuture, NOW), 'Počela prema rasporedu');
+  assert.equal(countdownLabel(liveFuture, NOW), null);
+});
+
 test('ponoć UTC ostaje potvrđen termin; nepoznat sat nikad nije ponoć', () => {
   const midnight = fx({ id: 'midnight', startsAtUtc: '2026-10-01T00:00:00Z', timeConfirmed: true });
   const agenda = buildUserAgenda([midnight], [PARTIZAN_FB], []);

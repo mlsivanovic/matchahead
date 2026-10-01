@@ -74,6 +74,22 @@ export const EMPTY_AGENDA_FILTER: AgendaFilter = {
   competitionId: ALL_FILTER_VALUE,
 };
 
+/**
+ * Promena sporta poništava izbor kluba i takmičenja: prethodni izbor
+ * može pripadati drugom sportu pa filter više ne bi imao važeću
+ * opciju. Opcije kluba/takmičenja se zato izvode iz agende sužene
+ * na izabrani sport.
+ */
+export function sportFilterChange(sport: AgendaFilter['sport']): AgendaFilter {
+  return { sport, clubId: ALL_FILTER_VALUE, competitionId: ALL_FILTER_VALUE };
+}
+
+/** Agenda sužena na sport pre izvođenja opcija kluba i takmičenja. */
+export function entriesForSport(entries: readonly AgendaEntry[], sport: AgendaFilter['sport']): AgendaEntry[] {
+  if (sport === ALL_FILTER_VALUE) return [...entries];
+  return entries.filter((entry) => entry.fixture.sport === sport);
+}
+
 export function applyAgendaFilters(entries: readonly AgendaEntry[], filter: AgendaFilter): AgendaEntry[] {
   return entries.filter((entry) => {
     if (filter.sport !== ALL_FILTER_VALUE && entry.fixture.sport !== filter.sport) return false;

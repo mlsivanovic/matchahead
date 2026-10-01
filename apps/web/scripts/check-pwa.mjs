@@ -116,9 +116,16 @@ async function overflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
-async function openRoute(page, hash) {
+async function openRoute(page, hash, screen) {
   await page.click(`nav a[href="${hash}"]`);
-  await page.waitForFunction((expected) => location.hash === expected, {}, hash === '#/' ? '#/' : hash);
+  await page.waitForFunction((expected) => location.hash === expected, {}, hash);
+  // Hash se menja pre React crtanja: čekaj stvarno iscrtan ekran, ne samo hash.
+  await page.waitForFunction(
+    (expected) => document.querySelector('main')?.dataset.screen === expected
+      && document.querySelector('main h1') !== null,
+    {},
+    screen,
+  );
 }
 
 run(process.execPath, ['--experimental-strip-types', '--test', ...readdirSync(join(webRoot, 'test')).filter((name) => name.endsWith('.test.ts')).map((name) => join(webRoot, 'test', name))], webRoot);
@@ -181,6 +188,8 @@ try {
   await page.focus('nav a[href="#/klubovi"]');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => location.hash === '#/klubovi');
+  await page.waitForFunction(() => document.querySelector('main')?.dataset.screen === 'clubs'
+    && document.querySelector('main h1') !== null);
   assert((await page.$eval('main', (element) => element.dataset.screen)) === 'clubs', 'Enter nije otvorio klubove');
   await page.focus('#club-search');
   await page.keyboard.type('zvezda');
@@ -203,14 +212,14 @@ try {
   assert((await page.$eval('.club-list button', (element) => element.textContent))?.includes('Pratim'), 'dugme nije označilo praćenje');
   assert(await overflow(page) <= 1, 'preliv na klubovima');
 
-  await openRoute(page, '#/moje');
+  await openRoute(page, '#/moje', 'mine');
   assert((await page.$eval('h1', (element) => element.textContent)) === 'Moje utakmice', 'moje utakmice');
   assert((await page.$eval('body', (element) => element.innerText)).includes('DEMO Rival'), 'praćeni klub ne vidi protivnika van kataloga');
   await page.focus('#draft-note');
   await page.keyboard.type('beleška za utakmicu');
   assert(await overflow(page) <= 1, 'preliv na mojim utakmicama');
 
-  await openRoute(page, '#/podesavanja');
+  await openRoute(page, '#/podesavanja', 'settings');
   assert((await page.$eval('h1', (element) => element.textContent)) === 'Podešavanja', 'podešavanja');
   assert((await page.$eval('body', (element) => element.innerText)).includes('BLOCKED'), 'podešavanja ne čuvaju da je faza 02 blokirana');
   assert((await page.$eval('body', (element) => element.innerText)).includes('Dodaj na početni ekran'), 'nema iPhone uputstva');
@@ -221,13 +230,13 @@ try {
     button?.click();
   });
   assert((await page.$eval('#zone', (element) => element.value)) === 'UTC', 'brisanje sesije je obrisalo zonu uređaja');
-  await openRoute(page, '#/moje');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Nema praćenih klubova'), 'odjava nije obrisala praćenje');
+  await openRoute(page, '#/moje', 'mine');
+  assert((await page.$eval('body', (element) => element.innerText)).includes('Nema utakmica u agendi'), 'odjava nije obrisala praćenje');
   assert((await page.$eval('#draft-note', (element) => element.value)) === '', 'odjava nije obrisala belešku');
   console.log('PASS: četiri ekrana, tastatura, 360 px, izbor klubova i brisanje sesije');
 
   await page.setViewport({ width: 1280, height: 800 });
-  await openRoute(page, '#/');
+  await openRoute(page, '#/', 'home');
   assert(await overflow(page) <= 1, 'preliv na 1280 px');
   await page.setViewport({ width: 360, height: 740 });
 
@@ -298,14 +307,25 @@ try {
   });
   assert(network === 'failed', 'mreža nije bila ugašena');
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  const offlineSchedule = await page.evaluate(async () => {
+    try {
+      const response = await fetch('/repo/data/demo-schedule.json', { cache: 'no-store' });
+      return response.status;
+    } catch {
+      return 0;
+    }
+  });
+  assert(offlineSchedule === 200, 'offline nema keširan raspored');
   const offlineText = await page.$eval('body', (element) => element.innerText);
-  assert(offlineText.includes('DEMO Rival') || offlineText.includes('FK Crvena zvezda'), 'offline nema raspored');
+  assert(offlineText.includes('Tvoja agenda je prazna'), 'offline home bez prazne agende');
+  assert(!offlineText.includes('Raspored nije učitan'), 'offline izgubio keširani raspored');
   assert((await page.$eval('[data-offline]', (element) => element.dataset.offline)) === 'true', 'offline oznaka');
   assert((await page.$eval('[data-stale]', (element) => element.dataset.stale)) === 'true', 'offline gubi oznaku zastarelosti');
   assert(offlineText.includes('ne donosi sveže termine'), 'offline tvrdi sveže termine');
   assert(!offlineText.includes('Termini su sveži'), 'offline ima lažnu svežinu');
-  await openRoute(page, '#/klubovi');
+  await openRoute(page, '#/klubovi', 'clubs');
   assert((await page.$eval('h1', (element) => element.textContent)) === 'Klubovi', 'offline navigacija');
+  assert((await page.$eval('body', (element) => element.innerText)).includes('FK Crvena zvezda'), 'offline klubovi bez statičke liste');
   console.log('PASS: posle jednog online učitavanja omotač i raspored rade offline');
 
   await page.setOfflineMode(false);
@@ -355,7 +375,7 @@ try {
     await registration.update();
   });
   await page.waitForSelector('[data-update-ready="true"]');
-  await openRoute(page, '#/moje');
+  await openRoute(page, '#/moje', 'mine');
   await page.focus('#draft-note');
   await page.keyboard.type('unos u toku');
   await page.click('[data-update-ready] button');
