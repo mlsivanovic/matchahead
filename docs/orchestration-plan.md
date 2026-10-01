@@ -11,7 +11,7 @@ nadzor, integraciju i GitHub push posle uspešne provere. Ugovor i kriterijumi:
 |---|---|---|---|
 | Grok | `task_5005528994dd` / `ctx_4afd0410a698` | `matchahead-05-server` | Stvarni rad potvrđen transcript-om; server, domenski ugovor i izvori. |
 | Muse | `task_d335ec2e38f2` / `ctx_9f999b596daf` | `matchahead-05-client` | Operator-launched `muse exec` radi pod Orca low-level Dispatch-om. Automatski start `ctx_40e3708960e7` readiness timeout, terminal released. |
-| Gemini CLI | `task_804dbb018b0e` / `ctx_a7b5497562f3` | `matchahead-05-review` | Aktivna provera izvora i QA plana; finalni pregled ide posle integracije. |
+| Gemini CLI | `task_f5915fa787be` / `ctx_f0564837be01` | `matchahead-05-review` | Novi nezavisni QA zadatak: korekcije audita i pregled koda; finalni pregled čeka integrisani HEAD. |
 
 Sva tri checkout-a su zasebni child worktree-i iz `main` na `7e09458`;
 koordinator menja globalne docs/CI i integriše commitove. Agentovi izvori,
@@ -21,6 +21,18 @@ Runtime odstupanje: `dispatch-show --preamble` za aktivne pokušaje ne sadrži
 `--dispatch-capability`, a validator ga zahteva. Gemini heartbeat pokušaji
 su odbijeni. Radnici ne smeju da rekonstruišu capability; isporuke i kasniji
 lifecycle recovery biće zabeleženi prema stvarnom stanju, bez lažnog success-a.
+
+Prvi Gemini zadatak `task_804dbb018b0e` / `ctx_a7b5497562f3` isporučio je
+audit/probe zaključno sa `fbde696`, ali `worker_done` je odbijen. Posle dokazanog
+finalnog odgovora i idle stanja koordinator je izričito izvršio `worker-stop`
+(zatvoren samo njegov agent terminal), pa `worker-release`. Ovo je oporavljena
+isporuka, bez prihvaćenog lifecycle uspeha. Audit još nije integrisan: preostala
+nepotvrđena zakonska tvrdnja i preciznost proba vraćene su novom QA zadatku.
+
+Zajednički HTTP ugovor `0a9ad3f` integrisan je kao `076c5fc`; 28/28 domenskih
+provera i 73/73 postojećih web provera prolaze i na Node 22. `checkedAt` je
+nullable prema odluci 05A. Pages workflow proverava domen i web pre builda;
+javni URL schedule servera dolazi iz repository variable, bez sportskih tajni.
 
 Početni koordinatorski lokalni dokazi: domenski 24/24, web 73/73 i PWA build/
 browser checker PASS. Nema novih dokaza produkcionog source prava/potpunosti,
