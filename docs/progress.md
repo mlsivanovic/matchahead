@@ -1,6 +1,6 @@
 # Napredak projekta
 
-Ažurirano: 30. septembar 2026. — orkestracioni checkpoint prvog talasa (run `run_b1cd86cb71c5`): faze 04 i 06 su IN_PROGRESS nad DEMO/emulatorima, faza 05 je BLOCKED, živa push isporuka NOT_TESTED. Finalni dokazi klijenta i push probe se čekaju od koordinatora; ovaj zapis ih ne izmišlja.
+Ažurirano: 1. oktobar 2026. — tekući run `run_6d3c53cc583e`. Auth klijent i lična DEMO agenda već su integrisani u `main`; lokalni pregled je prihvaćen uz ograničenja. Faza 05 je IN_PROGRESS: zajednički ugovor, domenske korekcije i prvi klijent su integrisani, serverski runtime i korekcije klijenta još se rade. Produkcioni izvori, potpuna pokrivenost i živi sportski endpoint nisu potvrđeni. Push na GitHub još nije urađen.
 Verzija specifikacije: 2.0
 
 | Zadatak | Status | Dokaz / prepreka |
@@ -9,9 +9,9 @@ Verzija specifikacije: 2.0
 | 01B | DONE | `docs/data-on-demand-feasibility.md`. Tok jednog klika i sintetičko spajanje prolaze. Nijedan stvarni izvor nema i pokrivenost i pravo unosa. 00:00/01:00/02:00 nisu potvrđen sat. |
 | 02 | BLOCKED | `docs/push-readiness-review.md` (ispravljen ugovor) + `docs/handoffs/02-push-reconciliation.md` + `docs/reviews/02-push-reconciliation.md`. Praćeni kod usklađen sa DO (`6af69c1`, 27/27: 23 funkcionalna + 4 workerd; rekonstrukcija + 3 razlike, nije deployovana — produkcija `2ee78270...` od 27. septembra). Živa migracija redova, fizička isporuka na zatvorenoj PWA (Android dostupan, iPhone nepotvrđen) i edge `cpuTime` su NOT_TESTED. Kapije ugašene. Plan Cloudflare naloga nije verifikovan dokazom. |
 | 03 | DONE | `apps/web` i `docs/handoffs/03-pwa-osnova.md`. Poslednja potvrđena Pages objava `be48495` (`https://mlsivanovic.github.io/matchahead/`, HTTP 200 provereno 30. septembra 2026; samo dostupnost). Instalabilnost, samostalni prozor, offline omotač i DEMO raspored. Prikaz na fizičkom telefonu (ikona) je NOT_TESTED. Nova objava nije potvrđena. |
-| 04 | IN_PROGRESS | Jezgro naloga (`packages/domain/src/user-account.ts`, `firebase/firestore.rules`, emulator pomoćnici) testirano u emulatoru: `check-auth.mjs` 4+5+6 prolaza, `tsc` čist; bezbednosna matrica `docs/reviews/04-account-core.md` PASS uz ograničenja. Nisu urađeni: React ekran, browser adapter, živa Google prijava (NOT_TESTED), deploy pravila. Predaja: `docs/handoffs/04-prijava-i-podesavanja.md`. |
+| 04 | IN_PROGRESS | Jezgro, React ekran, Firebase browser adapter i tok odjave/brisanja integrisani u `main`. Nezavisni lokalni pregled `docs/reviews/04-06-integrated-client.md`: 73/73 web, 6/6 emulator + 9/9 unit, browser 52/52, PWA 11/11. Koordinator je u ovom run-u ponovio 6/6 izolacionih testova. Živa Google prijava, deploy pravila i fizički uređaji ostaju NOT_TESTED. |
 | 05 | IN_PROGRESS | Run `run_6d3c53cc583e`, 1. oktobar: Grok radi server/adaptere, Muse klijent/agenda tok, Gemini nezavisni source audit i QA. Produkcioni unos i kompletna pokrivenost još nisu potvrđeni; javni rasporedi ostaju DEMO. Ugovor: `docs/phase-05-work-contract.md`. |
-| 06 | IN_PROGRESS | Logika agende i samostalne UI komponente verifikovane nad DEMO podacima: 39/39 `apps/web` testova, 20/20 domenskih, DOM pregled `docs/reviews/06-agenda-ui.md` 13/13 scenarija (2 manje mane + 3 zapažanja). Integracija u `App.tsx`/`screens.tsx` namerno nije urađena — čeka koordinatora. Živi Auth i uređaji NOT_TESTED. |
+| 06 | IN_PROGRESS | Lična DEMO agenda integrisana u `App.tsx`/ekrane zajedno sa Auth klijentom; bounded lokalni pregled je prihvaćen. Stvarni server rasporedi i jedinstvena agenda oba kluba još se dorađuju u fazi 05. Živi izvori i fizički uređaji nisu potvrđeni. |
 | 07 | TODO | ICS — planirano, nije implementirano. |
 | 08 | TODO | separateCalendarOAuth — planirano, nije implementirano; odvojen korak, nije deo faze 04. |
 | 09 | TODO | pushdevice — planirano, nije implementirano; čeka 04 (FID) i 02. |
@@ -19,7 +19,7 @@ Verzija specifikacije: 2.0
 | 11 | TODO | E2E — planirano, nije implementirano. |
 | 12 | TODO | Pilot i predaja — nije implementirano. |
 
-## Doc patch push korekcija (30. septembar 2026., run `run_b1cd86cb71c5`, nad `d582885`)
+## Istorija: doc patch push korekcija (30. septembar 2026., run `run_b1cd86cb71c5`, nad `d582885`)
 
 - Cherry-pickovano kao integracioni ulaz: `6af69c1` (DO rekonstrukcija), `ea0a993` + `8d9a048` (nezavisni pregled). Vlasništvo ovog patcha su samo docs putevi: `docs/push-readiness-review.md`, `docs/handoffs/02-push-reconciliation.md` (samo fizička uputstva), `README.md`, `docs/progress.md`, `docs/decisions.md`, `docs/orchestration-plan.md`, `docs/infrastructure-readiness.md`. Bez izmena Auth/PWA/product/test fajlova, bez push/main merge/cloud mutacija.
 - Ispravljen HIGH legacy protokol u operatorskim instrukcijama: registracija `POST /api/registrations` (`x-matchahead-enroll` + `fid`) → 201 `{registrationId, selfSendKey}`; slanje `POST /api/probe/send` samo `registrationId` uz `Bearer <selfSendKey>`; odjava `DELETE /api/registrations/<id>`; UI ne ispisuje ID/ključ (Network zapis 201, Android remote debugging po potrebi). Stari `registrationSecret`-u-telu primeri više ne važe.
@@ -73,14 +73,14 @@ Verzija specifikacije: 2.0
 - Šta je potrebno: FCM isporuka na PWA zatvorenoj pre slanja sa odvojenog pošiljaoca (NE Force stop, NE gašenje browsera, NE „pošalji pa zatvori”); edge `cpuTime` iz `wrangler tail`; usklađivanje repo koda sa deployovanim Durable Object radnikom pre bilo kakvog novog deploya.
 - Problem podataka: nema odobrenog izvora koji je istovremeno dovoljan za objavljene utakmice ovih klubova i dopušten za unos u MatchAhead. Dozvola Fixtur.es i drugih izvora za unos u MatchAhead nije potvrđena — bez pravnih zaključaka.
 - Dokaz: `docs/data-on-demand-feasibility.md` i `docs/data-feasibility.md`.
-- Šta je potrebno: odobren izvor sa pokrivenošću i pravom unosa, pa tek onda adapter u fazi 05. Do tada javni rasporedi ostaju DEMO.
-- Šta može nezavisno nastaviti: faza 04 ekran/adapter na testiranom jezgru (bez drugog service workera, bez `getToken()`); integracija 04+06; faze 07/08/09/10 na DEMO/mock nivou. Zadatak 05 ne sme da krene kao da je unos rešen.
+- Šta je potrebno: odluka o korišćenju izvora i dokazana pokrivenost relevantnih takmičenja. Adapteri i lokalne probe mogu da se razviju nezavisno; produkciono objavljivanje ostaje iza gates. Do tada javni rasporedi ostaju DEMO.
+- Šta se radi nezavisno: faza 05 server/adapteri, korekcije klijenta i jedinstvene agende, sintetički integracioni testovi i provera stvarnih odgovora izvora. Ekran/adapter 04 i integracija 04+06 već postoje; produkciona prava i pokrivenost se ne pretpostavljaju.
 
 ## Sledeći zadatak
 
-- 04 klijent (ekran + browser adapter na jezgru) i integracija 04+06 — preko koordinatora, na ovom jezgru. Push faza 02 ostaje BLOCKED za živu isporuku. Faza 05 ostaje BLOCKED. Faze 07–12 su planirane, nisu implementirane. Finalni dokazi klijenta/push-a/pregleda se čekaju od koordinatora.
+- Završiti i integrisati serverski Cloudflare runtime i klijentske korekcije 05, zatim predati konačni HEAD Gemini-ju za nezavisnu regresiju. Objavu i status DONE vezati za stvarne dokaze. Push faza 02 ostaje BLOCKED za fizičku isporuku; faze 07–12 su planirane.
 
-## Istraživanje izlaska iz blokade 05 — 1. oktobar 2026.
+## Istorija: istraživanje izlaska iz blokade 05 — 1. oktobar 2026.
 
 - Predlog i izvori: `docs/phase-05-source-proposal.md`. Preporuka su adapteri po takmičenju, ligaški HTML kao glavni kandidat i klupske dopune; AI eventualno pomaže pri razvoju/parserima vesti, bez AI API zavisnosti u prvoj verziji.
 - Stvarna mrežna proba: ABA `/calendar/26/1/` HTTP 200; jednokratni Python HTML parser izdvojio 36 redova za PAR/CZV kroz 18 kola. FSS, oba FK i oba KK dostupni preko HTTP-a. KK Partizanova tabela Evrolige prikazuje 2025/26; KK Zvezdin kompletan budući raspored nije izdvojen. Evroliga Game Center je u web proveri vratio 403.
@@ -94,3 +94,11 @@ Verzija specifikacije: 2.0
 - Muse-ov agent-first start je završio `agent_readiness` timeout pre predaje prompta; terminal je oslobođen po recovery receipt-u. Isti Task je ponovo postavljen ready i dobio operator-launched `muse exec` sa tačnim živim dispatch preamble-om. Ovo je Orca low-level, nesupervisana procesna traka sa koordinatorskim nadzorom, ne prihvaćen agent-first start.
 - Provereni živi Orca preamble-i nemaju `--dispatch-capability` iako runtime to traži za lifecycle. Gemini heartbeat je zato odbijen; radnici su obavešteni da ne izmišljaju capability i da isporuče commitove i tačan status. Završetak rada će se proveriti prema stvarnim dokazima, odvojeno od prihvaćenog lifecycle settlement-a.
 - Implementacija je u toku. Produkcioni izvori, integrisane faza-05 provere i GitHub push još nisu urađeni.
+
+## Tekući integracioni checkpoint 05 — 1. oktobar 2026.
+
+- `9557699` je prvi klijent, prihvaćen kao kod za dalju integraciju, ne kao završen korisnički tok. Muse novi Task `task_b13ba1b5b2c8` popravlja objedinjenu agendu, dupliranje derbija, trajanje timeout-a do kraja tela odgovora, odjavu i semantičku validaciju.
+- Grok Task `task_5005528994dd` razvija Cloudflare Worker/Durable Object runtime i adaptere; Node/file prototip sam ne zadovoljava ugovor. Domenske korekcije već integrišu stabilne revizije, validaciju i opoziv izvora u svim klupskim keševima.
+- Izvorni audit/probe su integrisani kao `d885bcf`. Koordinator je nezavisno ponovio osam mrežnih scenarija (exit 0), uključujući zvanični PDF Evrolige sa 38 kola i očekivanu blokadu Game Centera. To nije potvrda licence, punog sezonskog parsera niti Cloudflare CPU-a.
+- Koordinator: prvi klijent 91/91 web (exit 0), PWA pregled svih 11 scenarija PASS, izolacija naloga 6/6 emulator PASS. Push osnova 27/27 (23 funkcionalna + 4 workerd) potvrđena bez promene produkcije. Konačna faza-05 browser/server matrica još se čeka.
+- Gemini Task `task_f5915fa787be` proverava preliminarne nalaze, a konačni integrisani HEAD dobija tek kada server i korekcije klijenta budu spremni. Nema prihvaćenog finalnog QA niti GitHub push-a.
