@@ -104,9 +104,15 @@ Koraci tek kad pregled izričito otvori sesiju dokaza:
 
 1. Potvrditi `GET /api/probe/status`. Dok je `enabled` false, slanje ostaje 404 `probe_disabled`.
 2. Ako dokaz treba da pokrije prag jačine i serijalizaciju, prvo ide posebno odobren deploy ovog stabla. Taj deploy ponovo koristi tag `v1-probe-directory` i postojeći namespace. Deploy nije deo ovog commit-a. Dokaz protiv današnje produkcije vidi HTTP oblik vraćenog snopa, a ne prag `enroll_weak` i ne redjanje zahteva.
-3. Napraviti upisnu tajnu van repozitorijuma: bar 32 znaka i bar 16 različitih znakova. Staviti je u `PROBE_ENROLL_SECRET`. `PROBE_SEND_ENABLED` postaviti na `1` samo za trajanje sesije.
-4. Na telefonu otvoriti probu. Android: Chrome na adresi workera. iPhone, iOS 16.4+: Safari, Add to Home Screen, pa ikonica sa početnog ekrana pre traženja dozvole. U polje ključa probe uneti istu upisnu tajnu, dozvoliti obaveštenja, pa registrovati. Ekran kaže da je uređaj registrovan i ne ispisuje `registrationId` ni `selfSendKey`. Pre zatvaranja, iz mrežnog zapisa pregledača jednom prepisati JSON odgovor 201. Server tu vrednost više ne zna u čistom obliku.
-5. Potpuno zatvoriti PWA i Chrome: početni ekran, pregled nedavnih aplikacija, prevući aplikaciju naviše dok ne nestane iz memorije. Telefon može da ostane zaključan.
+3. Napraviti upisnu tajnu van repozitorijuma — poželjno 32 slučajna bajta kao base64url (43 znaka), uz opcionu proveru/ponavljanje dok ne bude bar 16 različitih znakova (inače server vraća 503 `enroll_weak`; stari `openssl rand -hex 24` je nepouzdan):
+   ```bash
+   umask 077
+   openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' > /tmp/probe-enroll-secret.txt
+   chmod 600 /tmp/probe-enroll-secret.txt
+   ```
+   Bez ispisa tajne na ekran, bez literala u komandnoj liniji/istoriji/URL-u/dokumentaciji. Staviti je u `PROBE_ENROLL_SECRET` isključivo interaktivnim unosom ili unosom iz datoteke. `PROBE_SEND_ENABLED` postaviti na `1` samo za trajanje sesije.
+4. Na telefonu otvoriti probu. Android: Chrome na adresi workera. iPhone, iOS 16.4+: Safari, Add to Home Screen, pa ikonica sa početnog ekrana pre traženja dozvole. U polje ključa probe uneti istu upisnu tajnu, dozvoliti obaveštenja, pa registrovati. Ekran kaže da je uređaj registrovan i ne ispisuje `registrationId` ni `selfSendKey`. Pre zatvaranja, iz mrežnog zapisa pregledača (na Androidu po potrebi preko remote debugging-a) jednom prepisati JSON odgovor 201. Server tu vrednost više ne zna u čistom obliku.
+5. Zatvoriti **samo PWA karticu**: početni ekran, pregled nedavnih aplikacija, prevući PWA naviše dok ne nestane iz memorije. Zabranjeno: Force stop, gašenje browser procesa i redosled „prvo pošalji pa zatvori”. Telefon može da ostane zaključan.
 6. Sa drugog računara, bez tajni u URL-u:
 
 ```bash

@@ -23,7 +23,22 @@ Talas pokrenut 30. septembra 2026. radi paralelnog rešavanja nezavisnih osnova 
 ### Runtime devijacije (zabeleženo pošteno)
 - Muse je radio ručno u direktnom terminalu nakon što je korisnik odobrio zaobilaženje readiness grešaka — nije tihi agent-run, već odobreni ručni rad.
 - Gemini `worker_done` je odbijen (nedostaje sposobnost); isporučene i proverene docs-commite koordinator je preuzeo, radnika zaustavio/oslobodio. Ne evidentira se kao prihvaćeno završavanje zadatka.
-- Ovaj (Muse docs) checkout `matchahead-04-auth` je settlovan na jezgru/p pregledu `5be2809`; samo durable docs se ovde uređuju. Cherry-pickovani docs-commiti gore su integracioni ulaz; ovaj checkpoint je novi commit.
+- Ovaj (Muse docs) checkout `matchahead-04-auth` je settlovan na jezgru/p pregledu `5be2809`, zatim cherry-pick `6af69c1`/`ea0a993`/`8d9a048` kao integracioni ulaz i doc checkpoint `b336ea5`; samo durable docs se ovde uređuju. Ovaj doc patch je novi commit samo na vlasničkim docs putevima.
+
+## 1A. Drugi talas — push usklađivanje i pregledi (novi taskovi, run `run_b1cd86cb71c5`)
+
+Stanje radnika provereno `worker-list` (30. septembar 2026.):
+
+| Zadatak / Kontekst | Ishod |
+|---|---|
+| Push implementacija `task_ee1b012cc153` / `ctx_b986f3739b8e` | **Accepted success `6af69c1`** (DO rekonstrukcija + 3 razlike, 27 testova), terminal released. |
+| Push pregled `task_6cba3e57979c` / `ctx_a8550c09c7fa` | Izveštaj `ea0a993`+`8d9a048` isporučen, final idle; recovered/stopped/released jer izvođač nema traženu sposobnost — **nema prihvaćenog `worker_done`**, ne evidentira se kao prihvaćeno završavanje. |
+| Core pregled `task_0aeedc8250b3` / `ctx_2e7ab1840ace` | Izveštaj `5be2809` isporučen, recovered/released. |
+| Klijent pregled `task_c3570f8b1165` / `ctx_feb6c810b7c7` | **ACTIVE, review-only**; Muse klijent direktno ACTIVE u `matchahead-auth-client` (faza 04 klijent + 06 integracija žive). Finalni dokaz se čeka — bez tvrdnje final pass/merged/published. |
+| Originalni Muse task `task_2192e0e9d10c` | **3× pao readiness**; korisnik je odobrio ručni rad (`f9f7952`, `d0f8469`, `4e80cef` izveštaj) — **ne retry-ovati propali task**. |
+| Ručni doc checkpointi | `b336ea5` (prvi talas IN_PROGRESS) i ovaj doc patch (push korekcije, samo vlasnički docs putevi). |
+
+Ako finalni dokaz klijenta stigne pre kraja, ugrađuje se stvarni podatak; inače zapis ostaje tačan IN_PROGRESS i signalizira preostali followup.
 
 ---
 

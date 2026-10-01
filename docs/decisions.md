@@ -122,3 +122,16 @@ Run `run_b1cd86cb71c5`. Razlog: orkestracioni krug je završen bez finalnih doka
 - Devijacije: Muse ručno uz odobrenje korisnika; Gemini `worker_done` odbijen (nedostaje sposobnost) — proverene isporuke preuzete, radnik zaustavljen/oslobođen, ne evidentira se kao prihvaćen završetak.
 
 Migracija: nema.
+
+## Odluka 02A — push ugovor, prag tajne i kapije (doc patch 30. septembar 2026. nad `d582885`)
+
+Razlog: operatori su u `docs/push-readiness-review.md` dobijali zastareli protokol (`registrationSecret` u telu, `/api/probe/unregister`, vidljive labele, `openssl rand -hex 24`).
+
+- Važeći HTTP ugovor (isti za živi snop `2ee78270...` i repo `6af69c1`): `POST /api/registrations` sa `x-matchahead-enroll` + `{"fid"}` → 201 `{registrationId, selfSendKey}` (32 slučajna bajta base64url, 43 znaka; server čuva samo SHA-256); `POST /api/probe/send` prima tačno jedno polje `registrationId` uz `Authorization: Bearer <selfSendKey>`; odjava je `DELETE /api/registrations/<registrationId>` uz isti Bearer; `/api/probe/unregister` ne postoji. UI ne ispisuje ID/ključ — 201 se prepisuje iz browser Network zapisa (Android remote debugging po potrebi).
+- Prag upisne tajne: bar 32 znaka i bar 16 različitih znakova (inače 503 `enroll_weak`). Generator: `openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'` u privatnu datoteku 0600 van repozitorijuma, bez ispisa tajne, uz opcionu proveru/ponavljanje do 16 različitih; `hex 24` je nepouzdan i zabranjen. Unos tajni samo interaktivno ili iz datoteke — bez literala u komandnoj liniji/istoriji/URL-u/dokumentaciji.
+- Faza 02 ostaje BLOCKED: fizička isporuka na zatvorenoj PWA (Android dostupan, iPhone nepotvrđen) i edge `cpuTime` su NOT_TESTED; zatvaranje je swipe samo PWA kartice (bez Force stop/gašenja browsera/slanja-pa-zatvaranja). Dokaz ide sa odvojenog autorizovanog pošiljaoca. Kapije (`PROBE_ENROLL_SECRET`, `PROBE_SEND_ENABLED=1`) ostaju ugašene do posebno pregledane sesije; posle sesije vraćanje na ugašeno.
+- Repo `6af69c1` je rekonstrukcija + 3 namerne razlike, nije bajt-identičan snopu i nije deployovan; živa migracija redova NOT_TESTED. Cloudflare Worker Free / plan naloga neverifikovan dokazom; Google `billingEnabled: false` verifikovano; budžet 0 €, naplata se ne uključuje. Stvarna slanja/živi upisi/čitanja tajni se ne izvode u ovom zadatku.
+
+Dokaz: `docs/handoffs/02-push-reconciliation.md`, `docs/reviews/02-push-reconciliation.md` (27/27: 23 funkcionalna + 4 workerd).
+
+Migracija: nema (budući deploy ponovo koristi tag `v1-probe-directory` i postojeći namespace, bez novog namespace-a).
