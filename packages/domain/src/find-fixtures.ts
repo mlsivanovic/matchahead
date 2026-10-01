@@ -181,16 +181,44 @@ export function findFixtures(input: {
       attemptAge < policy.minRefreshMinutes &&
       (query.refresh || successAt === null);
     if (withinReuse || throttled) {
+      const drift = revokedDuringCacheHit(team, cached, input.feeds, query.seasonId);
+      if (drift === null) {
+        return present({
+          team,
+          query,
+          fixtures: cached.fixtures,
+          coverage: cached.coverage,
+          cacheStatus: withinReuse ? 'reused' : 'throttled',
+          upstreamRequests: 0,
+          checkedAt: successAt,
+          lastAttemptAt: cached.lastAttemptAt ?? null,
+          lastSuccessAt: successAt,
+        });
+      }
+      const canonical = readCanonical(input.cache);
+      for (const id of drift.droppedIds) canonical.delete(id);
+      syncCanonical(input.cache, canonical, key, drift.droppedIds);
+      const fixtures = cached.fixtures.filter((fixture) => !drift.droppedIds.has(fixture.id));
+      const lastSuccessAt = fixtures.length === 0 ? null : successAt;
+      const record: FindCacheRecord = {
+        ...cached,
+        key,
+        fixtures,
+        coverage: drift.coverage,
+        lastSuccessAt,
+      };
+      input.cache.set(key, record);
+      clearRevokedSnapshots(input.cache, key, drift.droppedIds, input.feeds);
       return present({
         team,
         query,
-        fixtures: cached.fixtures,
-        coverage: cached.coverage,
+        fixtures,
+        coverage: drift.coverage,
         cacheStatus: withinReuse ? 'reused' : 'throttled',
         upstreamRequests: 0,
-        checkedAt: successAt,
+        checkedAt: lastSuccessAt,
         lastAttemptAt: cached.lastAttemptAt ?? null,
-        lastSuccessAt: successAt,
+        lastSuccessAt,
       });
     }
   }
@@ -477,6 +505,109 @@ function materialize(team: Team, draft: ObservedFixtureDraft, previous: Fixture 
 }
 
 const CANONICAL_KEY = '__matchahead_canonical__';
+
+/**
+ * Keš pogodak i dalje mora da vidi trenutnu dozvolu. Prazan spisak feedova
+ * znači da pozivalac nije doneo politiku i ne sme sam od sebe da obriše snimak.
+ * Feed čija dozvola više nije `allowed` skida svoje utakmice odmah, i unutar
+ * prozora od 6 sati i unutar 15 minuta.
+ */
+function revokedDuringCacheHit(
+  team: Team,
+  cached: FindCacheRecord,
+  feeds: readonly CompetitionFeed[],
+  seasonId: string,
+): { droppedIds: Set<string>; coverage: CoverageStatus[] } | null {
+  const seen = new Set<string>();
+  const droppedIds = new Set<string>();
+  let coverage = cached.coverage;
+  let changed = false;
+  for (const feed of feeds) {
+    if (feed.seasonId !== seasonId) {
+      throw new Error(`Feed ${feed.competitionId} nije za sezonu ${seasonId}.`);
+    }
+    const feedKey = `${feed.competitionId}:${feed.provider}`;
+    if (seen.has(feedKey)) {
+      throw new Error(`Feed ${feedKey} je naveden dvaput.`);
+    }
+    seen.add(feedKey);
+    if (feed.publication === 'allowed') continue;
+    for (const fixture of cached.fixtures) {
+      if (fixture.competitionId === feed.competitionId && fixture.provider === feed.provider) {
+        droppedIds.add(fixture.id);
+      }
+    }
+    const nextCoverage = coverage.map((row) => {
+      if (row.competitionId !== feed.competitionId || row.provider !== feed.provider || row.seasonId !== feed.seasonId) {
+        return row;
+      }
+      if (row.publication === feed.publication && row.scheduleAvailability === 'unknown' && row.verdict === 'unverified') {
+        return row;
+      }
+      changed = true;
+      return coverageRow(team, feed, {
+        scheduleAvailability: 'unknown',
+        verdict: 'unverified',
+        futureFixturesAvailable: null,
+        timePrecision: null,
+        requests: 0,
+        extra: 'Izvor nije označen kao dozvoljen za upis u MatchAhead. Odgovor nije učitan. Raniji snimak ovog izvora se ne vraća.',
+      });
+    });
+    coverage = nextCoverage;
+  }
+  if (droppedIds.size === 0 && !changed) return null;
+  return { droppedIds, coverage };
+}
+
+function clearRevokedSnapshots(
+  cache: FindCacheStore,
+  selfKey: string,
+  droppedIds: ReadonlySet<string>,
+  feeds: readonly CompetitionFeed[],
+): void {
+  const canonical = cache.get(CANONICAL_KEY);
+  for (const otherKey of canonical?.teamKeys ?? []) {
+    if (otherKey === selfKey) continue;
+    const snapshot = cache.get(otherKey);
+    if (!snapshot) continue;
+    const fixtures = snapshot.fixtures.filter((fixture) => !droppedIds.has(fixture.id));
+    let coverageChanged = false;
+    const coverage = snapshot.coverage.map((row) => {
+      const feed = feeds.find(
+        (item) =>
+          item.competitionId === row.competitionId &&
+          item.provider === row.provider &&
+          item.seasonId === row.seasonId &&
+          item.publication !== 'allowed',
+      );
+      if (!feed) return row;
+      if (row.publication === feed.publication && row.scheduleAvailability === 'unknown' && row.verdict === 'unverified') {
+        return row;
+      }
+      coverageChanged = true;
+      return {
+        ...row,
+        publication: feed.publication,
+        verdict: 'unverified' as const,
+        scheduleAvailability: 'unknown' as const,
+        futureFixturesAvailable: null,
+        timePrecision: null,
+        postponementObserved: null,
+        cancellationObserved: null,
+        requestsPerRefresh: 0,
+        evidence: `${feed.evidence} Izvor nije označen kao dozvoljen za upis u MatchAhead. Odgovor nije učitan. Raniji snimak ovog izvora se ne vraća.`.trim(),
+      };
+    });
+    if (fixtures.length === snapshot.fixtures.length && !coverageChanged) continue;
+    cache.set(otherKey, {
+      ...snapshot,
+      fixtures,
+      coverage,
+      lastSuccessAt: fixtures.length === 0 ? null : (snapshot.lastSuccessAt ?? null),
+    });
+  }
+}
 
 function readCanonical(cache: FindCacheStore): Map<string, Fixture> {
   const record = cache.get(CANONICAL_KEY);

@@ -530,6 +530,83 @@ test('zabranjen izvor ne vraća ranije dozvoljen snimak', () => {
   assert.equal(hidden.coverage[0]?.scheduleAvailability, 'unknown');
 });
 
+test('opoziv dozvole unutar 15 minuta i unutar 6 sati ne vraća stari snimak', () => {
+  const cache = memoryCache();
+  const derby = derbyFeed('2027-03-02T16:00:00Z', '2027-03-02', '17:00');
+  const zvezdaTeam: Team = {
+    ...team('football:rs:partizan'),
+    id: 'football:rs:crvena-zvezda',
+    name: 'FK Crvena zvezda',
+    shortName: 'Crvena zvezda',
+    aliases: ['Crvena zvezda', 'FK Crvena zvezda'],
+  };
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: [derby],
+    cache,
+    policy: dataset.policy,
+  });
+  findFixtures({
+    team: zvezdaTeam,
+    query: footballQuery({ teamId: 'football:rs:crvena-zvezda', now: '2027-01-15T12:00:30Z' }),
+    feeds: [derby],
+    cache,
+    policy: dataset.policy,
+  });
+
+  const hidden = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:01:00Z', refresh: true }),
+    feeds: [{ ...derby, publication: 'forbidden' }],
+    cache,
+    policy: dataset.policy,
+  });
+  assert.equal(hidden.cacheStatus, 'throttled');
+  assert.equal(hidden.upstreamRequests, 0);
+  assert.equal(hidden.futureFixtures.length, 0);
+  assert.equal(hidden.futureFixtures.some((fixture) => fixture.status === 'cancelled'), false);
+  assert.equal(hidden.checkedAt, null);
+  assert.equal(hidden.lastSuccessAt, null);
+  assert.equal(hidden.coverage[0]?.publication, 'forbidden');
+  assert.equal(hidden.coverage[0]?.scheduleAvailability, 'unknown');
+  const zvezdaKey = 'football:rs:crvena-zvezda:2026-2027';
+  const zvezdaSnapshot = cache.get(zvezdaKey);
+  assert.equal(zvezdaSnapshot?.fixtures.length, 0);
+  assert.equal(zvezdaSnapshot?.lastSuccessAt, null);
+  assert.equal(zvezdaSnapshot?.coverage[0]?.scheduleAvailability, 'unknown');
+  const canonical = cache.get('__matchahead_canonical__');
+  assert.equal(canonical?.fixtures.some((fixture) => fixture.providerFixtureId === 'syn-derby'), false);
+
+  const again = memoryCache();
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery(),
+    feeds: feeds(),
+    cache: again,
+    policy: dataset.policy,
+  });
+  const league = feeds()[0];
+  assert.ok(league);
+  const partial = findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T14:00:00Z' }),
+    feeds: feeds().map((feed) =>
+      feed.competitionId === league.competitionId && feed.provider === league.provider
+        ? { ...feed, publication: 'unknown' as const }
+        : feed,
+    ),
+    cache: again,
+    policy: dataset.policy,
+  });
+  assert.equal(partial.cacheStatus, 'reused');
+  assert.equal(partial.upstreamRequests, 0);
+  assert.equal(partial.futureFixtures.some((fixture) => fixture.providerFixtureId === 'syn-confirmed'), false);
+  assert.equal(partial.futureFixtures.some((fixture) => fixture.providerFixtureId === 'syn-alt-confirmed'), true);
+  assert.equal(partial.checkedAt, dataset.query.now);
+  assert.equal(partial.futureFixtures.some((fixture) => fixture.status === 'cancelled'), false);
+});
+
 test('derbi deli reviziju između keševa oba kluba', () => {
   const cache = memoryCache();
   const derby = derbyFeed('2027-03-02T16:00:00Z', '2027-03-02', '17:00');
