@@ -409,6 +409,32 @@ async function startApp(options: { limits?: QuotaLimits; mode?: 'synthetic' | 'p
   const server = createScheduleServer(deps);
   const port = await listen(server);
   const url = `http://127.0.0.1:${port}/api/find-fixtures`;
+  async function postRaw(path: string, headers: Record<string, string> = {}, body: Record<string, unknown> = {}): Promise<Reply> {
+    const requestHeaders = new Headers({
+      authorization: 'Bearer good',
+      'content-type': 'application/json',
+      origin: ORIGIN,
+      ...headers,
+    });
+    if (headers.authorization === '') requestHeaders.delete('authorization');
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: JSON.stringify({
+        sport: 'football',
+        teamId: TEAM,
+        seasonId: '2026-2027',
+        refresh: false,
+        ...body,
+      }),
+    });
+    const text = await response.text();
+    return {
+      status: response.status,
+      headers: response.headers,
+      body: text ? JSON.parse(text) as unknown : null,
+    };
+  }
   const app: App = {
     url,
     directory,
@@ -452,34 +478,9 @@ async function startApp(options: { limits?: QuotaLimits; mode?: 'synthetic' | 'p
     },
     clock,
     post(body = {}) {
-      return app.postRaw('/api/find-fixtures', {}, body);
+      return postRaw('/api/find-fixtures', {}, body);
     },
-    async postRaw(path: string, headers: Record<string, string> = {}, body: Record<string, unknown> = {}) {
-      const requestHeaders = new Headers({
-        authorization: 'Bearer good',
-        'content-type': 'application/json',
-        origin: ORIGIN,
-        ...headers,
-      });
-      if (headers.authorization === '') requestHeaders.delete('authorization');
-      const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-        method: path.startsWith('/api') ? 'POST' : 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify({
-          sport: 'football',
-          teamId: TEAM,
-          seasonId: '2026-2027',
-          refresh: false,
-          ...body,
-        }),
-      });
-      const text = await response.text();
-      return {
-        status: response.status,
-        headers: response.headers,
-        body: text ? JSON.parse(text) as unknown : null,
-      };
-    },
+    postRaw,
     mutate(change) {
       const draft = state.drafts[0];
       if (!draft) throw new Error('nema nacrta');

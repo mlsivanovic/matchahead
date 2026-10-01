@@ -2,6 +2,9 @@
 .env.*
 !.env.example
 node_modules/
+.wrangler/
+.dev.vars
+experiments/schedule-service/dist/
 experiments/push-probe/dist/
 experiments/push-probe/.wrangler/
 experiments/push-probe/.dev.vars

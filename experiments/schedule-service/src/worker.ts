@@ -36,15 +36,16 @@ export default {
       bodyText = await readBodyText(request, ioTimeoutMs(env.SCHEDULE_IO_TIMEOUT_MS), MAX_BODY_BYTES);
     } catch (error) {
       if (error instanceof BodyTimeout) {
+        const headers: Record<string, string> = {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+        };
+        for (const [key, value] of Object.entries(cors)) headers[key] = value;
         const timedOut: OutgoingResponse = {
           status: 400,
           body: { error: { code: 'payload_too_large', message: 'Telo nije stiglo u roku.' } },
-          headers: {
-            'content-type': 'application/json; charset=utf-8',
-            'cache-control': 'no-store',
-            'x-content-type-options': 'nosniff',
-            ...cors,
-          },
+          headers,
         };
         logDecision(timedOut);
         return toResponse(timedOut);

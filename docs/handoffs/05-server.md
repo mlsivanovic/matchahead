@@ -29,20 +29,24 @@ Faza nije DONE. Budžet 0 €. Push namespace nije diran. `apps/web` nije menjan
 - `.env.example` — samo sportska polja faze 05
 - `docs/handoffs/05-server.md`
 
+`.gitignore` ignoriše `.wrangler/`, `.dev.vars` i `experiments/schedule-service/dist/`. To stanje se ne commit-uje.
+
 `apps/web`, faza 02/push i globalna dokumentacija nisu menjani.
 
 ## Izvršene provere i dokazi
 
 Komande, 1. oktobar 2026, Node 26.7.0 (mise). Node 22 nije instaliran i nije pokrenut.
 
-- `node scripts/check-data-contracts.mjs` — 35 PASS, 0 FAIL, 132 ms
-- `node scripts/check-schedule-service.mjs` — 40 PASS, 0 FAIL, 17916 ms
+`node scripts/check-schedule-service.mjs` prvo pokreće `tsc -p experiments/schedule-service --noEmit` iz lockfile-a (`typescript` 5.9.3, `@types/node` 26.6.3), pa testove. `allowImportingTsExtensions` i `noEmit` su uključeni. `rootDir` nije sužen na servis, jer uvoz vuče `packages/domain`. Strip-types i esbuild nisu zamena za ovu proveru.
+
+- `node scripts/check-data-contracts.mjs` — 35 PASS, 0 FAIL, 138 ms
+- `node scripts/check-schedule-service.mjs` — tsc bez greške, zatim 40 PASS, 0 FAIL, 17934 ms
 
 Zid ovog procesa u tom nizu, nije obračunati CPU:
 
-- Node Evroliga PDF: `euroleague-node-wall-ms=77.5`
-- workerd sačuvani FSS HTML: `fss-html-wall-ms=42.0`
-- workerd sačuvani Evroliga PDF: `euroleague-pdf-wall-ms=50.0`
+- Node Evroliga PDF: `euroleague-node-wall-ms=90.8`
+- workerd sačuvani FSS HTML: `fss-html-wall-ms=40.0`
+- workerd sačuvani Evroliga PDF: `euroleague-pdf-wall-ms=45.0`
 
 Workerd, isti niz:
 

@@ -26,7 +26,7 @@ export async function verifyFirebaseIdTokenWeb(input: {
   const valid = await crypto.subtle.verify(
     'RSASSA-PKCS1-v1_5',
     key,
-    jwt.signature,
+    ownedBytes(jwt.signature),
     new TextEncoder().encode(jwt.signingInput),
   );
   if (!valid) throw new TokenRejected();
@@ -58,10 +58,13 @@ export function createWebFirebaseVerifier(input: {
 export function spkiDerFromPem(pem: string): ArrayBuffer {
   const body = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
   const der = base64UrlToBytes(body.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, ''));
-  if (pem.includes('BEGIN PUBLIC KEY')) return der.buffer.slice(der.byteOffset, der.byteOffset + der.byteLength);
+  if (pem.includes('BEGIN PUBLIC KEY')) return ownedBytes(der).buffer;
   if (!pem.includes('BEGIN CERTIFICATE')) throw new TokenRejected();
-  const spki = extractSpki(der);
-  return spki.buffer.slice(spki.byteOffset, spki.byteOffset + spki.byteLength);
+  return ownedBytes(extractSpki(der)).buffer;
+}
+
+function ownedBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(bytes);
 }
 
 async function importRsaKey(pem: string): Promise<CryptoKey> {

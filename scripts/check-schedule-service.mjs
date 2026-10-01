@@ -4,7 +4,16 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const testDir = resolve(root, 'experiments/schedule-service/test');
+const serviceDir = resolve(root, 'experiments/schedule-service');
+const tsc = resolve(serviceDir, 'node_modules/typescript/lib/tsc.js');
+const typecheck = spawnSync(process.execPath, [tsc, '-p', serviceDir, '--noEmit', '--pretty', 'false'], {
+  cwd: root,
+  stdio: 'inherit',
+});
+if (typecheck.status !== 0) {
+  process.exit(typecheck.status ?? 1);
+}
+const testDir = resolve(serviceDir, 'test');
 const testFiles = readdirSync(testDir)
   .filter((name) => name.endsWith('.test.ts'))
   .map((name) => resolve(testDir, name));

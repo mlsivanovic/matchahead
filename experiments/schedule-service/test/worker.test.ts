@@ -367,7 +367,7 @@ test('čitanje tela odustaje i sledeće čitanje radi', async () => {
       },
     }),
     duplex: 'half',
-  });
+  } as RequestInit);
   await assert.rejects(() => readBodyText(hung, 80, 4096), BodyTimeout);
   const ready = new Request('https://schedule.local/api/find-fixtures', { method: 'POST', body: '{"ok":true}' });
   assert.equal(await readBodyText(ready, 80, 4096), '{"ok":true}');
@@ -698,7 +698,7 @@ function options(lab: LabState, input: { mode?: string; limits?: QuotaLimits; tr
                   return new Response(lab.document, { headers: { 'content-type': 'text/html; charset=utf-8' } });
                 }
                 if (lab.document instanceof Uint8Array) {
-                  return new Response(lab.document, { headers: { 'content-type': 'application/pdf' } });
+                  return new Response(new Uint8Array(lab.document), { headers: { 'content-type': 'application/pdf' } });
                 }
                 return Response.json({ fixtures: lab.fixtures });
               }
@@ -714,7 +714,7 @@ function options(lab: LabState, input: { mode?: string; limits?: QuotaLimits; tr
 
 interface Reply {
   status: number;
-  headers: Headers;
+  headers: { get(name: string): string | null };
   body: unknown;
 }
 

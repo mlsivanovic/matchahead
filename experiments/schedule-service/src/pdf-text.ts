@@ -48,7 +48,7 @@ function stripTrailingNewline(bytes: Uint8Array): Uint8Array {
 }
 
 async function inflateOnce(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+  const stream = new Blob([new Uint8Array(bytes)]).stream().pipeThrough(new DecompressionStream('deflate'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 

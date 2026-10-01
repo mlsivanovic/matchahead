@@ -1,4 +1,5 @@
 import { competitionId } from '../../../../packages/domain/src/index.ts';
+import type { ObservedFixtureDraft } from '../../../../packages/domain/src/index.ts';
 import { foldName, teamIdForName } from '../names.ts';
 import { observedDraft } from './draft.ts';
 import { dottedDate, visibleText } from './html.ts';
@@ -13,7 +14,7 @@ export function parseFssSuperliga(html: string, fetchedAt: string): ParsedSource
     index: match.index ?? 0,
     label: visibleText(match[1] ?? ''),
   }));
-  const drafts = [];
+  const drafts: ObservedFixtureDraft[] = [];
   const rounds = new Set<number>();
   for (const match of html.matchAll(BLOCK)) {
     const names = [...(match[3] ?? '').matchAll(/col-6">([^<]*)</g)].map((item) => visibleText(item[1] ?? ''));
@@ -50,7 +51,7 @@ export function parseFssSuperliga(html: string, fetchedAt: string): ParsedSource
     );
   }
   const seen = new Set<string>();
-  const unique = [];
+  const unique: ObservedFixtureDraft[] = [];
   let conflict = false;
   for (const draft of drafts) {
     if (seen.has(draft.providerFixtureId)) {

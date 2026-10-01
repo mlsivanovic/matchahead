@@ -73,7 +73,10 @@ export async function parseEuroleaguePdf(bytes: Uint8Array, fetchedAt: string): 
     return date >= '2026-09-01' && date <= '2027-06-15';
   });
   const titled = lines.some((line) => /2026\s*[-/]\s*27/.test(line));
-  const roundsKnown = rows.every((row) => row.round >= 1 && row.round <= 38) && rows.some((row) => row.heading);
+  const roundsKnown = rows.every((row) => {
+    const round = row.round;
+    return round !== null && round >= 1 && round <= 38;
+  }) && rows.some((row) => row.heading);
   const complete = rows.length === 380 && byRound.size === 38 && clubsEveryRound && uniquePairs && datesInSeason && titled && roundsKnown;
   const workerNote = `Merenje inflate+TJ: ${durationMs.toFixed(1)} ms zida ovog procesa. To nije obračunati CPU Cloudflare-a. pdftotext se ne poziva.`;
   return {

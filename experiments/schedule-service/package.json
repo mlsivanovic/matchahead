@@ -5,11 +5,13 @@
   "type": "module",
   "description": "Na zahtev traži raspored četiri kluba. Nema periodičnog preuzimanja.",
   "scripts": {
-    "check": "node --experimental-strip-types --test test/*.test.ts"
+    "check": "tsc -p . --noEmit && node --experimental-strip-types --test test/*.test.ts"
   },
   "devDependencies": {
+    "@types/node": "26.6.3",
     "esbuild": "0.28.2",
-    "miniflare": "5.20260926.0-alpha"
+    "miniflare": "5.20260926.0-alpha",
+    "typescript": "5.9.3"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,
