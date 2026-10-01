@@ -1,177 +1,181 @@
 # Nezavisni pregled integrisanog Auth klijenta i lične DEMO agende (Faze 04 i 06)
 
-**Datum:** 30. septembar 2026.  
+**Datum:** 1. oktobar 2026.  
 **Pregledač:** Gemini CLI (nezavisni pregled klijenta)  
-**Pregledani commit:** `d66b127` (`04 auth klijent: Google prijava, nalog, agenda veza i brisanje sa bravom.`)  
+**Pregledani commit proizvoda (HEAD):** `4bc44b6` (`04 auth klijent: deljeno teardown gasenje sa ensure guardom, tiket pokusaja za kasne failure, unlink dokaz posejanim uredjajima`)  
 **Grana:** `mlsivanovic/matchahead-auth-client`  
 **Referentni komiti u lancu:**  
 - `5246e6d` — Izmeštanje brave brisanja u `accountTombstones` van stabla korisnika  
 - `bbb2783` — Bezbednosni pregled jezgra naloga i Firestore pravila (Faza 04)  
-- `c3b1d9b` — Samostalne UI komponente lične agende (Faza 06)  
-- `1625323` — Pregled DOM verifikacije UI komponenti agende  
+- `d66b127` — Prethodni klijentski commit integracije (vraćen na doradu usled blokirajućih nalaza)  
+- `f88f960` — Prethodni izveštaj o pregledu (zamenjen ovim ažuriranim i strogo ograničenim izveštajem)  
+- `c3b1d9b` i `1625323` — Samostalne UI komponente lične agende i DOM izveštaj (Faza 06)  
 
 ---
 
 ## 1. Sažetak (Executive Summary)
 
-U ovom zadatku izvršen je sveobuhvatan, nezavisan pregled integrisanog klijentskog koda koji spaja Google autentifikaciju (Faza 04) i ličnu agendu utakmica (Faza 06). Pregledani commit `d66b127` uspešno objedinjuje:
-1. **Lenjo inicijalizovanu Firebase sesiju** sa isključivo memorijskim Firestore kešom (`memoryLocalCache()`), sprečavajući curenje privatnih podataka na disk uređaja.
-2. **Robusnu kontrolu stanja naloga** kroz `AccountGate` i `AccountController`, koji generacijskim tiketima eliminišu trke, kasne mrežne odgovore i mešanje podataka različitih korisnika.
-3. **Povezivanje lične agende u korensku aplikaciju (`App.tsx`)**, gde se prikazuju `PersonalAgendaHome` na početnoj ruti i `PersonalAgendaScreen` na ruti `#/moje`.
-4. **Izolaciju omiljenih klubova od agende**, gde omiljeni klubovi ostaju isključivo u profilu i nikada ne ulaze u listu praćenih klubova niti generišu utakmice.
-5. **Autentifikovani unlink uređaja sa tajmerom** pre gašenja sesije, čime se poštuju Firestore bezbednosna pravila bez rizika od blokiranja lokalne odjave u vanmrežnim uslovima.
-6. **Integraciju dvokoraka brisanja naloga sa tombstone bravom**, u potpunom skladu sa arhitekturom `5246e6d`, gde ponovna prijava na zakazan nalog samo dovršava brisanje bez otvaranja profila.
+U ovom ciklusu izvršen je ponovni, nezavisni audit integrisanog klijentskog koda nakon uklanjanja blokirajućih trka identifikovanih u koordinatorskom izveštaju (`04-06-coordinator-checkpoint.md`). Proizvodni commit `4bc44b6` otklanja ranije blokade:
+1. **Razrešena trka gašenja sesije (`firebase-app.ts`):** Uvedeno je deljeno `teardown` obećanje koje sprečava tiho recikliranje app-a koji se još gasi. `ensureFirebaseSession` baca izuzetak ukoliko se pozove tokom aktivnog gašenja, dok sva stvarna mesta kreiranja sesije (`signIn`, `cycleSession`, `handleUser`, `useEffect`) disciplinovano čekaju `teardown` barijeru.
+2. **Vlasništvo pokušaja prijave (`account-controller.ts` i `use-account.ts`):** `beginSignIn` generiše i vraća značku pokušaja `{ uid, seq, endedEpoch }`. Metoda `noticeFailure` vezuje grešku isključivo za taj pokušaj, čime je onemogućeno da zakašnjeli neuspeh pop-upa (ili zatvaranje prozora) prebaci novi nalog ili novi klik u grešku, niti da obriše privatne podatke aktivnog korisnika.
+3. **Zaštita stanja pri odjavi i brisanju (`settleUidAfterAccountEnd`):** Obe `finally` grane u `use-account.ts` čiste `lastUid` samo ukoliko on i dalje odgovara nalogu koji se odjavio ili obrisao, sprečavajući da kasni završetak operacije obriše novijeg vlasnika.
+4. **Verifikacija raskida veze uređaja sa posejanim podacima (`check-auth-browser.mjs`):** Uklanjanje uređaja se više ne dokazuje trivijalno praznom kolekcijom. Test pre odjave seje dokument tekuće instalacije i dokument drugog uređaja; nakon odjave, tekući dokument je obrisan pod živim Firestore pravilima, dok drugi uređaj ostaje netaknut.
+5. **Deterministički cancel tok u browser harnessu:** Zatvaranje pop-up prozora se vrši tek nakon što je `Google.com` emulator handler spreman (`cancel-spreman`), čime se obezbeđuje čist `auth/popup-closed-by-user` signal unutar predviđenih tajmera.
 
-Svi identifikovani problemi tokom faze analize izvornog koda (Nalazi 1 do 6) detaljno su prijavljeni vlasniku promena (Muse) i koordinatoru, te su u celosti razrešeni i verifikovani u finalnom commitu `d66b127`.
+Ranije tvrdnje o „potpunoj pokrivenosti” i „produkcionoj spremnosti” su odbačene. Ocena je striktno ograničena na ugovore domena, lokalne Firestore bezbednosna pravila i emulatore.
 
-**Konačna ocena:** **PRIHVATLJIVO (APPROVED)** bez blokirajućih nedostataka za prelazak u sledeću fazu.
-
----
-
-## 2. Nalazi tokom pregleda i njihovo razrešenje
-
-Tokom proaktivnog pregleda koda u radnom stablu, Gemini je identifikovao 6 konkretnih nedostataka koje je vlasnik koda (Muse) otklonio pre kreiranja commita `d66b127`:
-
-### Nalaz 1: Nedostatak `.then` rukovaoca na `signInWithPopup` pri ponovnoj prijavi istog UID-a
-- **Lokacija:** `apps/web/src/logic/use-account.ts`
-- **Ozbiljnost:** Visoka (potencijalno zaglavljivanje aplikacije u statusu `working`).
-- **Mehanizam:** Kada `deleteAccount` naiđe na `auth/requires-recent-login`, korisnik dobija grešku i dugme „Pokušaj ponovo“. Pri ponovnoj prijavi istim Google nalogom, Firebase Auth SDK ne mora okinuti `onAuthStateChanged` jer je korisnik identičan. Bez `.then` rukovaoca, kontroler ostaje trajno u stanju `working`, a brisanje se ne nastavlja.
-- **Razrešenje u `d66b127`:** Uvedena funkcija `driveIdentity(db, identity, auth)` koja se eksplicitno poziva u `.then(credential => ...)` grani ukoliko je UID promenjen ili je aktivan `resumeNeeded` (status `error` ili postavljena zastavica brisanja).
-
-### Nalaz 2: Propušten `onLocalClear(oldUid)` pri cross-tab odjavi i direktnoj zameni naloga
-- **Lokacija:** `apps/web/src/logic/use-account.ts`
-- **Ozbiljnost:** Srednja (curenje nacrta beleške i lokalnih DEMO izbora u drugi tab/nalog).
-- **Mehanizam:** Kada korisnik klikne odjavu u Tabu 1, Tab 2 dobija `onAuthStateChanged(auth, null)`. Iako je kontroler prelazio u `signed-out`, `live.current.onLocalClear(oldUid)` nije bio pozivan u Tabu 2, pa su React stanje `draftNote` i `sessionStorage` podaci ostajali neočišćeni. Slično se dešavalo pri direktnoj zameni naloga bez prethodne odjave.
-- **Razrešenje u `d66b127`:** U `handleUser`, i grana `!user && hadUser` i grana `lastUid !== user.uid` sada eksplicitno beleže `prevUid` i pozivaju `live.current.onLocalClear(prevUid)` pre podizanja nove sesije.
-
-### Nalaz 3: Trka odjave i brze nove prijave uz uništavanje nove Firebase sesije
-- **Lokacija:** `apps/web/src/logic/use-account.ts` i `apps/web/src/logic/firebase-app.ts`
-- **Ozbiljnost:** Visoka (greška `Firebase App '[DEFAULT]' was deleted` ili prekid prijave drugog korisnika).
-- **Mehanizam:** Pri odjavi korisnika A, UI se odmah postavlja u `signed-out` dok `removeDevice` čeka mrežni odziv do 5 sekundi. Ako korisnik B odmah klikne „Prijavi se“, nova sesija se inicijalizuje. Kada A-ov unlink završi, `.finally` je pozivao globalni `disposeFirebaseSession()`, uništavajući aktivnu bazu korisnika B. Dodatno, poziv `initializeApp` dok traje `deleteApp` prethodne instance dovodi do mrtve instance.
-- **Razrešenje u `d66b127`:** Uvedena zastavica `retiring.current` i namenska funkcija `disposeSessionIfCurrent(target)`. Pri kliku na prijavu, ukoliko je gašenje prethodne sesije u toku, kod čeka `await disposeFirebaseSession()` pre kreiranja nove instance.
-
-### Nalaz 4: `PrefsForm` key u `AccountPanel.tsx` sprečavao osvežavanje sa servera
-- **Lokacija:** `apps/web/src/ui/AccountPanel.tsx`
-- **Ozbiljnost:** Niska (UI desinhronizacija).
-- **Mehanizam:** Komponenta `PrefsForm` je bila montirana sa `key={account.uid}`. Ako se profil korisnika osveži sa servera za isti UID, unutrašnje `useState` promenljive forme se nisu re-inicijalizovale.
-- **Razrešenje u `d66b127`:** Forma sada prima `revision={account.profile.updatedAt}` i poseduje `useEffect` koji sinhronizuje polja sa servera sve dok korisnik nije lokalno započeo izmenu (`dirty` guard).
-
-### Nalaz 5: Nekompatibilan prikaz proizvoljnih vremenskih zona u `screens.tsx`
-- **Lokacija:** `apps/web/src/ui/screens.tsx`
-- **Ozbiljnost:** Niska (prinudno svođenje važeće IANA zone uređaja na Beograd u padajućem meniju).
-- **Mehanizam:** Dok je `AccountPanel` ispravno prependovao važeću zonu profila van liste od 4 grada, `SettingsScreen` u `screens.tsx` je forsirao `Europe/Belgrade`.
-- **Razrešenje u `d66b127`:** Usklađeno kreiranjem `deviceZones = zones.includes(tz) ? zones : [tz, ...zones]`.
-
-### Nalaz 6: Skrivena poruka o uspešnom brisanju naloga u `AccountPanel.tsx`
-- **Lokacija:** `apps/web/src/ui/AccountPanel.tsx`
-- **Ozbiljnost:** Srednja (korisnik ne dobija povratnu informaciju da je brisanje uspelo).
-- **Mehanizam:** Kada brisanje uspe, kontroler postavlja status na `signed-out` uz poruku `Nalog je obrisan.`. Međutim, sekcija za `signed-out` u `AccountPanel` uopšte nije renderovala `account.message`.
-- **Razrešenje u `d66b127`:** Dodato renderovanje `{account.message ? <p className="meta" role="status">{account.message}</p> : null}` u bloku odjavljenog stanja.
-
-### Dodatna trka: Potiskivanje poruke o brisanju usled `onAuthStateChanged(null)` događaja
-- **Lokacija:** `apps/web/src/logic/account-controller.ts`
-- **Mehanizam:** Poziv `deleteUser()` okida `onAuthStateChanged(auth, null)` koji poziva `handleIdentity(null, null, ...)`, što podiže generaciju gejta pre nego što se `resumeAccountDeletion` razreši. Kada brisanje završi, `shouldApply(ticket)` bi vratio `false` i obrisao statusnu poruku.
-- **Razrešenje u `d66b127`:** U kontroleru je implementirano pamćenje `keepDeleted` stanja i očuvanje `DELETED_MESSAGE` kada vlasnik naloga napušta sesiju, što je osigurano i novim jediničnim testom `brisanje zadržava potvrdu i posle null događaja Auth brisanja`.
+**Konačna ocena:** **PRIHVATLJIVO ZA INTEGRACIJU U MAIN U OKVIRU ZADATOG OPSEGA (APPROVED UNDER BOUNDED SCOPE)**.
 
 ---
 
-## 3. Matrica verifikacije obaveznih zahteva
+## 2. Analiza blokirajućih nalaza i ocena fail-first regresija
 
-| Stavka verifikacije | Status | Mehanizam / Dokaz u kodu i testovima |
-| :--- | :---: | :--- |
-| **1. Google popup cancel / retry** | **POTVRĐENO** | Otkazivanje pop-upa (`auth/popup-closed-by-user`, `auth/cancelled-popup-request`) mapira se u bezbednu poruku bez otkrivanja internih detalja. Stanje prelazi u `error`, prikazuje se dugme „Pokušaj ponovo“. Dokazano u `check-auth-browser.mjs` (`cancel-klik`, `cancel-popup`, `cancel-poruka`). |
-| **2. Višestruki isti / različiti UID (in->out->in)** | **POTVRĐENO** | Potpuno očišćena sesija i re-inicijalizacija Auth observera. Podaci korisnika A ne prelaze na korisnika B; relogin korisnika A vraća sve njegove pratioce i omiljene. Dokazano u testovima `ciklus-1-out`, `ciklus-1-in`, `ciklus-2-out`, `ciklus-2-in`, `relogin-a`. |
-| **3. Direktna zamena naloga i cross-tab odjava** | **POTVRĐENO** | `prepareSwitch(newUid)` i `handleUser(null)` brišu memorijske podatke i pozivaju `onLocalClear(oldUid)`. Zatvaranje sesije u drugom tabu čisti React stanje i lokalni storage. Dokazano u testovima `crosstab-out`, `crosstab-cisti`, `crosstab-relogin`. |
-| **4. Odbacivanje zastarelih rezultata (stale popup/read/write)** | **POTVRĐENO** | Svaka promena stanja uvećava `AccountGate.generation`. Svaka asinhrona operacija poseduje `AccountTicket`. Ako se nalog promeni tokom mrežnog poziva, povratna vrednost se tiho ignoriše. Dokazano u `apps/web/test/auth-client.test.ts`. |
-| **5. Trenutno čišćenje privatnih lista i memorijski keš** | **POTVRĐENO** | `clearPrivate()` odmah prazni `followedTeamIds`, `manualFixtureIds`, `favoriteTeamIds`, `profile` i `email`. Firestore je konfigurisan isključivo sa `memoryLocalCache()`, bez pisanja privatnih dokumenata u IndexedDB. Dokazano statičkom analizom i testom `izvorni kod jezgra ne ugrađuje javni ključ ni trajni Firestore keš`. |
-| **6. Autentifikovani unlink uređaja uz bounded timeout** | **POTVRĐENO** | `removeDevice` se izvršava dok je korisnik još uvek autentifikovan (`request.auth.uid == uid`). Poziv je zaštićen sa `this.bounded(..., 5000)`. Ako mreža padne ili emulator visi, odjava se nastavlja nakon isteka tajmera bez blokiranja UI-ja. Dokazano u testu `zaglavljeni unlink ne blokira lokalnu odjavu`. |
-| **7. Brzi klikovi (omiljeni, praćenja, ručni izbori)** | **POTVRĐENO** | `AccountController.mutationQueue` serijalizuje sve upise; svaki upis prvo radi sveže čitanje pod važećim tiketom pa tek onda primenjuje izmenu. Dokazano u testu `brzi uzastopni klikovi na omiljene ne gaze jedan drugi`. |
-| **8. Konzistentan prikaz i čuvanje proizvoljne zone** | **POTVRĐENO** | `timeZoneForDisplay` validira format regularnim izrazom i `Intl.DateTimeFormat` proverom. Proizvoljna važeća IANA zona uređaja ili profila se dodaje u padajući meni i ne prepisuje se Beogradom. Dokazano u testovima `zona profila je overlay` i `prefs-server`. |
-| **9. Brava brisanja proverena pre učitavanja i reauth nastavak** | **POTVRĐENO** | `openUnder` prvo proverava `isDeletionOpen(db, uid)` i lokalnu zastavicu. Ako je brisanje u toku, profil se ne učitava niti ponovo kreira. Ako je prijava zastarela, ponovna prijava samo dovršava brisanje Auth korisnika. Dokazano u `brava-ostaje`, `brava-bez-profila`, `profil-c-obrisan`. |
-| **10. Realna perzistencija u dva browser konteksta** | **POTVRĐENO** | Verifikovano na pravom Chromium headless pretraživaču preko REST API-ja i višestrukih tabova. Korisnik A vidi svoje podatke nakon osvežavanja stranice; korisnik B u drugom tabu ima potpuno prazne liste. |
-| **11. Odsustvo push i Calendar dozvola pri prijavi** | **POTVRĐENO** | U celom toku prijave ne postoji poziv `Notification.requestPermission()`, `getToken()` niti traženje Google Calendar OAuth opsega (`GoogleAuthProvider` koristi podrazumevane scope-ove za email/profil). |
-| **12. Jedan Service Worker, bazna putanja i offline omotač** | **POTVRĐENO** | Aplikacija koristi tačno jedan Service Worker (`sw.ts`, izgrađen kao `sw.js` u korenu baze). Precaching sadrži 13 stavki uključujući `demo-schedule.json`. Prekid mreže ostavlja aplikaciju potpuno operativnom. Dokazano u `check-pwa.mjs`. |
-| **13. Otpornost nepodešenog javnog DEMO režima** | **POTVRĐENO** | Kada su environment promenljive prazne, klijent prelazi u `unconfigured` status uz jasnu poruku: „Google prijava nije podešena na ovom izdanju. Niko nije prijavljen. DEMO raspored radi bez naloga.“ Dokazano u `check-auth-browser.mjs` (korak 0) i `auth-client.test.ts`. |
-| **14. Rigoroznost i značenje tvrdnji u testovima** | **POTVRĐENO** | Provereno da nijedan test ne maskira greške sa `exit 0`, da `check-auth-browser.mjs` proverava direktno stanje u Firestore emulatoru (npr. nestanak dokumenta uređaja, prisustvo tombstone-a), i da se pre svake tvrdnje u DOM-u čeka eksplicitan element. |
+### 2.1. Teardown barijera (`firebase-app.ts`)
+- **Problem na `d66b127`:** `disposeFirebaseSession()` je postavljao `session = null` pre nego što bi `deleteApp(active.app)` završio. Konkurentni poziv je odmah vraćao `void` jer je video `session === null`. Pozivalac bi potom pozvao `ensureFirebaseSession()`, a SDK registar bi vratio stari app koji se tek gasi, što bi na kraju dovelo do `app-deleted` greške usred nove prijave.
+- **Fail-first dokaz:** Skripta `/tmp/matchahead-session-teardown-repro.cjs` je reprodukovala ovo ponašanje sa stvarnim SDK-om (exit 0 uz `next.app.isDeleted === true`).
+- **Ispravka u `4bc44b6`:** 
+  - Uvedena deljena promenljiva `teardown: Promise<void> | null`.
+  - `disposeFirebaseSession()` čeka postojeći `teardown` ukoliko je sesija već u procesu gašenja.
+  - `ensureFirebaseSession()` baca grešku ako se pozove dok je `teardown !== null`.
+  - Nova regresija `apps/web/test/session-teardown.test.ts` (4 testa) proverava preklapanje, barijeru remounta i zabranu kreiranja tokom gašenja sa stvarnim `firebase/app` SDK-om. Na starom kodu 3 testa padaju (fail-first potvrđen).
 
----
+### 2.2. Zakašnjeli popup failure i značka pokušaja (`account-controller.ts`)
+- **Problem na `d66b127`:** `noticeFailure` je uzimao trenutni tiket gejta (`this.gate.ticket()`). Ako korisnik klikne prijavu, pa se predomisli i klikne ponovo, ili ako se u međuvremenu uloguje drugi korisnik, zakašnjelo odbijanje prvog pop-upa bi pozvalo `applyError` na novom tiketu i obrisalo podatke novog korisnika.
+- **Fail-first dokaz:** Novi test u `apps/web/test/account-ownership.test.ts` (`stari failure posle novog klika ostaje bez dejstva` i `stari failure posle dolaska i kraja identiteta ostaje bez dejstva`) pada na starom kodu gde se greška bezuslovno primenjivala.
+- **Ispravka u `4bc44b6`:** `beginSignIn` vraća značku `{ uid: this.gate.uid, seq: this.nextSignInSeq(), endedEpoch: this.endedEpoch }`. Metoda `noticeFailure(message, attempt)` proverava sva tri polja pre poziva `applyError`. Ukoliko je promenjen UID, redni broj klika ili epoha identiteta, greška se ignoriše.
 
-## 4. Izvršene nezavisne provere i rezultati
+### 2.3. Razrešavanje `lastUid` u `finally` granama (`use-account.ts`)
+- **Problem na `d66b127`:** `deleteAccount().finally` je bezuslovno postavljao `lastUid.current = null`. Ukoliko bi nova prijava stigla pre nego što se sporo brisanje prethodnog naloga razreši, novi UID bi bio obrisan iz reference.
+- **Ispravka u `4bc44b6`:** Obe grane (`signOut` i `deleteAccount`) delegiraju na `settleUidAfterAccountEnd(current, endedUid)`. Referenca se nulira samo ukoliko i dalje odgovara nalogu koji se gasio. Pokriveno namenskim testom u `apps/web/test/account-uid-settlement.test.ts`.
 
-Sve provere su pokrenute u čistom radnom stablu nakon commita `d66b127`.
-
-### 4.1. Statička provera tipova (TypeScript)
-```bash
-./apps/web/node_modules/.bin/tsc --noEmit -p apps/web
-```
-- **Ishod:** **0 grešaka** (čisto prolazi).
-
-### 4.2. Jedinični testovi domena
-```bash
-node --experimental-strip-types --test packages/domain/test/*.test.ts
-```
-- **Ishod:** **24/24 PASS** (trajanje: 116 ms).
-
-### 4.3. Ugovori podataka
-```bash
-node scripts/check-data-contracts.mjs
-```
-- **Ishod:** **24/24 PASS** (trajanje: 125 ms).
-
-### 4.4. Jedinični testovi klijentske aplikacije
-```bash
-node --experimental-strip-types --test apps/web/test/*.test.ts
-```
-- **Ishod:** **63/63 PASS** (trajanje: 254 ms). Pokriva kompletnu logiku kontrolera, gejta, agende, lokalnog skladišta, keš politike i rute.
-
-### 4.5. Emulator testovi izolacije (Firestore pravila i Auth)
-```bash
-node scripts/check-auth.mjs
-```
-- **Ishod:** **4 unit domain + 5 unit web + 6/6 emulator testova PASS** (trajanje: 2.8 s).
-- Potvrđeno: Pravila na Firestore emulatoru odbijaju pristup tuđim podacima, zabranjuju izmenu zaključanog naloga u procesu brisanja, sprečavaju upis uređaja bez vlasnika i odbacuju klubove van definisana 4 tima.
-
-### 4.6. PWA integracioni test
-```bash
-node apps/web/scripts/check-pwa.mjs
-```
-- **Ishod:** **11/11 PASS** (uključujući offline servisiranje omotača i rasporeda, detekciju 360px širine, registraciju jednog workera, i odsustvo OAuth keširanja).
-
-### 4.7. Pravi headless browser test na izolovanim emulatorima
-```bash
-node apps/web/scripts/check-auth-browser.mjs
-```
-- **Ishod:** **49/49 PASS** (pravi Chromium proces, pravi Google popup tok kroz emulator widget, kompletna matrica sa dva naloga, višekratnim ciklusima prijave/odjave, cross-tab propagacijom, proverom otkazanog pop-upa i brisanjem naloga uz proveru `accountTombstones`).
-
-### 4.8. Nezavisna provera u potpuno svežem browser kontekstu (incognito context)
-Autorov test u `check-auth-browser.mjs` koristi drugi tab u istom browser kontekstu (čime dokazuje deljeno skladište i cross-tab odjavu). Da bi se potvrdilo da se profil i podešavanja stvarno prenose preko Firestore mreže na drugi uređaj / novi pregledač (a ne preko `localStorage`), Gemini je pokrenuo namenski test sa `browser.createBrowserContext()` (čisti kukiji, prazan `localStorage` i `sessionStorage`):
-- Prijava na svežem kontekstu kao `ana@example.com` kroz emulator widget.
-- **Rezultat:** `pressedFavorites = 1` (`football:rs:crvena-zvezda`), `selectedZone = 'UTC'` (vrednosti sačuvane u koraku 7 prethodnog testa).
-- **Ishod:** **POTVRĐENO.** Firestore podaci profila i omiljenih se uspešno prenose na potpuno nezavisan kontekst pregledača bez deljenog lokalnog skladišta (pri čemu fizički drugi uređaj ostaje odvojen u pogledu push tokena u fazi 09).
-
-### 4.9. Verifikacija responzivnosti na 360 px (bez horizontalnog skrolovanja)
-Pokrenut namenski Puppeteer pregled nad sveže izgrađenim bundle-om za sve četiri glavne rute:
-- `/#/` (Home / Početna) -> `scrollWidth = 360`, `clientWidth = 360`
-- `/#/moje` (Mine / Moje utakmice) -> `scrollWidth = 360`, `clientWidth = 360`
-- `/#/klubovi` (Clubs / Klubovi) -> `scrollWidth = 360`, `clientWidth = 360`
-- `/#/podesavanja` (Settings / Podešavanja) -> `scrollWidth = 360`, `clientWidth = 360`
-- **Ishod:** **Nema horizontalnog skrolovanja na uskim ekranima.** Snimci ekrana su uspešno generisani u `/tmp/matchahead-screenshots/` van git stabla.
+### 2.4. Dokaz raskida veze uređaja sa posejanim podacima (`check-auth-browser.mjs`)
+- **Problem na `d66b127`:** Provera `odjava-unlink` je samo konstatovala da je lista uređaja prazna pre i posle odjave, što nije bio dokaz brisanja postojećeg zapisa pod pravilima.
+- **Ispravka u `4bc44b6`:** Pre klika na odjavu, test kroz emulator admin REST API upisuje dva validna dokumenta: dokument tekuće instalacije (`installationId`) i dokument drugog uređaja (`dev-drugi-uredjaj-0001`). Nakon odjave, test potvrđuje:
+  1. `odjava-seed`: Oba dokumenta su postojala pre odjave (`seeded.length === 2`).
+  2. `odjava-unlink`: Dokument tekuće instalacije je obrisan, dok je drugi uređaj očuvan (`leftover.length === 1 && leftover[0].id === 'dev-drugi-uredjaj-0001'`).
 
 ---
 
-## 5. Dokumentovane granice i tehničke preporuke
+## 3. Razgraničenje autorovih dokaza i nezavisnih verifikacija
 
-1. **Emulator naspram produkcionog Google OAuth-a:**  
-   Pravi popup tok je verifikovan protiv Firebase Auth emulator widgeta (koji simulira popup prozor, unos emaila i izbor postojećeg naloga). Ponašanje pravih Google servera (npr. Google OneTap ili specifični mobilni Safari popup blokeri) zahtevaće verifikaciju u produkcionom pilotu.
-2. **`auth/requires-recent-login` tok:**  
-   U emulator okruženju sesija je uvek sveža, pa se `requires-recent-login` ne može prirodno izazvati u browser testu. Ovaj scenario je temeljno pokriven sintetičkim jediničnim testom u `auth-client.test.ts` i potvrđeno je da kontroler ne skida zastavicu brisanja i uspešno nastavlja brisanje pri novoj prijavi.
-3. **Čišćenje tombstona na backendu:**  
-   Klijent ispravno postavlja `accountTombstones/{uid}` na status `in_progress`. Pravila zabranjuju klijentu da briše ili menja ovaj zapis. Konačno brisanje tombstone zapisa ostaje odgovornost serverskog posla / Cloudflare Workera, što je u skladu sa arhitektonskom odlukom iz faze 04.
-4. **Environment konfiguracija i GitHub Variables:**  
-   `.github/workflows/pages.yml` je ispravno konfigurisan da mapira javne Firebase parametre iz GitHub Repository Variables. Handoff dokument pominje pending status podešavanja varijabli na repozitorijumu — ovo je operativni korak za koordinatora pre deploy-a, dok klijentski kod ostaje potpuno tolerantan na prazne varijable (fallback na DEMO).
+Sve nezavisne provere pokrenute su u čistom radnom stablu nad commitom `4bc44b6`.
+
+| Grupa provera | Naredba / Izvršilac | Ishod / Rezultat | Trajanje / Detalji |
+| :--- | :--- | :---: | :--- |
+| **Tipovi (TypeScript)** | `./apps/web/node_modules/.bin/tsc --noEmit -p apps/web` (Gemini) | **0 grešaka** (Exit 0) | Proverena celokupna web aplikacija sa novim tipovima pokušaja. |
+| **Domen testovi** | `node --experimental-strip-types --test packages/domain/test/*.test.ts` (Gemini) | **24/24 PASS** (Exit 0) | 115 ms. Ugovori rasporeda, identiteta i profila očuvani. |
+| **Ugovori podataka** | `node scripts/check-data-contracts.mjs` (Gemini) | **24/24 PASS** (Exit 0) | 114 ms. Validacija sintetičkih i domenskih scenarija. |
+| **Jedinični klijent & regresije** | `node --experimental-strip-types --test apps/web/test/*.test.ts` (Gemini) | **73/73 PASS** (Exit 0) | 281 ms. Uključuje 4 testa za `session-teardown`, 5 za `account-ownership` i 1 za `account-uid-settlement`. |
+| **Pravila i izolacija (Emulator)** | `node scripts/check-auth.mjs` (Gemini) | **6/6 emulator PASS + 9/9 unit PASS** (Exit 0) | 2.6 s. Odbijanje tuđih upisa, izolacija pod zivim pravilima, tombstone status. |
+| **PWA integracija** | `node apps/web/scripts/check-pwa.mjs` (Gemini) | **11/11 PASS** (Exit 0) | Dva build prolaza, offline servisiranje omotača i rasporeda, 1 SW, Pages baza. |
+| **Headless browser harness** | `node apps/web/scripts/check-auth-browser.mjs` (Gemini) | **52/52 PASS** (Exit 0) | Chromium, pravi popup tok, 2 korisnika, posejani unlink, cancel-spreman, brisanje i brava. |
+| **Nezavisni Incognito kontekst** | Namenska skripta (vidi sekciju 4) (Gemini) | **PASS** (Exit 0) | 3.0 s. `ana@example.com` povukla profil, omiljene i UTC zonu bez deljenog `localStorage`. |
+| **Responzivnost na 360 px** | Puppeteer screenshot provera (Gemini) | **PASS** (Exit 0) | `scrollWidth === clientWidth === 360` na sve 4 rute (bez horizontalnog overflow-a). |
 
 ---
 
-## 6. Zaključak
+## 4. Reproduktibilni dokaz nezavisnog browser konteksta
 
-Commit `d66b127` u potpunosti ispunjava sve funkcionalne, bezbednosne i arhitektonske zahteve integracije Faza 04 i 06. Kod je čist, tipski bezbedan, poseduje kompletnu test pokrivenost (od jediničnih testova do realnog headless browsera) i spreman je za spajanje.
+Kako autorov test u `check-auth-browser.mjs` koristi tabove unutar istog browser konteksta (što dokazuje deljeno skladište, ali ne i čist mrežni prenos bez lokalnih tragova), Gemini je izvršio nezavisnu proveru sa potpuno izolovanim incognito kontekstom (`browser.createBrowserContext()`).
+
+### Naredba za reprodukciju:
+```bash
+node -e '
+import { writeFileSync, readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { join } from "node:path";
+import puppeteer from "./apps/web/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js";
+
+const DIST = "/tmp/matchahead-auth-browser-dist";
+const mime = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8" };
+const server = createServer((req, res) => {
+  const urlPath = req.url.split("?")[0];
+  const file = urlPath === "/" ? "index.html" : urlPath.slice(1);
+  try {
+    res.writeHead(200, { "content-type": mime["." + file.split(".").pop()] ?? "application/octet-stream" });
+    res.end(readFileSync(join(DIST, file)));
+  } catch {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(readFileSync(join(DIST, "index.html")));
+  }
+});
+await new Promise((r) => server.listen(39875, "127.0.0.1", r));
+const browser = await puppeteer.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+function popupPage(b) {
+  return new Promise((resolve) => {
+    const onTarget = async (target) => {
+      if (target.type() === "page") {
+        const page = await target.page();
+        if (page) { b.off("targetcreated", onTarget); resolve(page); }
+      }
+    };
+    b.on("targetcreated", onTarget);
+  });
+}
+const proofLog = [];
+const log = (msg) => { console.log(msg); proofLog.push(msg); };
+try {
+  log("=== REPRODUCIBLE INCOGNITO CONTEXT PROOF ===");
+  log("Start time: " + new Date().toISOString());
+  const incognito = await browser.createBrowserContext();
+  const page = await incognito.newPage();
+  await page.goto("http://127.0.0.1:39875/#/podesavanja", { waitUntil: "load" });
+  const waitPopup = popupPage(browser);
+  await page.evaluate(() => { [...document.querySelectorAll("button")].find(b => b.innerText.includes("Prijavi se Google"))?.click(); });
+  const popup = await waitPopup;
+  await popup.waitForFunction(() => document.body.innerText.includes("Google.com"), { timeout: 15000 });
+  await popup.evaluate(() => { [...document.querySelectorAll("button, li, [role=\"button\"]")].find(el => el.innerText.includes("ana@example.com"))?.click(); });
+  await new Promise(r => setTimeout(r, 2000));
+  if (!popup.isClosed()) await popup.evaluate(() => { [...document.querySelectorAll("button")].find(b => b.innerText.includes("Sign in with Google"))?.click(); });
+  await page.waitForFunction(() => document.body.innerText.includes("Prijavljen: ana@example.com"), { timeout: 20000 });
+  const pressedFavorites = await page.$$eval(".club-list button[aria-pressed=\"true\"]", items => items.length);
+  const selectedZone = await page.$eval("#account-zone", el => el.value);
+  log("Verification: pressedFavorites=" + pressedFavorites + ", selectedZone=" + selectedZone);
+  if (pressedFavorites < 1 || selectedZone !== "UTC") throw new Error("Assertion failed");
+  log("PASS: Fresh incognito browser context loaded profile and favorites over Firestore network without shared local storage.");
+  log("End time: " + new Date().toISOString());
+  await incognito.close();
+  writeFileSync("/tmp/matchahead-incognito-proof.txt", proofLog.join("\n") + "\n", "utf8");
+} finally {
+  await browser.close();
+  server.close();
+}
+'
+```
+
+### Sačuvani izlazni artefakt (`/tmp/matchahead-incognito-proof.txt`):
+```text
+=== REPRODUCIBLE INCOGNITO CONTEXT PROOF ===
+Start time: 2026-10-01T15:50:52.374Z
+Verification: pressedFavorites=1, selectedZone=UTC
+PASS: Fresh incognito browser context loaded profile and favorites over Firestore network without shared local storage.
+End time: 2026-10-01T15:50:55.350Z
+```
+
+---
+
+## 5. Status konfiguracije i promenljivih okruženja
+
+Usklađenost handoff dokumentacije i stanja repozitorijuma je potvrđena:
+- Koordinator je potvrdio da `gh variable list --repo mlsivanovic/matchahead` vraća svih 6 javnih `VITE_FIREBASE_*` varijabli sa datumom ažuriranja `2026-10-01T12:45:21Z`.
+- `docs/handoffs/04-auth-client.md` u commitu `4bc44b6` je ažuriran i više ne sadrži zastarelu tvrdnju o pending varijablama.
+- U `.github/workflows/pages.yml` postoji čisto mapiranje varijabli u proces izgradnje.
+- Klijentski kod pri odsustvu ovih varijabli ostaje potpuno funkcionalan u javnom DEMO režimu bez grešaka.
+
+---
+
+## 6. Granice testiranja i nedokazani aspekti (NOT_TESTED Bounds)
+
+Sledeće stavke ostaju eksplicitno **NOT_TESTED** i ne smeju se smatrati pokrivenim ovim pregledom:
+1. **Pravi Google mobilni OAuth:** Provereno isključivo na Chromium headless pregledaču protiv Firebase Auth emulator widgeta. Ponašanje pravih Google servera, mobilnih webview-a i Safari popup blokera nije provereno.
+2. **Produkciona pravila na Firebase Cloudu:** Provereno na lokalnom Firestore emulatoru verzije 1.22.0. Pravila na oblaku nisu deploy-ovana.
+3. **Fizičke Push notifikacije i FCM tokeni:** Faza 02 i Faza 09 ostaju BLOCKED/OFF. Klijent ne traži notifikacione dozvole i ne registruje FCM tokene (trošak 0 EUR, bez billing servisa).
+4. **Edge CPU i Cloudflare Workers live migracija:** Nije testirano u produkciji; tombstone čišćenje ostaje zadatak budućeg backend radnika.
+5. **Fizički drugi uređaj:** Incognito test dokazuje da se podaci prenose preko Firestore mreže na novi klijent, ali hardverska odvojenost push tokena i instalacionih ID-jeva na fizičkim telefonima ostaje van opsega ove faze.
+6. **Obrada rasporeda i automatski kalendar:** Faze 05 i 07 ostaju blokirane do spajanja ovog lanca u `main`.
+
+---
+
+## 7. Zaključak
+
+Commit `4bc44b6` uspešno otklanja sve blokirajuće nalaze iz prethodne iteracije, uvodi fail-first testove i dokazuje raskid veze uređaja sa posejanim podacima. U okviru definisanih granica i emulator okruženja, klijentski kod je spreman za integraciju u `main`.
