@@ -1,5 +1,31 @@
 # Orkestracioni plan i mapa razvoja (Orchestration Plan)
 
+## Novi Run za fazu 05 — 1. oktobar 2026.
+
+`run_6d3c53cc583e`, koordinator `term_c4f77e01-fdd4-4811-8dc7-0eae8dff2781`.
+Korisnik je ovlastio tri navedena agenta, samostalne koordinatorske odluke,
+nadzor, integraciju i GitHub push posle uspešne provere. Ugovor i kriterijumi:
+`docs/phase-05-work-contract.md`. Sledeće sekcije o prvom talasu su istorija.
+
+| Vlasnik | Task / aktivni Dispatch | Checkout | Stanje |
+|---|---|---|---|
+| Grok | `task_5005528994dd` / `ctx_4afd0410a698` | `matchahead-05-server` | Stvarni rad potvrđen transcript-om; server, domenski ugovor i izvori. |
+| Muse | `task_d335ec2e38f2` / `ctx_9f999b596daf` | `matchahead-05-client` | Operator-launched `muse exec` radi pod Orca low-level Dispatch-om. Automatski start `ctx_40e3708960e7` readiness timeout, terminal released. |
+| Gemini CLI | `task_804dbb018b0e` / `ctx_a7b5497562f3` | `matchahead-05-review` | Aktivna provera izvora i QA plana; finalni pregled ide posle integracije. |
+
+Sva tri checkout-a su zasebni child worktree-i iz `main` na `7e09458`;
+koordinator menja globalne docs/CI i integriše commitove. Agentovi izvori,
+proizvod i pregled se ne uređuju iz drugih checkouta. Push/deploy ne rade radnici.
+
+Runtime odstupanje: `dispatch-show --preamble` za aktivne pokušaje ne sadrži
+`--dispatch-capability`, a validator ga zahteva. Gemini heartbeat pokušaji
+su odbijeni. Radnici ne smeju da rekonstruišu capability; isporuke i kasniji
+lifecycle recovery biće zabeleženi prema stvarnom stanju, bez lažnog success-a.
+
+Početni koordinatorski lokalni dokazi: domenski 24/24, web 73/73 i PWA build/
+browser checker PASS. Nema novih dokaza produkcionog source prava/potpunosti,
+izvedenog phase-05 adaptera, nove cloud objave ili GitHub push-a u ovom checkpointu.
+
 Datum: 30. septembar 2026.  
 Orkestracioni run: `run_b1cd86cb71c5` (status: normalan, final+idle; bez lifecycle komandi, bez push/deploy akcija)  
 Koordinator: `term_c83e83d8-4eef-4b6c-8602-fe2195768cce`  
