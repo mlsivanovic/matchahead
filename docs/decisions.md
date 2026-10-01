@@ -153,3 +153,11 @@ Razlog: operatori su u `docs/push-readiness-review.md` dobijali zastareli protok
 Dokaz: `docs/handoffs/02-push-reconciliation.md`, `docs/reviews/02-push-reconciliation.md` (27/27: 23 funkcionalna + 4 workerd).
 
 Migracija: nema (budući deploy ponovo koristi tag `v1-probe-directory` i postojeći namespace, bez novog namespace-a).
+
+## Odluka 05B — parsiranje u SQLite Durable Object-u, 1. oktobar 2026.
+
+Razlog: primena običnog Worker Free limita od 10 ms na sav kod rasporeda napravila bi neopravdanu tehničku blokadu. Aktuelna [Cloudflare DO dokumentacija](https://developers.cloudflare.com/durable-objects/platform/limits/) navodi 30 sekundi CPU po DO zahtevu; [cenovnik](https://developers.cloudflare.com/durable-objects/platform/pricing/) potvrđuje SQLite DO na Free planu uz dnevne kvote i odbijanje operacija posle limita. To se razlikuje od [običnog Worker ingress-a](https://developers.cloudflare.com/workers/platform/limits/).
+
+Odluka: jeftin ulazni Worker prosleđuje zahtev SQLite Durable Object-u; u DO se proveravaju autentifikacija, kvote, dozvola izvora, parsiranje i trajno sportsko stanje. Ne odbacivati HTML/PDF unapred zbog pretpostavljenih 10 ms. Podržane adaptere dokazati u workerd-u, sa granicom veličine i ukupnim IO rokovima. Testovi sintetičkih dozvola i stvarnih snimaka izvora ostaju odvojeni od produkcione dozvole i edge CPU dokaza.
+
+Ovo je izbor implementacije, ne tvrdnja uspešnog izvršavanja: Grok ga još razvija. Plan konkretnog Cloudflare naloga nije potvrđen (read-only subscriptions API je odbio token sa 403); nije uvedena naplata niti urađen deploy. Izvori bez dokumentovane odluke ostaju `unknown` i ne objavljuju utakmice. Nema novog hostinga, periodičnog preuzimanja ni AI API-ja. Migracija nije izvršena; budući raspored koristi zaseban DO namespace i ne menja postojeći push namespace.

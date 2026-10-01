@@ -101,7 +101,7 @@ Ako finalni dokaz klijenta stigne pre kraja, ugrađuje se stvarni podatak; inač
 
 ---
 
-## 2. Sledeći korak: Integracija i nezavisna provera (Next Wave)
+## Istorija prvog talasa: Integracija i nezavisna provera (Next Wave)
 
 Nakon završetka rada Groka i Muse-a:
 1. **Spajanje i integracija:**
@@ -113,7 +113,7 @@ Nakon završetka rada Groka i Muse-a:
 
 ---
 
-## 3. Dalje faze projekta (Roadmap)
+## Istorija prvog talasa: tadašnji roadmap
 
 | Faza | Naziv | Tehnički status i preduslovi | Može se raditi na DEMO / emulatorima? | Zahteva žive resurse / fizički uređaj? |
 |---|---|---|---|---|
@@ -130,7 +130,7 @@ Nakon završetka rada Groka i Muse-a:
 
 ---
 
-## 4. Razgraničenje: Šta je izvodljivo u DEMO/emulator režimu vs. Stvarni svet
+## Istorija prvog talasa: Šta je izvodljivo u DEMO/emulator režimu vs. Stvarni svet
 
 ### A. Potpuno izvodljivo na sintetičkim podacima i emulatorima (0 € budžet)
 - Razvoj i testiranje Firestore šeme i pravila (kroz `firebase emulators:exec`).
@@ -143,3 +143,12 @@ Nakon završetka rada Groka i Muse-a:
 - **Stvarni sportski podaci:** Postojeće revizije navode da nema potvrđene dozvole za besplatne API-je. Aplikacija se mora osloniti na DEMO raspored dok se ne potvrdi izvor sa dozvolom.
 - **Google Sign-In u produkciji:** Zahteva raspoređivanje konfiguracije i test na javnom domenu (`https://mlsivanovic.github.io/matchahead/`).
 - **PWA Push na zatvorenoj aplikaciji:** Prijem obaveštenja na PWA zatvorenoj pre slanja sa odvojenog pošiljaoca (NE Force stop, NE gašenje browsera, NE „pošalji pa zatvori”) mora se empirijski dokazati na fizičkom uređaju. Android je dostupan po korisniku; iPhone nije potvrđen; nijedan fizički push test nije izvršen.
+
+## Checkpoint nadzora faze 05 — 1. oktobar, 18:00 UTC
+
+- Koordinator je ponovio domensku proveru integrisanog `main`: 34/34 PASS. Prvi klijent: 91/91 web PASS i 11 PWA scenarija PASS. To nije finalni dokaz klijentske dorade niti servera.
+- Muse radi novi Task `task_b13ba1b5b2c8` / `ctx_9c68975dab53`, nakon prihvaćenog prvog commita. Obavezne dorade su jedna agenda/derbi, rok do kraja tela odgovora, abort/odjava, semantička validacija i opoziv izvora u svim lokalnim snimcima. Grok Task ostaje aktivan; Gemini završni QA čeka konačni HEAD.
+- Koordinator je dodatno rutirao: očuvanje prethodnog datuma pri date-only pomeranju, stabilan ID nezavisan od kola, tačan očekivani broj kola/klupskih redova, odbijanje skraćenog odgovora, ograničavanje sporog tela i sertifikatskog zahteva koji bi blokirali DO red.
+- Nova primarna platform dokumentacija razlikuje 30 s CPU u DO od 10 ms običnog Free ingress Worker-a. Odluka 05B uklanja preuranjenu tehničku zabranu parsera; stvarni workerd i edge dokazi se i dalje traže.
+- Audit korekcija `88a4683` integrisana kao `ebb72ab`: CZV lokalni sat nije UTC, hero sat je uočeni konflikt, kolo nije deo kanonskog ID-ja, uklonjena nepodržana sudska tvrdnja.
+- Konačni QA, servis deploy i GitHub push nisu urađeni. Stare roadmap tabele u ovom dokumentu su istorija prvog talasa; aktuelno stanje je `docs/progress.md`.
