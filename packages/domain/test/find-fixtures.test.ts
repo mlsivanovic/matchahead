@@ -441,6 +441,72 @@ test('neuspeh bez prethodnog snimka ne dobija checkedAt, a posle uspeha ga ne po
   assert.equal(held.upstreamRequests, 0);
 });
 
+test('pomeranje samo datuma pamti prethodni datum i ponavljanje ne diže reviziju', () => {
+  const cache = memoryCache();
+  const league = structuredClone(feeds()[0]);
+  assert.ok(league);
+  const copies = league.pages.flatMap((page) => page.fixtures).filter((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(copies.length, 2);
+  for (const sample of copies) {
+    sample.startsAtUtc = null;
+    sample.printedLocalTime = null;
+    sample.sourceClaimsTimeConfirmed = false;
+    sample.sourceTimeZone = null;
+    sample.scheduledLocalDate = '2026-10-10';
+    sample.previousStartsAtUtc = null;
+    sample.previousScheduledLocalDate = '2026-10-01';
+  }
+  const query = footballQuery();
+  findFixtures({ team: team('football:rs:partizan'), query, feeds: [league], cache, policy: dataset.policy });
+  const key = `football:rs:partizan:${query.seasonId}`;
+  const first = cache.get(key)?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(first?.scheduledLocalDate, '2026-10-10');
+  assert.equal(first?.previousScheduledLocalDate, '2026-10-01');
+  assert.equal(first?.startsAtUtc, null);
+  assert.equal(first?.previousStartsAtUtc, null);
+  const revision = first?.revision;
+
+  for (const sample of copies) sample.previousScheduledLocalDate = null;
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:20:00Z', refresh: true }),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  const repeat = cache.get(key)?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(repeat?.previousScheduledLocalDate, '2026-10-01');
+  assert.equal(repeat?.revision, revision);
+
+  for (const sample of copies) sample.scheduledLocalDate = '2026-10-11';
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T12:40:00Z', refresh: true }),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  const moved = cache.get(key)?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(moved?.scheduledLocalDate, '2026-10-11');
+  assert.equal(moved?.previousScheduledLocalDate, '2026-10-10');
+  assert.equal(moved?.previousStartsAtUtc, null);
+  assert.equal(moved?.revision, (revision ?? 0) + 1);
+  const canonical = cache.get('__matchahead_canonical__')?.fixtures.find((fixture) => fixture.id === moved?.id);
+  assert.equal(canonical?.previousScheduledLocalDate, '2026-10-10');
+  assert.equal(canonical?.scheduledLocalDate, '2026-10-11');
+
+  findFixtures({
+    team: team('football:rs:partizan'),
+    query: footballQuery({ now: '2027-01-15T13:00:00Z', refresh: true }),
+    feeds: [league],
+    cache,
+    policy: dataset.policy,
+  });
+  const stable = cache.get(key)?.fixtures.find((fixture) => fixture.providerFixtureId === 'syn-confirmed');
+  assert.equal(stable?.revision, moved?.revision);
+  assert.equal(stable?.previousScheduledLocalDate, '2026-10-10');
+});
+
 test('nemoguć datum i trenutak ne prolaze kalendarsku proveru', () => {
   assert.equal(isRealCalendarDate('2027-02-30'), false);
   assert.equal(isRealCalendarDate('2024-02-29'), true);

@@ -1,0 +1,22 @@
+{
+  // Ne pokretati wrangler deploy. Produkcija: SCHEDULE_MODE=production, bez SCHEDULE_LAB_URL.
+  // Ne dirati worker matchahead-push-probe. Ovaj zadatak ne menja naplatu niti nalog.
+  "name": "matchahead-schedule",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-27",
+  "workers_dev": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCHEDULE",
+        "class_name": "ScheduleDirectoryObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-schedule-directory",
+      "new_sqlite_classes": ["ScheduleDirectoryObject"]
+    }
+  ]
+}

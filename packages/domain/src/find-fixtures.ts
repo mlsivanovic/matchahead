@@ -464,13 +464,14 @@ function materialize(team: Team, draft: ObservedFixtureDraft, previous: Fixture 
 
   let previousStartsAtUtc = draft.previousStartsAtUtc;
   let previousScheduledLocalDate = draft.previousScheduledLocalDate;
-  if (previous && previousStartsAtUtc === null) {
-    if (previous.startsAtUtc && previous.startsAtUtc !== startsAtUtc) {
-      previousStartsAtUtc = previous.startsAtUtc;
-      previousScheduledLocalDate = previous.scheduledLocalDate;
-    } else {
-      previousStartsAtUtc = previous.previousStartsAtUtc;
-      previousScheduledLocalDate = previous.previousScheduledLocalDate;
+  if (previous) {
+    if (previousStartsAtUtc === null) {
+      previousStartsAtUtc = previous.startsAtUtc !== startsAtUtc ? previous.startsAtUtc : previous.previousStartsAtUtc;
+    }
+    if (previousScheduledLocalDate === null) {
+      previousScheduledLocalDate = previous.scheduledLocalDate !== draft.scheduledLocalDate
+        ? previous.scheduledLocalDate
+        : previous.previousScheduledLocalDate;
     }
   }
 
