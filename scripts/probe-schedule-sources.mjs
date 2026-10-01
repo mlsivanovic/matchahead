@@ -448,7 +448,7 @@ async function probeEuroleaguePdf() {
     missingRoundsIn1To38: missingRounds.length === 0 ? 'None (all 1..38 present)' : missingRounds.join(', '),
     observationNote: 'Raw token counts reflect textual mentions; full end-to-end fixture extraction requires row-level parsing of round, date, participants, and confirmed GMT time.',
     freshnessLimitation: 'Static baseline regular season schedule; in-season reschedulings lag unless PDF is republished',
-    zeroEurRuntimeFit: 'local extraction only, Worker not verified (requires edge workerd CPU measurement against 10ms Free limit)',
+    zeroEurRuntimeFit: 'Documented DO CPU budget (30s default) removes 10ms ingress constraint; actual workerd runtime proof pending',
     verdict
   };
 }

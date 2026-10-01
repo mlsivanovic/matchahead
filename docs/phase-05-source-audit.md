@@ -156,12 +156,17 @@ Grok mora testirati:
 4. **Keširanje i kuldaun:** Drugi zahtev unutar 15 minuta vraća keš bez mrežnih poziva. Simulacija greške izvora primenjuje `stale-while-revalidate`.
 5. **Autentifikacija:** Odbijanje zahteva bez Firebase Bearer tokena.
 
-### Nivo 3: Izvodljivost izvršavanja na platformi (0 € budžet i Cloudflare Workers)
-- **Target okruženje:** Cloudflare Workers Free (budžet 0 €) sa ograničenjem od 10 ms CPU po zahtevu i bez pristupa sistemskim binarnim paketima poput `pdftotext`.
-- **Lokalni Node.js dokaz nije produkcijski host:** Implementacija na Node.js filesystem modulima služi kao lokalna provera, a ne odobreni produkcijski host. Produkcijski bundle mora izbegavati `fs`, `child_process` i `Atomics.wait`.
+### Nivo 3: Izvodljivost izvršavanja na platformi (0 € budžet i Cloudflare Workers / Durable Objects)
+- **Razgraničenje budžeta procesiranja (primarna dokumentacija Cloudflare):**
+  - **Ingress Worker (Free plan):** Ograničen na standardnih 10 ms CPU po zahtevu. Njegova uloga je isključivo jeftina provera metoda, putanje, porekla (CORS), veličine tela i prosleđivanje zahteva. Verifikacija Firebase tokena/potpisa, trajne kvote (rate limiting), parsiranje i skladištenje izvršavaju se unutar Durable Object-a.
+  - **SQLite Durable Object:** Prema zvaničnoj specifikaciji platformskih limita ([Cloudflare DO Limits](https://developers.cloudflare.com/durable-objects/platform/limits/)), CPU budžet po zahtevu u SQLite Durable Object-u iznosi **30 sekundi** (fusnota 4: resetuje se na 30 s po svakom dolaznom zahtevu) i nije uslovljen plaćenim planom. Prema cenovniku ([Cloudflare DO Pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)), SQLite DO je dostupan na Free planu (100.000 zahteva/dan, 13.000 GB-s/dan, 5 GB skladišta; prekoračenje kvote odbija zahteve bez naplate).
+- **Razgraničenje 10 ms limita i status runtime dokaza:**
+  - Dokumentovani budžet od 30 s u Durable Object-u uklanja tvrdnju o 10 ms neizvodljivosti kao razlog za odustajanje od obrade u DO-u.
+  - Stvarni dokaz izvođenja HTML/PDF parsera u `workerd` runtime okruženju (uz `node:zlib` kompatibilnost ili `DecompressionStream`) ostaje na čekanju (runtime proof pending).
 - **Preporuka i QA kriterijum:**
-  - Za produkcijski servis rasporeda target ostaje Worker ulaz uz SQLite / Durable Object adapter.
-  - Završni QA zahteva proveru pod `workerd` okruženjem i dokumentovanje izmerenog edge CPU statusa. Ako parsiranje PDF-a prelazi 10 ms CPU, status se mora transparentno označiti kao `source_error` / `unknown` bez pretpostavke o novom hostingu ili plaćenim resursima.
+  - Ingress Worker ostaje minimalan i lagan; kapija objavljivanja izvora (`publication`) ostaje `unknown` po defaultu za neproverene izvore.
+  - Za produkcijski servis rasporeda target ostaje Worker ulaz povezan sa SQLite Durable Object adapterom.
+  - Lokalni Node.js dokaz (fs moduli) služi samo za offline verifikaciju, dok završni QA zahteva proveru pod `workerd` okruženjem i dokumentovanje izmerenog edge CPU statusa i limita memorije/baze bez pretpostavke o promeni hostinga ili plaćenom planu (Free nalog ostaje nepotvrđen 403 u lokalnom okruženju).
 
 ### Nivo 4: Klijentski PWA tok (`apps/web/`)
 Muse mora verifikovati:
@@ -182,7 +187,7 @@ Muse mora verifikovati:
 
 1. **Tehnička izvodljivost:**
    - ABA kalendar i FSS Superliga pružaju javne podatke za domaća prvenstva, ali sa nepotpunim satnicama (većina mečeva je `date_only` ili `time_tbd`).
-   - Zvanični Euroleague PDF kalendar sadrži 38 kola sa GMT satnicama, ali zahteva uvažavanje platformskih CPU ograničenja (10 ms na Workers Free).
+   - Zvanični Euroleague PDF kalendar sadrži 38 kola sa GMT satnicama. Dokumentovani budžet od 30 s CPU u SQLite Durable Object-u uklanja prepreku od 10 ms, dok stvarni dokaz izvođenja pod `workerd` okruženjem ostaje predmet empirijske provere u završnom QA.
 2. **Pravni i ugovorni status:**
    - MatchAhead nema verifikovanu licencu. Korišćenje podataka zavisi od odluke operatera, a javni ICS feed ostaje ograđen (gated).
 3. **Nezavisni QA:**
