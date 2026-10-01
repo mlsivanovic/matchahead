@@ -65,7 +65,11 @@ function staticChecks(dir) {
   const registers = app.split('serviceWorker.register').length - 1;
   assert(registers === 1, `registracija service worker-a: ${registers}`);
   assert(!app.includes('firebase-messaging-sw'), 'aplikacija registruje drugi worker');
-  assert(!app.includes('findFixtures'), 'aplikacija zove fazu 05');
+  // Faza 05: jedini sportski mrežni poziv iz browsera je konfigurisani server.
+  assert(app.includes('/api/find-fixtures'), 'klijent nema poziv faze 05');
+  for (const host of ['aba-liga.com', 'api-football', 'api-sports.io', 'thesportsdb.com', 'euroleaguebasketball']) {
+    assert(!app.includes(host), `browser zove sportski host direktno: ${host}`);
+  }
   const schedule = JSON.parse(readDist(dir, 'data/demo-schedule.json'));
   assert(schedule.kind === 'synthetic-demo' && schedule.publication === 'forbidden', 'raspored nije zabranjen DEMO');
   console.log('PASS: statička provera /repo/ manifesta, jednog workera i DEMO rasporeda');

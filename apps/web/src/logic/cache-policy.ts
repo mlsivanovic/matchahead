@@ -25,6 +25,20 @@ export function isPublicScheduleUrl(url: string): boolean {
 }
 
 /**
+ * Faza 05: privatni API servera rasporeda nikad ne ulazi u keš.
+ * Odgovori sa /api/ uvek idu direktno na mrežu (network-only),
+ * isto kao OAuth i tuđi API odgovori.
+ */
+export function isPrivateApiUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, 'http://local');
+    return parsed.pathname === '/api' || parsed.pathname.startsWith('/api/');
+  } catch {
+    return url.includes('/api/');
+  }
+}
+
+/**
  * Workbox precache (`workbox-`) čisti sama biblioteka, tek kad novi omotač
  * postoji. Imenovani raspored se ne briše ovde: neuspeo odgovor ne sme
  * da obriše poslednji sačuvani DEMO fajl.

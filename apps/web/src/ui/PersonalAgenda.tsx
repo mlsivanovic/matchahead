@@ -19,6 +19,8 @@ import {
 import { sportLabel } from '../logic/clubs.ts';
 import { routeHash } from '../logic/routes.ts';
 import { competitionName, isScheduleStale, type DemoSchedule } from '../logic/schedule.ts';
+import type { LastGoodSchedule } from '../logic/schedule-store.ts';
+import { scheduleKindLabel, ServerFixtureCard } from './ScheduleFinder.tsx';
 import {
   ALL_FILTER_VALUE,
   EMPTY_AGENDA_FILTER,
@@ -51,6 +53,7 @@ export interface PersonalAgendaHomeProps {
   followed: readonly string[];
   manualFixtureIds: readonly string[];
   onToggleManual: (fixtureId: string) => void;
+  serverSnapshots?: readonly LastGoodSchedule[];
 }
 
 export interface PersonalAgendaScreenProps {
@@ -63,10 +66,12 @@ export interface PersonalAgendaScreenProps {
   onToggleManual: (fixtureId: string) => void;
   draftNote: string;
   onDraft: (value: string) => void;
+  serverSnapshots?: readonly LastGoodSchedule[];
 }
 
 export function PersonalAgendaHome(props: PersonalAgendaHomeProps) {
   const { schedule, error, now, timeZone, online, followed, manualFixtureIds, onToggleManual } = props;
+  const serverSnapshots = props.serverSnapshots ?? [];
   const agenda = useMemo(
     () => (schedule ? buildUserAgenda(schedule.fixtures, followed, manualFixtureIds) : []),
     [schedule, followed, manualFixtureIds],
@@ -158,6 +163,13 @@ export function PersonalAgendaHome(props: PersonalAgendaHomeProps) {
               />
             ))
           )}
+          <ServerAgendaSection
+            snapshots={serverSnapshots}
+            timeZone={timeZone}
+            followed={followed}
+            manualFixtureIds={manualFixtureIds}
+            onToggleManual={onToggleManual}
+          />
         </>
       ) : null}
     </section>
@@ -280,6 +292,13 @@ export function PersonalAgendaScreen(props: PersonalAgendaScreenProps) {
             onToggleManual={onToggleManual}
             expandedId={expandedId}
             onToggleDetail={setExpandedId}
+          />
+          <ServerAgendaSection
+            snapshots={props.serverSnapshots ?? []}
+            timeZone={timeZone}
+            followed={followed}
+            manualFixtureIds={manualFixtureIds}
+            onToggleManual={onToggleManual}
           />
           <h2>Ručni izbor iz DEMO kataloga</h2>
           <p className="meta">Katalog je nezavisan od praćenih klubova: svaku DEMO utakmicu možeš dodati ili ukloniti ručno.</p>
@@ -474,6 +493,65 @@ function AgendaEntryCard(props: {
 function FilterButton(props: { pressed: boolean; onClick: () => void; children: string }) {
   return (
     <button type="button" aria-pressed={props.pressed} onClick={props.onClick}>{props.children}</button>
+  );
+}
+
+/**
+ * Faza 05: serverske utakmice u ličnoj agendi. Svaki snimak nosi tačno
+ * poreklo (režim i poslednju uspešnu proveru); bez uspešnog pronalaženja
+ * nema sekcije. Derbi deduplikacija radi preko buildUserAgenda: ista
+ * utakmica je jedan red čak i kada se prate oba kluba.
+ */
+export function ServerAgendaSection(props: {
+  snapshots: readonly LastGoodSchedule[];
+  timeZone: string;
+  followed: readonly string[];
+  manualFixtureIds: readonly string[];
+  onToggleManual: (fixtureId: string) => void;
+}) {
+  const { snapshots, timeZone, followed, manualFixtureIds, onToggleManual } = props;
+  const agendaSnapshots = useMemo(
+    () => snapshots.map((snapshot) => ({
+      snapshot,
+      entries: buildUserAgenda(snapshot.response.result.futureFixtures, followed, manualFixtureIds),
+    })).filter((group) => group.entries.length > 0),
+    [snapshots, followed, manualFixtureIds],
+  );
+  if (snapshots.length === 0) return null;
+  return (
+    <>
+      <h2>Pronađene utakmice</h2>
+      {agendaSnapshots.length === 0 ? (
+        <p>Nema serverskih utakmica za praćene klubove. Pronađi raspored na ekranu Klubovi.</p>
+      ) : null}
+      {agendaSnapshots.map(({ snapshot, entries }) => {
+        const teamName = snapshot.response.teams.find((team) => team.id === snapshot.teamId)?.name ?? snapshot.teamId;
+        const competitions = new Map(snapshot.response.competitions.map((competition) => [competition.id, competition.name]));
+        return (
+          <div key={`${snapshot.teamId}:${snapshot.seasonId}`} data-server-agenda={snapshot.teamId} data-provenance={snapshot.checkedAt ?? undefined}>
+            <p className="meta">
+              <strong>{teamName}</strong> · {scheduleKindLabel(snapshot.kind)} ·{' '}
+              {snapshot.checkedAt ? (
+                <>poslednja uspešna provera: <time dateTime={snapshot.checkedAt}>{formatFetchedAt(snapshot.checkedAt, timeZone)}</time>.</>
+              ) : (
+                <>još nema uspešne provere izvora.</>
+              )}
+            </p>
+            {entries.map((entry) => (
+              <ServerFixtureCard
+                key={entry.fixture.id}
+                fixture={entry.fixture}
+                competitionName={competitions.get(entry.fixture.competitionId) ?? entry.fixture.competitionId}
+                timeZone={timeZone}
+                demo={false}
+                tracked
+                onToggleManual={onToggleManual}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </>
   );
 }
 

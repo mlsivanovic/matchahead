@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isPublicScheduleUrl, isSensitiveUrl, PUBLIC_SCHEDULE_CACHE, shouldDeleteCacheOnActivate } from '../src/logic/cache-policy.ts';
+import { isPrivateApiUrl, isPublicScheduleUrl, isSensitiveUrl, PUBLIC_SCHEDULE_CACHE, shouldDeleteCacheOnActivate } from '../src/logic/cache-policy.ts';
 import { isComposingElement, mayApplyUpdate } from '../src/logic/update-policy.ts';
 import { isStandaloneDisplay, needsIosInstallHelp } from '../src/logic/install.ts';
 
@@ -13,6 +13,13 @@ test('OAuth i Google API se ne keširaju, javni DEMO raspored jeste kandidat', (
   assert.equal(isSensitiveUrl('https://example.github.io/repo/oauth/token?access_token=tajna'), true);
   assert.equal(isSensitiveUrl('https://example.github.io/repo/data/demo-schedule.json'), false);
   assert.equal(isPublicScheduleUrl('https://example.github.io/repo/data/demo-schedule.json'), true);
+});
+
+test('privatni /api/ odgovori su network-only, javni DEMO fajl nije privatan', () => {
+  assert.equal(isPrivateApiUrl('https://raspored.example/api/find-fixtures'), true);
+  assert.equal(isPrivateApiUrl('https://raspored.example/api/'), true);
+  assert.equal(isPrivateApiUrl('https://example.github.io/repo/data/demo-schedule.json'), false);
+  assert.equal(isPrivateApiUrl('https://example.github.io/repo/index.html'), false);
 });
 
 test('aktivacija čuva raspored i workbox precache', () => {

@@ -1,7 +1,7 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 
-import { isSensitiveUrl, PUBLIC_SCHEDULE_CACHE, shouldDeleteCacheOnActivate } from './logic/cache-policy.ts';
+import { isPrivateApiUrl, isSensitiveUrl, PUBLIC_SCHEDULE_CACHE, shouldDeleteCacheOnActivate } from './logic/cache-policy.ts';
 
 /**
  * Jedini service worker ovog scope-a: offline omotač i budući FCM.
@@ -34,7 +34,8 @@ const manifest = (self as unknown as WorkerScope).__WB_MANIFEST;
 worker.addEventListener('fetch', (event) => {
   const request = event.request;
   if (!request) return;
-  const sensitive = isSensitiveUrl(request.url) || request.headers.has('authorization');
+  // Faza 05: privatni /api/ odgovori su network-only, nikad iz keša.
+  const sensitive = isSensitiveUrl(request.url) || isPrivateApiUrl(request.url) || request.headers.has('authorization');
   if (!sensitive) return;
   event.stopImmediatePropagation();
   event.respondWith(fetch(request, { cache: 'no-store' }));

@@ -5,7 +5,10 @@ import { APP_BUILD } from './build.ts';
 import { AccountController } from './logic/account-controller.ts';
 import { ensureInstallationId } from './logic/firebase-app.ts';
 import { routeHash, routeNavLabel, parseRoute, type RouteId } from './logic/routes.ts';
+import { currentScheduleIdToken } from './logic/schedule-auth.ts';
+import { readScheduleServerConfig } from './logic/schedule-config.ts';
 import { parseDemoSchedule, type DemoSchedule } from './logic/schedule.ts';
+import { ScheduleFinder, useScheduleFinder } from './ui/ScheduleFinder.tsx';
 import { useAccount } from './logic/use-account.ts';
 import {
   browserStore,
@@ -43,6 +46,20 @@ export function App() {
 
   const controller = useMemo(() => new AccountController(), []);
   const installationId = useMemo(() => ensureInstallationId(browserStore(localStorage)), []);
+  // Faza 05: trajno poslednje dobro stanje je na uređaju (localStorage),
+  // javni podaci koji preživljavaju zamenu naloga. Nema periodičnog poziva.
+  const scheduleStore = useMemo(() => browserStore(localStorage), []);
+  const scheduleServer = useMemo(() => {
+    const env = import.meta.env as unknown as { VITE_SCHEDULE_API_URL?: string };
+    return readScheduleServerConfig({ VITE_SCHEDULE_API_URL: env.VITE_SCHEDULE_API_URL });
+  }, []);
+  const finder = useScheduleFinder({
+    apiBase: scheduleServer.kind === 'ready' ? scheduleServer.baseUrl : null,
+    getIdToken: currentScheduleIdToken,
+    store: scheduleStore,
+    now,
+    online,
+  });
   const { setup, account, signIn, signOut, deleteAccount } = useAccount({
     controller,
     fallbackTimeZone: prefs.timeZone,
@@ -63,6 +80,20 @@ export function App() {
   const displayTimeZone = signedIn && account.profile
     ? timeZoneForDisplay(account.profile.timeZone)
     : prefs.timeZone;
+  // Zamena naloga prekida tekući autentifikovani zahtev: prekinuto se
+  // nikad ne upisuje. Javni snimci na uređaju ostaju (nisu podaci naloga),
+  // a agenda i dalje čita samo praćenja/ručne izbore tekućeg naloga.
+  const accountIdentity = `${account.status}:${account.uid ?? ''}`;
+  useEffect(() => {
+    finder.abortPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountIdentity]);
+  // Agendu grade samo provereni snimci: blokada i DEMO se u njoj ne
+  // prikazuju kao pouzdane utakmice (DEMO ionako nije u trajnom stanju).
+  const verifiedSnapshots = useMemo(
+    () => finder.snapshots.filter((snapshot) => snapshot.kind === 'verified-schedule'),
+    [finder.snapshots],
+  );
 
   useEffect(() => {
     setUpdateBlocker(() => composingFromDocument(document));
@@ -194,6 +225,7 @@ export function App() {
             followed={followed}
             manualFixtureIds={manualFixtureIds}
             onToggleManual={toggleManual}
+            serverSnapshots={verifiedSnapshots}
           />
         ) : null}
         {route === 'mine' ? (
@@ -207,9 +239,24 @@ export function App() {
             onToggleManual={toggleManual}
             draftNote={draftNote}
             onDraft={changeDraft}
+            serverSnapshots={verifiedSnapshots}
           />
         ) : null}
-        {route === 'clubs' ? <ClubsScreen followed={followed} onToggle={toggleFollow} /> : null}
+        {route === 'clubs' ? (
+          <ClubsScreen
+            followed={followed}
+            onToggle={toggleFollow}
+            finder={(
+              <ScheduleFinder
+                state={finder}
+                timeZone={displayTimeZone}
+                followed={followed}
+                manualFixtureIds={manualFixtureIds}
+                onToggleManual={toggleManual}
+              />
+            )}
+          />
+        ) : null}
         {route === 'settings' ? (
           <SettingsScreen
             prefs={prefs}

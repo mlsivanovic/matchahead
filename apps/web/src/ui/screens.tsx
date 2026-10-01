@@ -168,6 +168,7 @@ function Group(props: {
 export function ClubsScreen(props: {
   followed: readonly string[];
   onToggle: (teamId: string) => void;
+  finder?: ReactNode;
 }) {
   const [sport, setSport] = useState<Sport>('football');
   const [query, setQuery] = useState('');
@@ -206,6 +207,7 @@ export function ClubsScreen(props: {
           );
         })}
       </ul>
+      {props.finder ?? null}
     </section>
   );
 }
