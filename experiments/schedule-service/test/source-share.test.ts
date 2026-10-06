@@ -217,6 +217,33 @@ test('mešani provajderi: novo preuzimanje ne briše već sačuvanu ligu', async
   await assertClientValid(later.body);
 });
 
+test('istekla liga objavljuje pomeraj i dok je klupski snimak kupa još svež', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ma-mixed-expiry-'));
+  const app = mixedHarness(directory);
+  await app.post(PARTIZAN, false, START);
+  app.cupListed = true;
+  const before = await app.post(ZVEZDA, false, '2027-01-15T12:01:00.000Z');
+  const oldDerby = (before.body as FindFixturesHttpSuccess).result.futureFixtures.find((item) => item.providerFixtureId === 'derbi');
+  assert.ok(oldDerby);
+  app.leagueRows[0] = { ...app.leagueRows[0], scheduledLocalDate: '2027-03-04', startsAtUtc: '2027-03-04T18:00:00Z' };
+  const after = await app.post(ZVEZDA, false, '2027-01-15T18:00:00.000Z');
+  const body = after.body as FindFixturesHttpSuccess;
+  const moved = body.result.futureFixtures.find((item) => item.providerFixtureId === 'derbi');
+  assert.equal(after.status, 200);
+  assert.deepEqual(app.bodies, { league: 2, cup: 1 });
+  assert.equal(body.result.cacheStatus, 'fetched');
+  assert.equal(body.result.upstreamRequests, 1);
+  assert.equal(moved?.scheduledLocalDate, '2027-03-04');
+  assert.equal(moved?.revision, oldDerby.revision + 1);
+  assert.equal(body.changes.filter((change) => change.kind === 'rescheduled').length, 1);
+  assert.equal(body.manifests.find((item) => item.provider === 'cup')?.lastSuccessAt, '2027-01-15T12:01:00.000Z');
+  await assertClientValid(after.body);
+  const repeated = await app.post(ZVEZDA, false, '2027-01-15T18:00:30.000Z');
+  assert.deepEqual(app.bodies, { league: 2, cup: 1 });
+  assert.equal((repeated.body as FindFixturesHttpSuccess).result.futureFixtures.find((item) => item.providerFixtureId === 'derbi')?.revision, moved?.revision);
+  assert.equal((repeated.body as FindFixturesHttpSuccess).changes.length, 0);
+});
+
 test('istekli dobar snimak ne zove izvor dok traje cooldown posle kvara', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'ma-stale-fail-'));
   const app = harness(directory, 'league');
@@ -557,6 +584,7 @@ function loadFrom(
 function mixedHarness(directory: string): {
   bodies: { league: number; cup: number };
   cupListed: boolean;
+  leagueRows: Row[];
   post(teamId: string, refresh: boolean, now: string): Promise<{ status: number; body: unknown }>;
 } {
   let nowIso = START;
@@ -650,6 +678,7 @@ function mixedHarness(directory: string): {
   } satisfies ScheduleDeps);
   return {
     get bodies() { return { league: state.league, cup: state.cup }; },
+    get leagueRows() { return leagueRows; },
     get cupListed() { return state.cupListed; },
     set cupListed(value: boolean) { state.cupListed = value; },
     post(teamId: string, refresh: boolean, now: string) {

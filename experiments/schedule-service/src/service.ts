@@ -29,7 +29,6 @@ import type { QuotaDeny, QuotaGate } from './quota-logic.ts';
 import {
   SourceFlight,
   feedsToPublish,
-  hasLeagueFeed,
   planSharedReads,
   recordsAfterAttempt,
   servedClock,
@@ -247,7 +246,7 @@ export class ScheduleService {
       network: false,
     }));
     const clubRecord = this.deps.store.get(cacheKey);
-    const clubSkip = !hasLeagueFeed(described.feeds, described.shares)
+    const clubSkip = described.feeds.every((feed) => feed.publication !== 'allowed')
       && shouldSkipNetwork(clubRecord, now, request.request.refresh);
     const plan = planSharedReads({
       feeds: described.feeds,
@@ -335,7 +334,6 @@ export class ScheduleService {
       competitions: mergeById(described.competitions, (fetched ?? policy)?.competitions ?? []),
       technicalSuccess: fetched?.technicalSuccess ?? [],
     };
-    this.projectNewFeeds(cacheKey, loaded.feeds, now);
     const previous = this.deps.store.get(cacheKey)?.fixtures ?? [];
     let result: FindFixturesResult;
     try {
@@ -351,6 +349,7 @@ export class ScheduleService {
         },
         feeds: loaded.feeds,
         cache: this.deps.store,
+        projectSourcePages: !plan.clubCacheHit,
       });
     } catch {
       return finish(400, errorBody('invalid_body', 'Raspored nije mogao da se proveri.'), 'invalid_body', team.id);
@@ -421,23 +420,6 @@ export class ScheduleService {
       technicalSuccess: [],
       feeds: mapped.map((feed) => ({ ...feed, publication: 'unknown' as const, pages: [] })),
     };
-  }
-
-  /** Svež klupski snimak ne sme da sakrije provajdera koji zajednička strana već ima. */
-  projectNewFeeds(cacheKey: string, feeds: readonly CompetitionFeed[], now: string): void {
-    const saved = this.deps.store.get(cacheKey);
-    if (!saved) return;
-    const known = new Set(saved.coverage.map((row) => `${row.competitionId}\t${row.provider}`));
-    const missing = feeds.some((feed) =>
-      feed.publication === 'allowed'
-      && feed.failure === 'none'
-      && feed.pages.some((page) => page.fixtures.length > 0)
-      && !known.has(`${feed.competitionId}\t${feed.provider}`),
-    );
-    if (!missing) return;
-    const staleSuccess = new Date(Date.parse(now) - (DEFAULT_ON_DEMAND_POLICY.reuseWithinMinutes + 1) * 60_000).toISOString();
-    const staleAttempt = new Date(Date.parse(now) - DEFAULT_ON_DEMAND_POLICY.minRefreshMinutes * 60_000).toISOString();
-    this.deps.store.set(cacheKey, { ...saved, lastSuccessAt: staleSuccess, lastAttemptAt: staleAttempt });
   }
 
   applyRevokes(items: SharePlan['revoke']): void {

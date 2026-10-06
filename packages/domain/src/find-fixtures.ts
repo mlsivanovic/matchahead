@@ -144,6 +144,8 @@ export function findFixtures(input: {
   feeds: readonly CompetitionFeed[];
   cache: FindCacheStore;
   policy?: OnDemandCachePolicy;
+  /** Servis je već proverio rok izvora: objavi dostavljene strane bez klupskog prečica. */
+  projectSourcePages?: boolean;
 }): FindFixturesResult {
   const policy = input.policy ?? DEFAULT_ON_DEMAND_POLICY;
   assertPolicy(policy);
@@ -165,7 +167,7 @@ export function findFixtures(input: {
   const cached = input.cache.get(key);
   const ageMinutes = cached ? minutesBetween(cached.storedAt, query.now) : null;
 
-  if (cached && ageMinutes !== null && ageMinutes >= 0) {
+  if (!input.projectSourcePages && cached && ageMinutes !== null && ageMinutes >= 0) {
     const successAt = cached.lastSuccessAt ?? null;
     const successAge = successAt === null ? null : minutesBetween(successAt, query.now);
     const attemptAt = cached.lastAttemptAt ?? cached.storedAt;

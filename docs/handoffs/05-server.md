@@ -23,6 +23,10 @@ Jedna potpuna ligaška strana služi oba izabrana kluba. Ključ je takmičenje, 
 
 Faza nije DONE. Budžet 0 €. Push namespace nije diran. `apps/web` nije menjan.
 
+Koordinatorska dopuna: servis odlučuje o preuzimanju po ključu izvora, a zatim poziva domen sa `projectSourcePages` da svež klupski snimak ne sakrije već preuzetu promenu postojećeg takmičenja. Ovo je interna opcija, nije polje HTTP zahteva. Klupski prečica ostaje samo za snimke čiji su svi izvori blokirani; dozvoljeni klupski izvori koriste sopstveni rok. Pre projekcije se ne upisuju izmišljeni datumi uspeha/pokušaja. Sačuvana strana zadržava svoj `checkedAt`; zbirni `checkedAt` odgovora nije mera svežine svakog izvora.
+
+Koordinatorova negativna proba nad `8db3ad1` preuzela je pomeren derbi, ali vratila stari datum zbog svežeg klupskog snimka novijeg kupa. Posle korekcije isti helper `/tmp/matchahead-05-existing-provider-regression.mjs` prolazi, sa stvarnim odgovorima kroz `parseFindResponse`. Node 22 tsc + servis/workerd: 55/55, exit 0 (`/tmp/matchahead-05-root-projection-service-fixed.log`); domen 35/35. Završna nezavisna prihvatljivost čeka Gemini proveru konačnog integrisanog commita.
+
 ## Izmenjene datoteke
 
 - `packages/domain/src/find-fixtures.ts` i `packages/domain/test/find-fixtures.test.ts` — prethodni lokalni datum ostaje i kada su oba UTC polja prazna

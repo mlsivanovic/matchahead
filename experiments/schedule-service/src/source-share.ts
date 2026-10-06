@@ -219,7 +219,7 @@ export function feedsToPublish(input: {
       (fixture) => fixture.competitionId === feed.competitionId && fixture.provider === feed.provider,
     );
     if (keepFailure) return feed;
-    return { ...page.good, publication: feed.publication, checkedAt: feed.checkedAt };
+    return { ...page.good, publication: feed.publication };
   });
 }
 
