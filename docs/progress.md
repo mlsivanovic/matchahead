@@ -1,6 +1,6 @@
 # Napredak projekta
 
-Ažurirano: 6. oktobar 2026. — run `run_6d3c53cc583e`. Auth, lična agenda, faza-05 klijent i serverski Worker/SQLite Durable Object integrisani su u `main`. Gemini proverava proizvodni commit `bbbe9bb`; nova Grok dorada zajedničkog ligaškog keša mora biti integrisana i ponovo proverena pre završne prihvatljivosti. Produkcioni izvori, puna pokrivenost svih takmičenja i živi sportski endpoint nisu potvrđeni. GitHub push još nije urađen.
+Ažurirano: 6. oktobar 2026. — run `run_6d3c53cc583e`. Auth, lična agenda, faza-05 klijent i serverski Worker/SQLite Durable Object integrisani su u `main`. Prva dorada zajedničkog ligaškog keša integrisana je kao `e5d434b`: koordinator potvrđuje Node 22 tsc + 51/51 servisnih provera i jedno preuzimanje za oba kluba kroz strogi klijentski validator. Dodatni test ipak potvrđuje nedostajuće novo takmičenje u ranije svežem klupskom snimku. Grok zadržava vlasništvo popravke, Gemini završno odobrenje čeka konačni integrisani commit. Produkcioni izvori, puna pokrivenost svih takmičenja i živi sportski endpoint nisu potvrđeni. GitHub push još nije urađen.
 Verzija specifikacije: 2.0
 
 | Zadatak | Status | Dokaz / prepreka |
@@ -124,3 +124,9 @@ Verzija specifikacije: 2.0
 Koordinator je reprodukovao nedostatak zajedničkog ligaškog keša: nad istim potpunim dozvoljenim kontrolisanim feed-om sa derbijem, zahtevi KK Partizan → KK Zvezda → KK Partizan u istom trenutku uzrokuju 1 → 2 → 2 preuzimanja. Prva dva odgovora su `fetched`, tek treći `reused`. Dokaz: `/tmp/matchahead-05-shared-source-proof.log`. Ovo nije pad javnog izvora.
 
 Novi vlasnik popravke je Grok Task `task_7edd2f982824` / Dispatch `ctx_108bbf005f6f`, nad istim worktree-om i eksplicitno ponovo korišćenim supervisanim terminalom. Prethodni završeni Task ostaje prihvaćen, novi ne predstavlja retroaktivno menjanje ishoda. Dorada obuhvata trajni keš izvora po takmičenju/sezoni/provajderu, oba kluba iz jednog preuzimanja, zajednički cooldown, kvote stvarnih preuzimanja i opoziv politike. Gemini nastavlja druge provere na `bbbe9bb`; konačna prihvatljivost čeka novi integrisani proizvodni HEAD i proveru izmenjenih oblasti. Push još nije izvršen.
+
+## Provera prve dorade keša — 6. oktobar, 11:55 UTC
+
+Grokov `6840ebc` integrisan je kao `e5d434b`, bez konačnog prihvatanja aktivnog Task-a. Koordinator je ponovio Node 22 tsc + servis/workerd: 51/51, exit 0 (`/tmp/matchahead-05-shared-first-integrated-node22.log`). Prvobitni fail-first helper `/tmp/matchahead-05-shared-source-regression.mjs` sada prolazi: stvarni odgovori za oba kluba prolaze `parseFindResponse`, uz jedno preuzimanje i isti identitet/reviziju derbija (`/tmp/matchahead-05-shared-source-first-fix.log`).
+
+Novi nezavisni helper `/tmp/matchahead-05-new-provider-regression.mjs` potvrđuje dodatni defekt nad tim tačnim commit-om: Partizan u 10:00 dobije ligu, Zvezda u 10:01 dobije istu sačuvanu ligu i novo takmičenje, ali Partizan u 10:02 dobije samo ligu, iako se novo takmičenje već nalazi u zajedničkom kešu. Sva tri stvarna odgovora prolaze strogi klijentski validator; očekivana dva meča naspram jednog uzrokuju stvarni exit 1 (`/tmp/matchahead-05-new-provider-fail-first.log`). Mešoviti odgovor takođe pomera zbirni sat uspeha na 10:01 umesto da sačuva sat starijeg izvora 10:00. Ovi nalazi, opseg klupskih satova i identitet konkurentnog preuzimanja po takmičenju vraćeni su Groku. Finalni Gemini QA i push čekaju ispravku; 51 prolaz nije predstavljen kao završetak faze.
