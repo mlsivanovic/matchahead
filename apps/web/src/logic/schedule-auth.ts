@@ -2,7 +2,7 @@
  * Faza 05: token za Authorization: Bearer preko postojećeg Firebase adaptera.
  * Nova prijava se ne pokreće ovde; poziva ga isključivo klik.
  * null dok korisnik nije prijavljen ili dok sesija ne postoji —
- * tada server vraća 401, a UI to kaže bez izmišljenog uspeha.
+ * server prihvata javnu pretragu samo ako je izričito uključen guest režim.
  * Token nikad ne ide u URL, log, trajni keš ni Vite config.
  * Firebase modul se uvozi lenjo: testovi prosleđuju sesiju ili null
  * i ne povlače firebase runtime.

@@ -37,6 +37,8 @@ import {
   type FlightClaim,
   type SharePlan,
 } from './source-share.ts';
+import { sha256Utf8 } from './sha256.ts';
+import { LIVE_PROVIDERS } from './sources/production.ts';
 import type { FeedLoad, FeedSource } from './sources/types.ts';
 
 export const MAX_BODY_BYTES = 4096;
@@ -76,6 +78,8 @@ export interface ScheduleDeps {
   idMappings?: readonly IdMapping[];
   trustProxy?: boolean;
   flight?: SourceFlight;
+  approvedProviders?: readonly string[];
+  allowPublicRead?: boolean;
 }
 
 /** Odbija poznat loš metod, putanju, poreklo ili token u URL-u pre čitanja tela. */
@@ -211,13 +215,16 @@ export class ScheduleService {
       return finish(429, errorBody('quota_ip', 'Previše neuspelih prijava sa ove adrese.'), 'quota_ip', null);
     }
     const bearer = /^Bearer (\S+)$/.exec(input.authorization ?? '');
-    if (!bearer) {
+    const publicRead = !input.authorization && this.deps.allowPublicRead === true;
+    if (!bearer && !publicRead) {
       this.deps.quota.recordAuthFailure(ip, nowDate);
       return finish(401, errorBody('unauthorized', 'Potrebna je prijava.'), 'unauthorized', null);
     }
     let uid: string;
-    try {
-      uid = (await this.deps.verifier.verify(bearer[1] ?? '')).uid;
+    if (publicRead) {
+      uid = `public:${sha256Utf8(ip)}`;
+    } else try {
+      uid = (await this.deps.verifier.verify(bearer?.[1] ?? '')).uid;
     } catch {
       this.deps.quota.recordAuthFailure(ip, nowDate);
       return finish(401, errorBody('unauthorized', 'Prijava nije prihvaćena.'), 'unauthorized', null);
@@ -417,8 +424,12 @@ export class ScheduleService {
     if (this.deps.mode !== 'production') return { ...loaded, feeds: mapped };
     return {
       ...loaded,
-      technicalSuccess: [],
-      feeds: mapped.map((feed) => ({ ...feed, publication: 'unknown' as const, pages: [] })),
+      technicalSuccess: loaded.technicalSuccess.filter((entry) => this.deps.approvedProviders?.includes(entry.split(':')[0] ?? '')),
+      feeds: mapped.map((feed) => {
+        const approved = this.deps.approvedProviders?.includes(feed.provider)
+          && LIVE_PROVIDERS.includes(feed.provider as typeof LIVE_PROVIDERS[number]);
+        return approved ? feed : { ...feed, publication: 'unknown' as const, pages: [] };
+      }),
     };
   }
 
@@ -531,8 +542,8 @@ function directoryTeam(id: string, sport: Sport): Team {
   return {
     id,
     sport,
-    name: slug,
-    shortName: slug,
+    name: slug.replace(/-/g, ' ').replace(/\b[a-z]/g, (letter) => letter.toUpperCase()),
+    shortName: slug.replace(/-/g, ' '),
     country,
     city: '',
     aliases: [],

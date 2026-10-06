@@ -6,7 +6,7 @@ import type {
   FindFixturesHttpSuccess,
   FindFixturesResponseKind,
 } from '../../../../packages/domain/src/schedule-api.ts';
-import type { Fixture, ScheduleAvailability, Sport } from '../../../../packages/domain/src/types.ts';
+import type { Fixture, ScheduleAvailability, Sport, Team } from '../../../../packages/domain/src/types.ts';
 import {
   fixtureTitle,
   formatFetchedAt,
@@ -264,7 +264,7 @@ export function ScheduleFinder(props: {
     <section aria-label="Raspored na zahtev">
       <h2>Raspored na zahtev</h2>
       <p className="lead">
-        Izaberi klub i pritisni „Pronađi utakmice”. Sezona je fiksirana na {state.seasonId} za početni test.
+        Izaberi klub i pritisni „Pronađi utakmice”. Raspored je za sezonu {state.seasonId}.
       </p>
       <div className="filters" role="group" aria-label="Sport">
         <button type="button" aria-pressed={state.sport === 'football'} onClick={() => state.pickSport('football')}>
@@ -357,6 +357,7 @@ export function ScheduleResult(props: {
         <ServerFixtureCard
           key={fixture.id}
           fixture={fixture}
+          teams={response.teams}
           competitionName={competitions.get(fixture.competitionId)?.name ?? fixture.competitionId}
           timeZone={timeZone}
           demo={lastGood.kind === 'synthetic-demo'}
@@ -405,6 +406,7 @@ export function ScheduleResult(props: {
 
 export function ServerFixtureCard(props: {
   fixture: Fixture;
+  teams?: readonly Team[];
   competitionName: string;
   timeZone: string;
   demo: boolean;
@@ -412,7 +414,7 @@ export function ServerFixtureCard(props: {
   onToggleManual: (fixtureId: string) => void;
 }) {
   const { fixture, timeZone } = props;
-  const teams = useMemo(() => selectableTeams(fixture.sport), [fixture.sport]);
+  const teams = props.teams ?? selectableTeams(fixture.sport);
   return (
     <article className="card">
       <p className="kicker">

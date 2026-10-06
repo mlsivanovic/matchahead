@@ -16,22 +16,26 @@ import { parseKkCz, parseKkPartizan, parseKls } from './gates.ts';
 import { parsePartizanNuxt } from './partizan-football.ts';
 import type { FeedLoad, FeedRequest, FeedSource, ParsedSource } from './types.ts';
 
-export function createProductionSource(fetchImpl: typeof fetch = globalThis.fetch): FeedSource {
+export const LIVE_PROVIDERS = ['fss', 'aba-liga', 'euroleague'] as const;
+
+export function createProductionSource(fetchImpl: typeof fetch = globalThis.fetch, approvedProviders: readonly string[] = []): FeedSource {
+  const approved = new Set(approvedProviders.filter((provider) => LIVE_PROVIDERS.includes(provider as typeof LIVE_PROVIDERS[number])));
   return {
     async load(input) {
-      const documents = SOURCE_DOCUMENTS[input.team.sport];
-      if (!documents.some((document) => document.url.includes('api-live.euroleague.net'))) {
-        // Katalog namerno nema privatni ili nedokumentovani Game Center.
-      }
+      const documents = SOURCE_DOCUMENTS[input.team.sport].filter((document) => approved.has(document.provider));
+      const gaps = catalogCompetitions(input.team.sport).filter((competition) => !documents.some((document) => competitionForProvider(document.provider) === competition.id)).map((competition): CompetitionFeed => ({
+        competitionId: competition.id, seasonId: input.seasonId, provider: 'listed-gap', providerCompetitionId: null, publication: 'unknown', organizerMarkedUnpublished: false, teamNotInCompetition: false, failure: 'none', totalPages: 1, pages: [], evidence: `${competition.name}: trenutno nema povezanog potvrđenog izvora za ovu fazu.`, sourceUrl: '', checkedAt: input.todayLocalDate,
+      }));
       if (!input.network) {
         return {
-          feeds: documents.map((document) =>
-            baseFeed(document, input, competitionForProvider(document.provider), 'none', 'Keš je još u roku. Izvor nije zvan.'),
-          ),
+          feeds: [...gaps, ...documents.map((document) =>
+            approvedFeed(document, input, competitionForProvider(document.provider), 'none', 'Izvor je odobren odlukom projekta; stranica se čita na zahtev.'),
+          )],
           teams: [input.team],
           competitions: catalogCompetitions(input.team.sport),
           upstreamPlan: documents.length,
           technicalSuccess: [],
+          shares: Object.fromEntries(documents.map((document) => [document.provider, 'league' as const])),
         };
       }
       const feeds: CompetitionFeed[] = [];
@@ -39,12 +43,12 @@ export function createProductionSource(fetchImpl: typeof fetch = globalThis.fetc
       for (const document of documents) {
         const selected = !input.fetchProviders || input.fetchProviders.includes(document.provider);
         if (!selected) {
-          feeds.push(baseFeed(document, input, competitionForProvider(document.provider), 'none', 'Keš je još u roku. Izvor nije zvan.'));
+          feeds.push(approvedFeed(document, input, competitionForProvider(document.provider), 'none', 'Keš je još u roku. Izvor nije zvan.'));
           continue;
         }
         const read = await readAllowlisted(document, fetchImpl);
         if (!read.ok) {
-          feeds.push(baseFeed(document, input, competitionForProvider(document.provider), read.failure, read.evidence));
+          feeds.push(approvedFeed(document, input, competitionForProvider(document.provider), read.failure, read.evidence));
           continue;
         }
         const parsed = await parseDocument(document, read.body, input.now);
@@ -54,7 +58,10 @@ export function createProductionSource(fetchImpl: typeof fetch = globalThis.fetc
         for (const competition of competitions) {
           const drafts = parsed.drafts.filter((draft) => draft.competitionId === competition).length;
           const success = parsed.failure === 'none' || (parsed.failure === 'incomplete_page' && drafts > 0);
-          feeds.push(baseFeed(document, input, competition, parsed.failure, parsed.evidence));
+          const feed = approvedFeed(document, input, competition, parsed.failure, parsed.evidence);
+          feed.totalPages = parsed.complete ? 1 : 2;
+          feed.pages = [{ page: 1, fixtures: parsed.drafts.filter((draft) => draft.competitionId === competition) }];
+          feeds.push(feed);
           if (success) technicalSuccess.push(`${document.provider}:${competition}`);
         }
       }
@@ -82,6 +89,7 @@ export function createProductionSource(fetchImpl: typeof fetch = globalThis.fetc
         competitions: catalogCompetitions(input.team.sport),
         upstreamPlan: documents.length,
         technicalSuccess,
+        shares: Object.fromEntries(documents.map((document) => [document.provider, 'league' as const])),
       };
     },
   };
@@ -141,6 +149,10 @@ function baseFeed(
   };
 }
 
+function approvedFeed(document: SourceDocument, input: FeedRequest, competition: string, failure: FetchFailureKind, evidence: string): CompetitionFeed {
+  return { ...baseFeed(document, input, competition, failure, evidence), publication: 'allowed', checkedAt: input.todayLocalDate };
+}
+
 async function readAllowlisted(
   document: SourceDocument,
   fetchImpl: typeof fetch,
@@ -152,13 +164,21 @@ async function readAllowlisted(
     return { ok: false, failure: 'http_error', evidence: 'URL nije na listi dozvoljenih domaćina.' };
   }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), document.timeoutMs);
+  const timer = setTimeout(() => controller.abort(), Math.min(document.timeoutMs, 8_000));
   try {
-    const response = await fetchImpl(target, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { accept: 'text/html,application/pdf', 'user-agent': USER_AGENT },
-    });
+    let response: Response;
+    for (let redirects = 0;; redirects += 1) {
+      response = await fetchImpl(target, {
+        signal: controller.signal, redirect: 'manual',
+        headers: { accept: 'text/html,application/pdf', 'user-agent': USER_AGENT },
+      });
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      const location = response.headers.get('location');
+      await response.body?.cancel();
+      if (!location || redirects >= 3) return { ok: false, failure: 'http_error', evidence: 'Neispravno preusmerenje izvora.' };
+      try { target = assertAllowlisted(new URL(location, target).href); }
+      catch { return { ok: false, failure: 'http_error', evidence: 'Preusmerenje je napustilo listu domaćina.' }; }
+    }
     if (response.url) {
       try {
         assertAllowlisted(response.url);
@@ -172,7 +192,25 @@ async function readAllowlisted(
     if (Number.isFinite(declared) && declared > MAX_SOURCE_BYTES) {
       return { ok: false, failure: 'http_error', evidence: 'Odgovor je veći od granice.' };
     }
-    const body = new Uint8Array(await response.arrayBuffer());
+    const reader = response.body?.getReader();
+    if (!reader) return { ok: false, failure: 'unexpected_empty', evidence: 'Prazan odgovor.' };
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_SOURCE_BYTES) {
+          await reader.cancel();
+          return { ok: false, failure: 'http_error', evidence: 'Odgovor je veći od granice.' };
+        }
+        chunks.push(value);
+      }
+    } finally { reader.releaseLock(); }
+    const body = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
     if (body.byteLength === 0) return { ok: false, failure: 'unexpected_empty', evidence: 'Prazan odgovor.' };
     if (body.byteLength > MAX_SOURCE_BYTES) return { ok: false, failure: 'http_error', evidence: 'Odgovor je veći od granice.' };
     return { ok: true, body };

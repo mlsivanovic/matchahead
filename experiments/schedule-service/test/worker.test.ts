@@ -772,7 +772,7 @@ function fixture(
   return { providerFixtureId: id, homeTeamId: home, awayTeamId: away, scheduledLocalDate, printedLocalTime, startsAtUtc, status, venue };
 }
 
-function options(lab: LabState, input: { mode?: string; limits?: QuotaLimits; trustProxy?: boolean; labKind?: string; labParser?: string; ioTimeoutMs?: number }) {
+function options(lab: LabState, input: { mode?: string; limits?: QuotaLimits; trustProxy?: boolean; labKind?: string; labParser?: string; ioTimeoutMs?: number; approvedProviders?: string; publicRead?: boolean }) {
   const mode = input.mode ?? 'synthetic';
   return {
     workers: [
@@ -790,6 +790,8 @@ function options(lab: LabState, input: { mode?: string; limits?: QuotaLimits; tr
           env: {
             FIREBASE_PROJECT_ID: { type: 'text', value: 'matchahead' },
             SCHEDULE_MODE: { type: 'text', value: mode },
+            SCHEDULE_APPROVED_PROVIDERS: { type: 'text', value: input.approvedProviders ?? '' },
+            SCHEDULE_PUBLIC_READ: { type: 'text', value: input.publicRead ? '1' : '' },
             SCHEDULE_ALLOWED_ORIGINS: { type: 'text', value: ORIGIN },
             SCHEDULE_TRUST_PROXY: { type: 'text', value: input.trustProxy ? '1' : '' },
             SCHEDULE_ALLOW_TEST_CLOCK: { type: 'text', value: mode === 'synthetic' ? '1' : '' },
@@ -830,7 +832,7 @@ function options(lab: LabState, input: { mode?: string; limits?: QuotaLimits; tr
               if (url.hostname === 'lab.schedule.test' && url.pathname === '/policy') {
                 return Response.json({ publication: lab.publication, failure: lab.failure });
               }
-              if (url.hostname === 'lab.schedule.test' && url.pathname === '/fixtures') {
+              if ((url.hostname === 'lab.schedule.test' && url.pathname === '/fixtures') || (url.hostname === 'fss.rs' && input.approvedProviders?.includes('fss'))) {
                 lab.fixtureFetches += 1;
                 if (typeof lab.document === 'string') {
                   return new Response(lab.document, { headers: { 'content-type': 'text/html; charset=utf-8' } });
@@ -979,3 +981,26 @@ function tinyPdf(commands: string): Uint8Array {
   const tail = Buffer.from('\nendstream\nendobj\n');
   return new Uint8Array(Buffer.concat([head, stream, tail]));
 }
+
+
+test('workerd produkcija objavljuje odobren FSS gostima, deli ligu i odbija lažan token', async () => {
+  const lab = freshLab(); lab.document = superligaHtml();
+  const mf = new Miniflare(options(lab, { mode: 'production', approvedProviders: 'fss,synthetic', publicRead: true }));
+  const request = async (teamId: string, authorization?: string) => mf.dispatchFetch('https://schedule.local/api/find-fixtures', {
+    method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json', 'cf-connecting-ip': '192.0.2.7', ...(authorization ? { authorization } : {}) },
+    body: JSON.stringify({sport:'football',teamId,seasonId:'2026-2027',refresh:false}),
+  });
+  try {
+    for (const teamId of [TEAM, 'football:rs:crvena-zvezda']) {
+      const response = await request(teamId); assert.equal(response.status,200);
+      const body = await response.json() as FindFixturesHttpSuccess;
+      assert.equal(body.kind,'verified-schedule'); assert.ok(body.result.futureFixtures.length>0);
+      assert.equal(body.result.futureFixtures.every(f => f.provider==='fss'),true);
+      assert.ok(body.result.coverage.some(c=>c.competitionId.endsWith('kup-srbije') && c.scheduleAvailability==='unknown'));
+    }
+    assert.equal(lab.fixtureFetches,1); assert.equal(lab.certFetches,0); assert.equal(lab.unexpected,0);
+    assert.equal((await request(TEAM,'Bearer invalid')).status,401);
+    const foreign = await mf.dispatchFetch('https://schedule.local/api/find-fixtures',{method:'POST',headers:{origin:'https://foreign.example'},body:'{}'});
+    assert.equal(foreign.status,403); assert.equal(lab.fixtureFetches,1);
+  } finally { await mf.dispose(); }
+});

@@ -5,6 +5,7 @@ import { quotaLimitsFromJson } from './quota-logic.ts';
 import { BodyTimeout, ioTimeoutMs, readBodyText } from './read-body.ts';
 import { MAX_BODY_BYTES, assertScheduleMode, ScheduleService, type ScheduleDeps, type OutgoingResponse } from './service.ts';
 import type { TokenVerifier } from './auth-claims.ts';
+import { createProductionSource, LIVE_PROVIDERS } from './sources/production.ts';
 import { createGateSource } from './sources/gate.ts';
 import { createDocumentLabSource } from './sources/html-lab.ts';
 import { createLabSource } from './sources/lab.ts';
@@ -23,6 +24,8 @@ export interface ScheduleEnv {
   SCHEDULE: ScheduleNamespace;
   FIREBASE_PROJECT_ID: string;
   SCHEDULE_MODE?: string;
+  SCHEDULE_APPROVED_PROVIDERS?: string;
+  SCHEDULE_PUBLIC_READ?: string;
   SCHEDULE_ALLOWED_ORIGINS?: string;
   SCHEDULE_TRUST_PROXY?: string;
   SCHEDULE_ALLOW_TEST_CLOCK?: string;
@@ -96,9 +99,10 @@ export class ScheduleDirectoryObject {
         .map((item) => item.trim())
         .filter(Boolean);
       const timeoutMs = ioTimeoutMs(this.#env.SCHEDULE_IO_TIMEOUT_MS);
+      const approvedProviders = (this.#env.SCHEDULE_APPROVED_PROVIDERS ?? '').split(',').filter((value) => LIVE_PROVIDERS.includes(value as typeof LIVE_PROVIDERS[number]));
       const source = mode === 'synthetic'
         ? labSource(this.#env, timeoutMs)
-        : createGateSource();
+        : approvedProviders.length ? createProductionSource(globalThis.fetch, approvedProviders) : createGateSource();
       const deps: ScheduleDeps = {
         clock,
         verifier: this.#verifier,
@@ -109,6 +113,8 @@ export class ScheduleDirectoryObject {
         mode,
         trustProxy: this.#env.SCHEDULE_TRUST_PROXY === '1',
         flight: this.#flight,
+        approvedProviders,
+        allowPublicRead: this.#env.SCHEDULE_PUBLIC_READ === '1',
         logger: (event) => {
           console.log(JSON.stringify({ status: event.status, code: event.code, teamId: event.teamId }));
         },

@@ -205,8 +205,8 @@ export function App() {
     <div className="app">
       <a className="skip" href="#sadrzaj">Preskoči na sadržaj</a>
       <header className="top">
-        <p className="brand">MatchAhead <span className="demo">DEMO</span></p>
-        <p className="meta" data-app-build={APP_BUILD}>Sintetički raspored</p>
+        <p className="brand">MatchAhead {serverSnapshots.some((snapshot) => snapshot.kind === 'verified-schedule') ? null : <span className="demo">DEMO</span>}</p>
+        <p className="meta" data-app-build={APP_BUILD}>{serverSnapshots.some((snapshot) => snapshot.kind === 'verified-schedule') ? 'Raspored iz javnih izvora' : 'Sintetički raspored'}</p>
       </header>
       {update.ready ? (
         <div className="update" role="status" data-update-ready="true">
