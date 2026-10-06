@@ -1,6 +1,6 @@
 # Napredak projekta
 
-Ažurirano: 6. oktobar 2026. — run `run_6d3c53cc583e`. Auth, lična agenda, faza-05 klijent i serverski Worker/SQLite Durable Object integrisani su u `main`. Završni nezavisni Gemini QA radi nad proizvodnim commitom `bbbe9bb`. Produkcioni izvori, puna pokrivenost svih takmičenja i živi sportski endpoint nisu potvrđeni. GitHub push još nije urađen.
+Ažurirano: 6. oktobar 2026. — run `run_6d3c53cc583e`. Auth, lična agenda, faza-05 klijent i serverski Worker/SQLite Durable Object integrisani su u `main`. Gemini proverava proizvodni commit `bbbe9bb`; nova Grok dorada zajedničkog ligaškog keša mora biti integrisana i ponovo proverena pre završne prihvatljivosti. Produkcioni izvori, puna pokrivenost svih takmičenja i živi sportski endpoint nisu potvrđeni. GitHub push još nije urađen.
 Verzija specifikacije: 2.0
 
 | Zadatak | Status | Dokaz / prepreka |
@@ -118,3 +118,9 @@ Verzija specifikacije: 2.0
 - Popravljena su tri stvarna parser defekta: ABA naziv Igokea m:tel, identičan FSS preview meča i Evroliga ROUND naslovi prema PDF koordinatama. Prolaz snimaka od 1. oktobra nije dokaz svežeg mrežnog stanja 6. oktobra.
 - Gemini je dobio tačan proizvodni HEAD `bbbe9bb856aa6850b6744f00df9afb41ffc2766e` za nezavisnu završnu matricu. Njegov interim pregled propustio je četiri stvarna `source-blocked` serverska odgovora kroz klijentski validator; konačni pregled još nije prihvaćen. Grok resurs je zadržan za moguće popravke iz tog pregleda.
 - Preostaju produkcioni uslovi: odluka o korišćenju izvora sa dokazima, izvori/statusi za ostala takmičenja, potvrda Cloudflare plana i deploy API-ja. Produkcija vraća `source-blocked` i ne poziva sportske izvore. Nijedan od tih uslova nije predstavljen kao završen.
+
+## Konkretan QA nalaz i nova dorada — 6. oktobar, 11:09 UTC
+
+Koordinator je reprodukovao nedostatak zajedničkog ligaškog keša: nad istim potpunim dozvoljenim kontrolisanim feed-om sa derbijem, zahtevi KK Partizan → KK Zvezda → KK Partizan u istom trenutku uzrokuju 1 → 2 → 2 preuzimanja. Prva dva odgovora su `fetched`, tek treći `reused`. Dokaz: `/tmp/matchahead-05-shared-source-proof.log`. Ovo nije pad javnog izvora.
+
+Novi vlasnik popravke je Grok Task `task_7edd2f982824` / Dispatch `ctx_108bbf005f6f`, nad istim worktree-om i eksplicitno ponovo korišćenim supervisanim terminalom. Prethodni završeni Task ostaje prihvaćen, novi ne predstavlja retroaktivno menjanje ishoda. Dorada obuhvata trajni keš izvora po takmičenju/sezoni/provajderu, oba kluba iz jednog preuzimanja, zajednički cooldown, kvote stvarnih preuzimanja i opoziv politike. Gemini nastavlja druge provere na `bbbe9bb`; konačna prihvatljivost čeka novi integrisani proizvodni HEAD i proveru izmenjenih oblasti. Push još nije izvršen.

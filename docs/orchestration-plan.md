@@ -9,7 +9,7 @@ nadzor, integraciju i GitHub push posle uspešne provere. Ugovor i kriterijumi:
 
 | Vlasnik | Task / aktivni Dispatch | Checkout | Stanje |
 |---|---|---|---|
-| Grok | `task_5005528994dd` / `ctx_4afd0410a698` | `matchahead-05-server` | Prihvaćen worker_done za server i dve dorade; sve integrisano. Resurs zadržan za konkretne QA popravke. |
+| Grok | `task_7edd2f982824` / `ctx_108bbf005f6f` | `matchahead-05-server` | Novi korektivni zadatak za trajni zajednički ligaški keš, nakon prihvaćene i integrisane serverske predaje. |
 | Muse | `task_0f1237e026a1` / `ctx_56818f4c2f10` | `matchahead-05-client` | Korektivni zadaci završeni, prihvaćeni i integrisani; operator cleanup nakon finalnog QA. |
 | Gemini CLI | `task_f5915fa787be` / `ctx_f0564837be01` | `matchahead-05-review` | Završna nezavisna matrica dobila je tačan proizvodni HEAD bbbe9bb; rezultat se čeka. |
 
@@ -162,3 +162,5 @@ Dalji vlasnik popravke validatora je Muse novi Task `task_0f1237e026a1` / Dispat
 ## Finalni QA pokrenut — 6. oktobar 2026.
 
 Grokov završetak i obe dorade prihvaćeni su, klijent je već integrisan. Gemini je sledeći vlasnik nezavisne provere, na čistom detached checkout-u `bbbe9bb856aa6850b6744f00df9afb41ffc2766e`, uz očuvanje audit grane. Koordinator je potvrdio finalni servis tsc i 40/40 na Node 22. Grok resurs se zadržava za konkretne nalaze; nema novog korektivnog Task-a dok takav nalaz ne stigne. Muse završeni operator proces treba zatvoriti samo uz dokaz izlaska. Push čeka finalni pregled, a produkcioni uslovi se vode odvojeno i nisu DONE.
+
+Koordinatorov reprodukovani nalaz zajedničkog keša dobio je novog vlasnika 6. oktobra u 11:09 UTC: Grok `task_7edd2f982824` / `ctx_108bbf005f6f`, `worker-start --terminal` nad prethodno završenim supervisanim terminalom. Resource ownership je preuzet novim Dispatch-om; stari Task nije ponovo otvoren. Gemini ne završava QA dok novi kod ne dobije tačan HEAD i nezavisnu proveru.
