@@ -1,6 +1,6 @@
 # Napredak projekta
 
-Ažurirano: 1. oktobar 2026. — tekući run `run_6d3c53cc583e`. Auth klijent i lična DEMO agenda već su integrisani u `main`; lokalni pregled je prihvaćen uz ograničenja. Faza 05 je IN_PROGRESS: zajednički ugovor, domenske korekcije i prvi klijent su integrisani, serverski runtime i korekcije klijenta još se rade. Produkcioni izvori, potpuna pokrivenost i živi sportski endpoint nisu potvrđeni. Push na GitHub još nije urađen.
+Ažurirano: 6. oktobar 2026. — run `run_6d3c53cc583e`. Auth, lična agenda, faza-05 klijent i serverski Worker/SQLite Durable Object integrisani su u `main`. Završni nezavisni Gemini QA radi nad proizvodnim commitom `bbbe9bb`. Produkcioni izvori, puna pokrivenost svih takmičenja i živi sportski endpoint nisu potvrđeni. GitHub push još nije urađen.
 Verzija specifikacije: 2.0
 
 | Zadatak | Status | Dokaz / prepreka |
@@ -10,8 +10,8 @@ Verzija specifikacije: 2.0
 | 02 | BLOCKED | `docs/push-readiness-review.md` (ispravljen ugovor) + `docs/handoffs/02-push-reconciliation.md` + `docs/reviews/02-push-reconciliation.md`. Praćeni kod usklađen sa DO (`6af69c1`, 27/27: 23 funkcionalna + 4 workerd; rekonstrukcija + 3 razlike, nije deployovana — produkcija `2ee78270...` od 27. septembra). Živa migracija redova, fizička isporuka na zatvorenoj PWA (Android dostupan, iPhone nepotvrđen) i edge `cpuTime` su NOT_TESTED. Kapije ugašene. Plan Cloudflare naloga nije verifikovan dokazom. |
 | 03 | DONE | `apps/web` i `docs/handoffs/03-pwa-osnova.md`. Poslednja potvrđena Pages objava `be48495` (`https://mlsivanovic.github.io/matchahead/`, HTTP 200 provereno 30. septembra 2026; samo dostupnost). Instalabilnost, samostalni prozor, offline omotač i DEMO raspored. Prikaz na fizičkom telefonu (ikona) je NOT_TESTED. Nova objava nije potvrđena. |
 | 04 | IN_PROGRESS | Jezgro, React ekran, Firebase browser adapter i tok odjave/brisanja integrisani u `main`. Nezavisni lokalni pregled `docs/reviews/04-06-integrated-client.md`: 73/73 web, 6/6 emulator + 9/9 unit, browser 52/52, PWA 11/11. Koordinator je u ovom run-u ponovio 6/6 izolacionih testova. Živa Google prijava, deploy pravila i fizički uređaji ostaju NOT_TESTED. |
-| 05 | IN_PROGRESS | Run `run_6d3c53cc583e`, 1. oktobar: Grok radi server/adaptere, Muse klijent/agenda tok, Gemini nezavisni source audit i QA. Produkcioni unos i kompletna pokrivenost još nisu potvrđeni; javni rasporedi ostaju DEMO. Ugovor: `docs/phase-05-work-contract.md`. |
-| 06 | IN_PROGRESS | Lična DEMO agenda integrisana u `App.tsx`/ekrane zajedno sa Auth klijentom; bounded lokalni pregled je prihvaćen. Stvarni server rasporedi i jedinstvena agenda oba kluba još se dorađuju u fazi 05. Živi izvori i fizički uređaji nisu potvrđeni. |
+| 05 | IN_PROGRESS | Server i klijent integrisani; koordinator potvrđuje web 113/113, browser 16/16, domen 35/35 i server/workerd 40/40 uz tsc na Node 22. Stvarni snimci od 1. oktobra: FSS 182, ABA 18 po klubu, Evroliga 380/38 kola. Finalni Gemini QA nad `bbbe9bb` je u toku. Produkcioni unos, puna pokrivenost i deploy nisu potvrđeni; javni rasporedi ostaju DEMO. Ugovor: `docs/phase-05-work-contract.md`. |
+| 06 | IN_PROGRESS | Lična DEMO agenda integrisana u `App.tsx`/ekrane zajedno sa Auth klijentom; bounded lokalni pregled je prihvaćen. Jedinstvena agenda faze 05 integrisana je i browser provera oba kluba/derbija prolazi. Živi izvori i fizički uređaji nisu potvrđeni. |
 | 07 | TODO | ICS — planirano, nije implementirano. |
 | 08 | TODO | separateCalendarOAuth — planirano, nije implementirano; odvojen korak, nije deo faze 04. |
 | 09 | TODO | pushdevice — planirano, nije implementirano; čeka 04 (FID) i 02. |
@@ -110,3 +110,11 @@ Verzija specifikacije: 2.0
 - Predaja nije konačna faza-05 prihvatljivost. Novi Muse Task `task_0f1237e026a1` / `ctx_56818f4c2f10` popravlja nedostajuće provere imenika učesnika, sadržaja/reda next pokazivača, pozitivnih revizija i mešovitog dozvoljenog/blokiranog izvora. Prethodni Task ima prihvaćen `worker_done`; operator-launched Muse proces dokazano je završio i terminal je ponovo korišćen za novu tačnu predaju.
 - Grok server i stvarni DO adapteri još su aktivni. Gemini završni QA dobija konačni HEAD posle obe dorade; mora dodatno da propusti stvarne server odgovore kroz klijentski validator i proveri očekivane klupske brojeve redova nezavisno od parsera.
 - Platformski audit `0c8bf84` je integrisan kao `41e6c4b`, uz pending workerd dokaz i bez pretpostavke produkcione dozvole. GitHub push još nije izvršen.
+
+## Završni integrisani proizvod pred nezavisnim QA — 6. oktobar 2026.
+
+- Muse `2e16659` integrisan kao `eb4a71f`; koordinatorova dodatna korekcija `186641e` proverava sport/klub/sezonu odgovora i usklađuje opoziv sa svim snimcima i njihovom pokrivenošću. Koordinator: web 113/113 na Node 22, tsc exit 0, browser 16/16 na 360/390 px, exit 0.
+- Grok ima prihvaćen `worker_done`: `29b3407`, `3fb4a40`, `e73a393`, integrisani kao `96aea3d`, `9b6e2f0`, `bbbe9bb`. Node 22 nad finalnim kodom: servis tsc exit 0, server/workerd 40/40, exit 0 (`/tmp/matchahead-05-final-service-node22.log`); domen 35/35. Npm audit servisnog paketa: 0 ranjivosti. Pages CI instalira servis i proverava ga pre objave klijenta.
+- Popravljena su tri stvarna parser defekta: ABA naziv Igokea m:tel, identičan FSS preview meča i Evroliga ROUND naslovi prema PDF koordinatama. Prolaz snimaka od 1. oktobra nije dokaz svežeg mrežnog stanja 6. oktobra.
+- Gemini je dobio tačan proizvodni HEAD `bbbe9bb856aa6850b6744f00df9afb41ffc2766e` za nezavisnu završnu matricu. Njegov interim pregled propustio je četiri stvarna `source-blocked` serverska odgovora kroz klijentski validator; konačni pregled još nije prihvaćen. Grok resurs je zadržan za moguće popravke iz tog pregleda.
+- Preostaju produkcioni uslovi: odluka o korišćenju izvora sa dokazima, izvori/statusi za ostala takmičenja, potvrda Cloudflare plana i deploy API-ja. Produkcija vraća `source-blocked` i ne poziva sportske izvore. Nijedan od tih uslova nije predstavljen kao završen.

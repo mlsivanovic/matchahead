@@ -1,6 +1,6 @@
 # Predlog za izvore rasporeda i izlazak iz blokade faze 05
 
-Provera: 1. oktobar 2026. Ovo je istraživanje i predlog, ne prihvaćena promena zahteva niti produkcioni adapter. Budžet ostaje 0 €, pronalaženje i osvežavanje ostaju na korisnikov klik. Faza 05 ostaje BLOCKED za kompletan produkcioni tok.
+Istorijski predlog i mrežna provera: 1. oktobar 2026. Aktuelna implementacija i dokazi su u [napretku](progress.md), [auditu](phase-05-source-audit.md) i [serverskoj predaji](handoffs/05-server.md): HTML/PDF parseri i serverski runtime sada su integrisani, produkcioni unos još nije otvoren. Sledeći tekst beleži početno istraživanje i nije trenutni status implementacije. Budžet ostaje 0 €, pronalaženje i osvežavanje ostaju na korisnikov klik. Faza 05 ostaje BLOCKED za kompletan produkcioni tok.
 
 Preporuka: kombinovati izvore po takmičenju, prvenstveno javne ligaške rasporede, zatim klupske stranice za potvrdu termina i prijateljske utakmice. HTML adapter je tehnički moguć bez sportskog API ključa. AI koristiti za pomoć pri razvoju parsera i eventualne predloge iz vesti; ne kao autoritet za datum, sat ili otkazivanje.
 
