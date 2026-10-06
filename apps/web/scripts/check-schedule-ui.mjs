@@ -21,6 +21,26 @@ const basePath = '/repo/';
 const SEASON = '2026-2027';
 const CHECKED_AT = '2026-10-01T08:00:00.000Z';
 const SUCCESS_AT = '2026-10-01T08:00:00.000Z';
+// Ovi kontrolisani rasporedi imaju mečeve 4/5. oktobra. Zamrzni samo
+// browser kalendar; Node rokovi i produkcioni sat ostaju stvarni.
+const BROWSER_NOW = Date.parse('2026-10-01T12:00:00.000Z');
+
+async function freezeBrowserCalendar(page) {
+  await page.evaluateOnNewDocument((now) => {
+    const NativeDate = Date;
+    globalThis.Date = new Proxy(NativeDate, {
+      construct(target, args, newTarget) {
+        return Reflect.construct(target, args.length ? args : [now], newTarget);
+      },
+      apply() {
+        return new NativeDate(now).toString();
+      },
+      get(target, property, receiver) {
+        return property === 'now' ? () => now : Reflect.get(target, property, receiver);
+      },
+    });
+  }, BROWSER_NOW);
+}
 
 const TEAMS = [
   'football:rs:crvena-zvezda',
@@ -458,6 +478,7 @@ const browser = await puppeteer.launch({
 
 try {
   const page = await browser.newPage();
+  await freezeBrowserCalendar(page);
   page.setDefaultTimeout(15000);
   page.on('pageerror', (error) => console.log('PAGEERROR', error.message));
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
@@ -642,6 +663,7 @@ try {
   console.log('PASS: offline čuva prikaz bez poziva');
 
   const narrow = await browser.newPage();
+  await freezeBrowserCalendar(narrow);
   narrow.setDefaultTimeout(15000);
   await narrow.setViewport({ width: 360, height: 740, deviceScaleFactor: 1 });
   const narrowText = async () => narrow.$eval('body', (element) => element.innerText);
@@ -740,6 +762,7 @@ try {
   console.log('PASS: svi zahtevi na klik, ugovor tela ispravan, bez lažnog tokena');
 
   const plain = await browser.newPage();
+  await freezeBrowserCalendar(plain);
   plain.setDefaultTimeout(15000);
   await plain.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
   await plain.goto(`${originNoCfg}/repo/#/klubovi`, { waitUntil: 'load' });

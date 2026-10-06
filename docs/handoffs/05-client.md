@@ -146,3 +146,9 @@ Muse korekcije su integrisane kao `6871a5e` (samo vlasnički klijent iz `7fa387a
 Proširene regresije opoziva takođe su prvo pokazale da je drugi klupski snimak zadržavao `publication: allowed` posle uklanjanja utakmica. Opoziv sada usklađuje pokrivenost u svim snimcima, čisti indeks povučenih promena i vraća `source-blocked` kada više nema dozvoljenog izvora. Nepovezani dozvoljeni izvori se čuvaju.
 
 Nezavisna koordinatorska provera dopune: web 113/113 exit 0 (39 schedule-client), TypeScript čist; Node 22 takođe 113/113 exit 0. PWA 11 scenarija PASS na prethodnom integrisanom UI-ju; browser tok je ponovljen posle strožeg validatora i usklađivanja politike: 16/16 PASS, exit 0. Blokirani snimci se prosleđuju graditelju agende radi opoziva/praznog stanja; on i dalje bira samo proverene utakmice. Konačni serverski boundary i Gemini QA se još čekaju; ove provere nisu dokaz živog produkcionog izvora.
+
+## Koordinatorova korekcija datuma browser provere — 6. oktobar 2026.
+
+Originalna kontrolisana browser provera sa mečevima 4/5. oktobra pala je kada je stvarni datum postao 6. oktobar: derbi više nije buduća utakmica, pa je očekivanje jednog derbija u sledećim utakmicama brojalo nulu. Fail-first: `/tmp/matchahead-05-oct06-browser-precheck.log`, stvarni exit 1. Produkciono filtriranje prošlih utakmica nije menjano.
+
+Browser harness sada eksplicitno postavlja samo browser kalendar na 1. oktobar u 12:00 UTC, u sve tri kartice preko `evaluateOnNewDocument`. Node rokovi i produkcioni sat ostaju stvarni. Ponovljena provera: svih 16 scenarija PASS, stvarni exit 0 (`/tmp/matchahead-05-oct06-browser-fixed-clock.log`). Ovo je dokaz nad kontrolisanim datumom i odgovorima, ne živa provera rasporeda 6. oktobra.
