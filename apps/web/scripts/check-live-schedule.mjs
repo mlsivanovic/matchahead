@@ -13,12 +13,12 @@ try {
     assert.equal(await page.$eval('[data-app-build]',el=>el.dataset.appBuild),process.env.MATCHAHEAD_EXPECT_BUILD);
   }
   async function choose(group,index) {
-    await page.$$eval(`section[aria-label="Raspored na zahtev"] [role="group"][aria-label="${group}"] button`,(buttons,i)=>buttons[i].click(),index);
+    await page.$$eval(`section[aria-label="Raspored na zahtev"] [role="group"][aria-label="${group}"] button`,(buttons,i)=>{ const button=typeof i==='number' ? buttons[i] : buttons.find(b=>b.textContent.toLowerCase().includes(i)); if(!button) throw Error('Klub nije pronađen'); button.click(); },index);
   }
   for (const [sportIndex,sport] of ['football','basketball'].entries()) {
     await choose('Sport',sportIndex);
-    for (const [clubIndex,club] of ['partizan','crvena-zvezda'].entries()) {
-      await choose('Klub',clubIndex);
+    for (const club of ['partizan','crvena-zvezda']) {
+      await choose('Klub',club === 'partizan' ? 'partizan' : 'crvena zvezda');
       const pending = page.waitForResponse(r=>r.url().endsWith('/api/find-fixtures') && r.request().method()==='POST',{timeout:30000});
       pending.catch(() => undefined);
       await page.$$eval('section[aria-label="Raspored na zahtev"] button',buttons=>{

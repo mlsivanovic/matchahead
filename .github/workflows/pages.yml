@@ -58,7 +58,9 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           # Javna HTTPS adresa phase-05 servera; sportski ključevi ne idu u build.
           VITE_SCHEDULE_API_URL: ${{ vars.VITE_SCHEDULE_API_URL }}
-        run: npm run build
+        run: |
+          node -e "const u = new URL(process.env.VITE_SCHEDULE_API_URL); if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) throw new Error('Public schedule API URL is missing or invalid')"
+          npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
