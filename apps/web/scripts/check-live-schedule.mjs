@@ -20,6 +20,7 @@ try {
     for (const [clubIndex,club] of ['partizan','crvena-zvezda'].entries()) {
       await choose('Klub',clubIndex);
       const pending = page.waitForResponse(r=>r.url().endsWith('/api/find-fixtures') && r.request().method()==='POST',{timeout:30000});
+      pending.catch(() => undefined);
       await page.$$eval('section[aria-label="Raspored na zahtev"] button',buttons=>{
         const button=buttons.find(b=>b.textContent.trim()==='Pronađi utakmice');
         if(!button || button.disabled) throw Error('Pronalaženje nije dostupno');
@@ -31,7 +32,7 @@ try {
       assert.equal(data.kind,'verified-schedule');
       assert.equal(data.result.teamId,`${sport}:rs:${club}`);
       assert.ok(data.result.futureFixtures.length>0);
-      await page.waitForFunction(()=>document.querySelector('[data-schedule-kind="verified-schedule"] article h3')!==null);
+      await page.waitForFunction(count=>document.querySelectorAll('[data-schedule-kind="verified-schedule"] article').length===count,{},data.result.futureFixtures.length);
       const count=await page.$$eval('[data-schedule-kind="verified-schedule"] article',cards=>cards.length);
       assert.equal(count,data.result.futureFixtures.length);
       const titles=await page.$$eval('[data-schedule-kind="verified-schedule"] article h3',els=>els.map(el=>el.textContent));

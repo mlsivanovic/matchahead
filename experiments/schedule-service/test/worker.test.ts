@@ -488,7 +488,7 @@ test('workerd dozvoljeni HTML prolazi kroz pravi FSS parser i preživljava gaše
     assert.equal(partizan?.name, 'FK Partizan');
     assert.equal(gost?.sport, 'football');
     assert.equal(gost?.country, 'xx');
-    assert.equal(gost?.name, 'gost-01');
+    assert.equal(gost?.name, 'Gost 01');
     assert.equal(gost?.city, '');
     assert.deepEqual(gost?.aliases, []);
     assert.deepEqual(gost?.providerIds, {});
