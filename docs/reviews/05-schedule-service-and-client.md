@@ -4,7 +4,7 @@
 **Pregledač:** Gemini CLI (nezavisna završna verifikacija i revizija faze 05)  
 **Konačni integrisani commit proizvoda (HEAD):** `a2ab384a3a74ff27135317164e3260e790db90dc` (`fix: preserve the latest real aggregate source success time`)  
 **Status konačne revizije:** **FINAL APPROVED UNDER BOUNDED SCOPE (KONAČNO ODOBRENO U OKVIRU ZADATOG OPSEGA — PREPORUČENO ZA GITHUB PUSH)**.  
-*Svi tehnički, arhitektonski i funkcionalni defekti u domenu, servisu i klijentu su u potpunosti otklonjeni i nezavisno verifikovani. Faza 05 se ne proglašava formalno završenom (DONE) jer status prava na javne izvore ostaje `unknown`, produkcija ostaje `source-blocked`, a Cloudflare nalog ostaje pod neproverenim nivoom pretplate bez deploya.*
+*Otkriveni defekti u testiranom domenu, servisu i klijentu otklonjeni su i verifikovani. Faza 05 se ne proglašava formalno završenom (DONE) jer status prava na javne izvore ostaje `unknown`, produkcija ostaje `source-blocked`, a Cloudflare nalog ostaje pod neproverenim nivoom pretplate bez deploya.*
 
 ---
 
@@ -47,7 +47,7 @@ Tokom ciklusa verifikacije Faze 05 uspešno su dijagnostikovani, reprodukovani k
 ### 2.2. Projekcija novoobjavljenog kupa u svež klupski snimak (Razrešeno u `8db3ad1`)
 - **Istorijski problem:** Kada Partizan u 10:00 preuzme ligu, a Zvezda u 10:01 preuzme keširanu ligu i novoobjavljeni kup, ponovni poziv za Partizan u 10:02 je vraćao stari klupski snimak koji je sadržao samo ligu (dobijao je 1 umesto 2 meča), jer klupski snimak nije bio istekao.
 - **Fail-first dokaz:** Skripta `/tmp/matchahead-05-new-provider-regression.mjs` je na `e5d434b` padala sa izlaznim kodom 1 (`expected 2 fixtures, actual 1`), evidentirano u koordinatorskom logu `/tmp/matchahead-05-new-provider-fail-first.log`.
-- **Verifikovano rešenje na `a2ab384`:** Uvedena je funkcija `projectSourcePages` koja proverava nedostajuća ili novija deljena takmičenja i ažurira klupski snimak bez novog mrežnog poziva. Ista skripta na `a2ab384` prolazi sa exit 0 (`PASS: newly listed cup reaches both strict-validated club responses without refetching`).
+- **Verifikovano rešenje na `a2ab384`:** Interna opcija `projectSourcePages` omogućava projekciju deljenih stranica u klupski snimak; odluke o preuzimanju ostaju vezane za pojedinačne izvore. Ista skripta na `a2ab384` prolazi sa exit 0 (`PASS: newly listed cup reaches both strict-validated club responses without refetching`).
 
 ### 2.3. Ažuriranje istekle lige bez blokiranja od strane svežeg kupa (Razrešeno u `b3cdbf2`)
 - **Istorijski problem:** Ako klupski snimak sadrži ligu (istek 6h) i kup (istek 24h), a liga istekne na 16:00, servis bi preuzeo novu ligu, ali bi domen mogao ponovo iskoristiti klupski snimak jer mu je agregatni `lastSuccessAt` pomeren kasnijim kupom.
@@ -88,7 +88,7 @@ Tokom ciklusa verifikacije Faze 05 uspešno su dijagnostikovani, reprodukovani k
 | 11 | Regresija mešanog isteka | `/tmp/matchahead-05-existing-provider-regression.mjs` | **PASS** | `0` | Istekla liga preuzima ažuriranu ligu bez kvarenja kupa. |
 | 12 | Sačuvani izvori (brojevi) | Independent parser test | **PASS** | `0` | ABA 18 po klubu, FSS 182, Evroliga 380 (38 kola po 10 mečeva, 2 derbija). |
 | 13 | Negativne regresije | Truncated/corrupted inputs | **PASS** | `0` | Skraćeni podaci i netačna sezona striktno vraćaju `complete: false`. |
-| 14 | Žive probe izvora | `node scripts/probe-schedule-sources.mjs` | **8 / 8 PASS** | `0` | Svi živi izvori dostupni; opservacije satnica zabeležene bez nagađanja. |
+| 14 | Žive probe izvora | `node scripts/probe-schedule-sources.mjs` | **8 / 8 PASS** | `0` | Očekivani blokirani i ograničeni odgovori pravilno evidentirani; dostupnost svih izvora nije potvrđena. |
 
 ### 3.1. Razgraničenje serverske integracije i validacionih scenarija
 U okviru provere granice (`parseFindResponse`) u skripti `/tmp/matchahead-05-boundary-qa.mjs` jasno se razlikuju dve kategorije testova:
@@ -119,6 +119,8 @@ U okviru provere granice (`parseFindResponse`) u skripti `/tmp/matchahead-05-bou
 
 ## 5. Zaključak i preporuka
 
-Konačni integrisani commit proizvoda `a2ab384a3a74ff27135317164e3260e790db90dc` u potpunosti ispunjava sve ugovorene tehničke, arhitektonske i bezbednosne zahteve zadate u orkestraciji Faze 05. Svi testovi i granične provere prolaze sa izlaznim kodom 0.
+Konačni integrisani commit proizvoda `a2ab384a3a74ff27135317164e3260e790db90dc` prolazi navedenu lokalnu verifikacionu matricu. Produkcioni i netestirani zahtevi ostaju otvoreni. Svi testovi i granične provere prolaze sa izlaznim kodom 0.
 
 Kod je stabilan, dobro izolovan i preporučuje se za GitHub push.
+
+Koordinatorsko prihvatanje: izveštaj je prihvaćen za navedeni lokalni opseg. Orca `worker_done` je odbijen zbog nedostajućeg Dispatch capability-ja; posle dokazanog završnog odgovora i idle prompta Dispatch je administrativno zaustavljen i resurs oslobođen. To nije prihvaćen lifecycle success. Koordinator je nezavisno potvrdio servis 55/55, domen 35/35 i web 113/113 na Node 22.
