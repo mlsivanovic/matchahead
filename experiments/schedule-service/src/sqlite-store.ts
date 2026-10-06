@@ -1,5 +1,6 @@
 import type { FindCacheRecord, ScheduleChange, SourceManifest } from '../../../packages/domain/src/index.ts';
 import type { SchedulePersistence } from './persistence.ts';
+import type { SharedSourcePage } from './source-share.ts';
 import {
   loadQuota,
   quotaAuthBlocked,
@@ -30,6 +31,7 @@ export function sessionFrom(sql: {
 export function ensureScheduleSchema(sql: SqlSession): void {
   sql.exec(`CREATE TABLE IF NOT EXISTS snapshot (key TEXT PRIMARY KEY, body TEXT NOT NULL)`);
   sql.exec(`CREATE TABLE IF NOT EXISTS document (name TEXT PRIMARY KEY, body TEXT NOT NULL)`);
+  sql.exec(`CREATE TABLE IF NOT EXISTS source_page (key TEXT PRIMARY KEY, body TEXT NOT NULL)`);
 }
 
 export class SqliteScheduleStore implements SchedulePersistence {
@@ -96,6 +98,44 @@ export class SqliteScheduleStore implements SchedulePersistence {
       name,
       JSON.stringify(value),
     );
+  }
+
+  readSource(key: string): SharedSourcePage | null {
+    const rows = this.sql.exec('SELECT body FROM source_page WHERE key = ?', key);
+    const body = rows[0]?.body;
+    if (typeof body !== 'string') return null;
+    return structuredClone(JSON.parse(body) as SharedSourcePage);
+  }
+
+  writeSource(page: SharedSourcePage): void {
+    this.sql.exec(
+      'INSERT INTO source_page (key, body) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET body = excluded.body',
+      page.key,
+      JSON.stringify(page),
+    );
+  }
+
+  listSources(): SharedSourcePage[] {
+    const rows = this.sql.exec('SELECT body FROM source_page');
+    const pages: SharedSourcePage[] = [];
+    for (const row of rows) {
+      if (typeof row.body !== 'string') continue;
+      pages.push(structuredClone(JSON.parse(row.body) as SharedSourcePage));
+    }
+    return pages;
+  }
+
+  deleteSources(match: { competitionId: string; seasonId: string; provider: string }): void {
+    for (const page of this.listSources()) {
+      if (
+        page.competitionId !== match.competitionId ||
+        page.seasonId !== match.seasonId ||
+        page.provider !== match.provider
+      ) {
+        continue;
+      }
+      this.sql.exec('DELETE FROM source_page WHERE key = ?', page.key);
+    }
   }
 }
 

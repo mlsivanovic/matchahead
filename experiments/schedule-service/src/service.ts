@@ -26,6 +26,17 @@ import { todayLocalDate } from './clock.ts';
 import { PRODUCTION_ID_MAPPINGS, applyIdMapping, type IdMapping } from './names.ts';
 import type { SchedulePersistence } from './persistence.ts';
 import type { QuotaDeny, QuotaGate } from './quota-logic.ts';
+import {
+  SourceFlight,
+  feedsToPublish,
+  hasLeagueFeed,
+  planSharedReads,
+  recordsAfterAttempt,
+  servedClock,
+  sourceScope,
+  type FlightClaim,
+  type SharePlan,
+} from './source-share.ts';
 import type { FeedLoad, FeedSource } from './sources/types.ts';
 
 export const MAX_BODY_BYTES = 4096;
@@ -64,6 +75,7 @@ export interface ScheduleDeps {
   logger: (event: ScheduleLog) => void;
   idMappings?: readonly IdMapping[];
   trustProxy?: boolean;
+  flight?: SourceFlight;
 }
 
 /** Odbija poznat loš metod, putanju, poreklo ili token u URL-u pre čitanja tela. */
@@ -152,9 +164,11 @@ export function shouldSkipNetwork(cached: FindCacheRecord | null, now: string, r
 
 export class ScheduleService {
   deps: ScheduleDeps;
+  flight: SourceFlight;
 
   constructor(deps: ScheduleDeps) {
     this.deps = deps;
+    this.flight = deps.flight ?? new SourceFlight();
   }
 
   async handle(input: IncomingRequest): Promise<OutgoingResponse> {
@@ -224,32 +238,104 @@ export class ScheduleService {
     const now = nowDate.toISOString();
     const today = todayLocalDate(nowDate);
     const cacheKey = `${team.id}:${request.request.seasonId}`;
-    const described = await this.deps.source.load({
+    const described = this.normalizeLoad(await this.deps.source.load({
       team,
       seasonId: request.request.seasonId,
       now,
       todayLocalDate: today,
       network: false,
+    }));
+    const clubRecord = this.deps.store.get(cacheKey);
+    const clubSkip = !hasLeagueFeed(described.feeds, described.shares)
+      && shouldSkipNetwork(clubRecord, now, request.request.refresh);
+    const plan = planSharedReads({
+      feeds: described.feeds,
+      shares: described.shares,
+      teamId: team.id,
+      now,
+      refresh: request.request.refresh,
+      pages: this.deps.store.listSources(),
+      clubSkip,
     });
-    const skip = shouldSkipNetwork(this.deps.store.get(cacheKey), now, request.request.refresh);
+    this.applyRevokes(plan.revoke);
+    let claim: FlightClaim | null = null;
+    let upstream = plan.fetchProviders.length;
+    if (upstream > 0) {
+      const clubScoped = plan.fetchProviders.some((provider) => sourceScope(provider, described.shares) === 'club');
+      const flightKey = [
+        team.sport,
+        request.request.seasonId,
+        clubScoped ? team.id : '*',
+        plan.fetchProviders.slice().sort().join('\n'),
+      ].join('\n');
+      claim = this.flight.claim(flightKey);
+      if (!claim.leader) upstream = 0;
+    }
     const taken = this.deps.quota.tryConsume({
       uid,
       ip,
       now: nowDate,
-      fresh: !skip,
-      upstream: skip ? 0 : described.upstreamPlan,
+      fresh: upstream > 0,
+      upstream,
     });
     if (!taken.ok) {
+      if (claim?.leader) claim.fail(new Error('kvota'));
       return finish(429, errorBody(taken.code, quotaMessage(taken.code)), taken.code, team.id);
     }
 
-    const loaded = await this.loadForDecision(described, {
-      team,
-      seasonId: request.request.seasonId,
-      now,
-      todayLocalDate: today,
-      skip,
-    });
+    let fetched: FeedLoad | null = null;
+    if (claim?.leader) {
+      try {
+        const raw = await this.deps.source.load({
+          team,
+          seasonId: request.request.seasonId,
+          now,
+          todayLocalDate: today,
+          network: true,
+          fetchProviders: plan.fetchProviders,
+        });
+        claim.finish(raw);
+        fetched = this.normalizeLoad(raw);
+      } catch (error) {
+        claim.fail(error);
+        throw error;
+      }
+    } else if (claim) {
+      fetched = this.normalizeLoad(await claim.join());
+    }
+    if (fetched) this.persistAttempt(fetched, plan.fetchProviders, team.id, now, true);
+    if (plan.touchProviders.length > 0) this.persistAttempt(described, plan.touchProviders, team.id, now, false);
+    const policyOnly = !plan.clubCacheHit
+      && plan.serve === null
+      && plan.fetchProviders.length === 0
+      && plan.touchProviders.length === 0;
+    const policy = policyOnly
+      ? this.normalizeLoad(await this.deps.source.load({
+        team,
+        seasonId: request.request.seasonId,
+        now,
+        todayLocalDate: today,
+        network: true,
+        fetchProviders: [],
+      }))
+      : null;
+    const loaded: FeedLoad = {
+      ...described,
+      feeds: policy
+        ? policy.feeds
+        : feedsToPublish({
+          described: described.feeds,
+          shares: described.shares,
+          plan,
+          pages: this.deps.store.listSources(),
+          teamId: team.id,
+          clubFixtures: clubRecord?.fixtures ?? [],
+          fetched: fetched?.feeds ?? null,
+        }),
+      teams: fetched?.teams ?? policy?.teams ?? described.teams,
+      competitions: mergeById(described.competitions, (fetched ?? policy)?.competitions ?? []),
+      technicalSuccess: fetched?.technicalSuccess ?? [],
+    };
     const previous = this.deps.store.get(cacheKey)?.fixtures ?? [];
     let result: FindFixturesResult;
     try {
@@ -270,12 +356,43 @@ export class ScheduleService {
       return finish(400, errorBody('invalid_body', 'Raspored nije mogao da se proveri.'), 'invalid_body', team.id);
     }
 
+    const fetchedNow = claim?.leader ? plan.fetchProviders : [];
+    if (!plan.clubCacheHit) {
+      result = {
+        ...result,
+        upstreamRequests: fetchedNow.length,
+        coverage: result.coverage.map((row) => fetchedNow.includes(row.provider) ? row : { ...row, requestsPerRefresh: 0 }),
+      };
+    }
+    if (plan.serve) {
+      const clock = servedClock(this.deps.store.listSources(), loaded.feeds);
+      const saved = this.deps.store.get(cacheKey);
+      const lastSuccessAt = saved && saved.fixtures.length > 0 ? (clock.goodAt ?? saved.lastSuccessAt ?? null) : null;
+      const lastAttemptAt = clock.attemptAt ?? saved?.lastAttemptAt ?? result.lastAttemptAt;
+      if (saved && (lastSuccessAt !== saved.lastSuccessAt || lastAttemptAt !== saved.lastAttemptAt)) {
+        this.deps.store.set(cacheKey, { ...saved, lastSuccessAt, lastAttemptAt });
+      }
+      result = {
+        ...result,
+        cacheStatus: plan.serve,
+        upstreamRequests: 0,
+        checkedAt: lastSuccessAt,
+        lastSuccessAt,
+        lastAttemptAt,
+      };
+    }
     const kind = responseKind(this.deps.mode, result);
     const stored = this.deps.store.get(cacheKey)?.fixtures ?? [];
     const changes = kind === 'source-blocked' ? [] : diffFixtures(previous, stored);
     this.deps.store.appendChanges(changes);
     this.deps.store.writePolicy(cacheKey, policyFingerprint(loaded.feeds));
-    const storedManifests = skip ? this.deps.store.readManifests() : this.writeManifests(loaded, now, changes, stored);
+    const recordManifest = plan.fetchProviders.length > 0
+      || plan.touchProviders.length > 0
+      || (plan.serve === null && !plan.clubCacheHit);
+    const manifestLoad = fetched ?? policy ?? described;
+    const storedManifests = recordManifest
+      ? this.writeManifests(manifestLoad, now, changes, stored)
+      : this.deps.store.readManifests();
     const manifests = manifestsForResponse(storedManifests, request.request.seasonId, loaded.competitions);
     const body: FindFixturesHttpSuccess = {
       kind,
@@ -288,19 +405,7 @@ export class ScheduleService {
     return finish(200, body, null, team.id);
   }
 
-  async loadForDecision(
-    described: FeedLoad,
-    input: { team: FeedLoad['teams'][number]; seasonId: string; now: string; todayLocalDate: string; skip: boolean },
-  ): Promise<FeedLoad> {
-    const loaded = input.skip
-      ? described
-      : await this.deps.source.load({
-          team: input.team,
-          seasonId: input.seasonId,
-          now: input.now,
-          todayLocalDate: input.todayLocalDate,
-          network: true,
-        });
+  normalizeLoad(loaded: FeedLoad): FeedLoad {
     const mappings = this.deps.idMappings ?? PRODUCTION_ID_MAPPINGS;
     const mapped = loaded.feeds.map((feed) => ({
       ...feed,
@@ -312,8 +417,27 @@ export class ScheduleService {
     if (this.deps.mode !== 'production') return { ...loaded, feeds: mapped };
     return {
       ...loaded,
+      technicalSuccess: [],
       feeds: mapped.map((feed) => ({ ...feed, publication: 'unknown' as const, pages: [] })),
     };
+  }
+
+  applyRevokes(items: SharePlan['revoke']): void {
+    for (const item of items) this.deps.store.deleteSources(item);
+  }
+
+  persistAttempt(load: FeedLoad, providers: readonly string[], teamId: string, now: string, fetchedBody: boolean): void {
+    const next = recordsAfterAttempt({
+      feeds: load.feeds,
+      shares: load.shares,
+      providers,
+      teamId,
+      now,
+      prior: this.deps.store.listSources(),
+      fetchedBody,
+    });
+    this.applyRevokes(next.revoke);
+    for (const page of next.write) this.deps.store.writeSource(page);
   }
 
   writeManifests(
@@ -353,6 +477,13 @@ export class ScheduleService {
     this.deps.store.writeManifests(next);
     return next;
   }
+}
+
+function mergeById<T extends { id: string }>(base: readonly T[], extra: readonly T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const item of base) byId.set(item.id, item);
+  for (const item of extra) byId.set(item.id, item);
+  return [...byId.values()];
 }
 
 function manifestsForResponse(

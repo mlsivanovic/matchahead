@@ -586,6 +586,144 @@ test('workerd meri sačuvani Evroliga PDF', { skip: existsSync('/tmp/ma-sources/
   }
 });
 
+test('workerd jedna ligaška strana služi oba košarkaška kluba', async () => {
+  const partizan = 'basketball:rs:partizan';
+  const zvezda = 'basketball:rs:crvena-zvezda';
+  const derby = () => fixture('derbi', partizan, zvezda, 'scheduled', '2027-03-02T18:00:00Z', '2027-03-02', '19:00');
+  const basketball = (teamId: string, refresh = false) => ({
+    sport: 'basketball',
+    teamId,
+    seasonId: '2026-2027',
+    refresh,
+  });
+  const lab = freshLab();
+  lab.fixtures = [derby(), fixture('gost-p', partizan, 'basketball:xx:gost'), fixture('gost-z', zvezda, 'basketball:xx:gost')];
+  const mf = new Miniflare(options(lab, {}));
+  const token = signToken('user-1', START);
+  try {
+    const first = await post(mf, token, START, basketball(partizan));
+    const second = await post(mf, token, START, basketball(zvezda));
+    const third = await post(mf, token, START, basketball(partizan));
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(third.status, 200);
+    assert.equal(lab.fixtureFetches, 1);
+    const firstBody = first.body as FindFixturesHttpSuccess;
+    const secondBody = second.body as FindFixturesHttpSuccess;
+    const left = firstBody.result.futureFixtures.find((item) => item.id.includes('derbi'));
+    const right = secondBody.result.futureFixtures.find((item) => item.id.includes('derbi'));
+    assert.ok(left && right);
+    assert.equal(left.id, right.id);
+    assert.equal(left.revision, right.revision);
+    assert.equal(secondBody.result.cacheStatus, 'reused');
+    assert.equal(secondBody.result.upstreamRequests, 0);
+    assert.equal(secondBody.result.futureFixtures.length, 2);
+    assert.equal(secondBody.teams.some((item) => item.id === partizan && item.name === 'KK Partizan'), true);
+    assert.equal(secondBody.teams.some((item) => item.id === 'basketball:xx:gost' && item.city === ''), true);
+    const coverage = secondBody.result.coverage.find((row) => row.provider === 'lab');
+    assert.equal(coverage?.competitionId, 'basketball:regional:aba-liga');
+    assert.equal(coverage?.scheduleAvailability, 'published');
+    assert.equal((third.body as FindFixturesHttpSuccess).result.cacheStatus, 'reused');
+
+    await mf.unsafeEvictDurableObject('matchahead-schedule', 'ScheduleDirectoryObject', { name: SCHEDULE_OBJECT_NAME });
+    const evicted = await post(mf, token, '2027-01-15T12:05:00.000Z', basketball(zvezda));
+    assert.equal(lab.fixtureFetches, 1);
+    assert.equal((evicted.body as FindFixturesHttpSuccess).result.futureFixtures.length, 2);
+
+    const throttled = await post(mf, token, '2027-01-15T12:10:00.000Z', basketball(zvezda, true));
+    assert.equal(lab.fixtureFetches, 1);
+    assert.equal((throttled.body as FindFixturesHttpSuccess).result.cacheStatus, 'throttled');
+    const refreshed = await post(mf, token, '2027-01-15T12:21:00.000Z', basketball(partizan, true));
+    assert.equal(lab.fixtureFetches, 2);
+    const reused = await post(mf, token, '2027-01-15T18:20:00.000Z', basketball(zvezda));
+    assert.equal(lab.fixtureFetches, 2);
+    assert.equal((reused.body as FindFixturesHttpSuccess).result.cacheStatus, 'reused');
+    const stale = await post(mf, token, '2027-01-15T18:22:00.000Z', basketball(partizan));
+    assert.equal(lab.fixtureFetches, 3);
+    assert.equal((stale.body as FindFixturesHttpSuccess).result.futureFixtures.some((item) => item.id === left.id), true);
+
+    lab.fixtures[0] = fixture('derbi', partizan, zvezda, 'scheduled', '2027-03-04T19:00:00Z', '2027-03-04', '20:00');
+    const moved = await post(mf, token, '2027-01-15T18:40:00.000Z', basketball(partizan, true));
+    const movedDerby = (moved.body as FindFixturesHttpSuccess).result.futureFixtures.find((item) => item.id.includes('derbi'));
+    const followed = await post(mf, token, '2027-01-15T18:45:00.000Z', basketball(zvezda));
+    const followedDerby = (followed.body as FindFixturesHttpSuccess).result.futureFixtures.find((item) => item.id.includes('derbi'));
+    assert.ok(movedDerby && followedDerby);
+    assert.equal(movedDerby.revision, followedDerby.revision);
+    assert.equal(movedDerby.revision > left.revision, true);
+    const noop = await post(mf, token, '2027-01-15T19:05:00.000Z', basketball(zvezda, true));
+    const noopDerby = (noop.body as FindFixturesHttpSuccess).result.futureFixtures.find((item) => item.id.includes('derbi'));
+    assert.equal(noopDerby?.revision, movedDerby.revision);
+    assert.equal((noop.body as FindFixturesHttpSuccess).changes.length, 0);
+
+    const fetches = lab.fixtureFetches;
+    lab.failure = 'timeout';
+    const held = await post(mf, token, '2027-01-15T19:30:00.000Z', basketball(partizan, true));
+    assert.equal(lab.fixtureFetches, fetches);
+    assert.equal((held.body as FindFixturesHttpSuccess).result.futureFixtures.some((item) => item.id === movedDerby.id), true);
+    const heldOther = await post(mf, token, '2027-01-15T19:35:00.000Z', basketball(zvezda, true));
+    assert.equal(lab.fixtureFetches, fetches);
+    assert.equal((heldOther.body as FindFixturesHttpSuccess).result.futureFixtures.some((item) => item.id === movedDerby.id), true);
+
+    lab.failure = 'none';
+    lab.publication = 'unknown';
+    const revoked = await post(mf, token, '2027-01-15T19:55:00.000Z', basketball(partizan, true));
+    assert.equal((revoked.body as FindFixturesHttpSuccess).result.futureFixtures.length, 0);
+    assert.equal((revoked.body as FindFixturesHttpSuccess).result.checkedAt, null);
+    const otherRevoked = await post(mf, token, '2027-01-15T19:56:00.000Z', basketball(zvezda));
+    assert.equal((otherRevoked.body as FindFixturesHttpSuccess).result.futureFixtures.length, 0);
+    assert.equal(lab.fixtureFetches, fetches);
+    lab.publication = 'allowed';
+    lab.fixtures[0] = fixture('derbi-2', partizan, zvezda, 'scheduled', '2027-03-06T19:00:00Z', '2027-03-06', '20:00');
+    const restored = await post(mf, token, '2027-01-15T20:20:00.000Z', basketball(zvezda, true));
+    const restoredBody = restored.body as FindFixturesHttpSuccess;
+    assert.equal(lab.fixtureFetches, fetches + 1);
+    assert.equal(restoredBody.result.futureFixtures.some((item) => item.id.includes('derbi-2')), true);
+    assert.equal(restoredBody.result.checkedAt !== null, true);
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test('workerd istovremeni klubovi i globalna kvota dele jedno preuzimanje lige', async () => {
+  const partizan = 'basketball:rs:partizan';
+  const zvezda = 'basketball:rs:crvena-zvezda';
+  const basketball = (teamId: string) => ({ sport: 'basketball', teamId, seasonId: '2026-2027', refresh: false });
+  const lab = freshLab();
+  lab.fixtures = [fixture('derbi', partizan, zvezda, 'scheduled', '2027-03-02T18:00:00Z', '2027-03-02', '19:00')];
+  const mf = new Miniflare(options(lab, {}));
+  const token = signToken('user-1', START);
+  try {
+    const [left, right] = await Promise.all([
+      post(mf, token, START, basketball(partizan)),
+      post(mf, token, START, basketball(zvezda)),
+    ]);
+    assert.equal(left.status, 200);
+    assert.equal(right.status, 200);
+    assert.equal(lab.fixtureFetches, 1);
+    const leftId = (left.body as FindFixturesHttpSuccess).result.futureFixtures[0];
+    const rightId = (right.body as FindFixturesHttpSuccess).result.futureFixtures[0];
+    assert.equal(leftId?.id, rightId?.id);
+    assert.equal(leftId?.revision, rightId?.revision);
+  } finally {
+    await mf.dispose();
+  }
+
+  const limited = freshLab();
+  limited.fixtures = [fixture('derbi', partizan, zvezda, 'scheduled', '2027-03-02T18:00:00Z', '2027-03-02', '19:00')];
+  const limitedMf = new Miniflare(options(limited, { limits: { ...DEFAULT_QUOTA_LIMITS, globalUpstream: 1 } }));
+  try {
+    assert.equal((await post(limitedMf, token, START, basketball(partizan))).status, 200);
+    assert.equal((await post(limitedMf, token, START, basketball(zvezda))).status, 200);
+    assert.equal(limited.fixtureFetches, 1);
+    const denied = await post(limitedMf, token, '2027-01-15T12:20:00.000Z', { ...basketball(partizan), refresh: true });
+    assert.equal(denied.status, 429);
+    assert.equal((denied.body as { error: { code: string } }).error.code, 'quota_global');
+    assert.equal(limited.fixtureFetches, 1);
+  } finally {
+    await limitedMf.dispose();
+  }
+});
+
 interface LabFixture {
   providerFixtureId: string;
   homeTeamId: string;

@@ -37,6 +37,11 @@ export function createProductionSource(fetchImpl: typeof fetch = globalThis.fetc
       const feeds: CompetitionFeed[] = [];
       const technicalSuccess: string[] = [];
       for (const document of documents) {
+        const selected = !input.fetchProviders || input.fetchProviders.includes(document.provider);
+        if (!selected) {
+          feeds.push(baseFeed(document, input, competitionForProvider(document.provider), 'none', 'Keš je još u roku. Izvor nije zvan.'));
+          continue;
+        }
         const read = await readAllowlisted(document, fetchImpl);
         if (!read.ok) {
           feeds.push(baseFeed(document, input, competitionForProvider(document.provider), read.failure, read.evidence));

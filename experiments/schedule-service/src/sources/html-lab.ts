@@ -24,6 +24,8 @@ interface DocumentParser {
   parse(body: Uint8Array, fetchedAt: string): Promise<ParsedSource>;
 }
 
+const LEAGUE_PROVIDERS = new Set(['fss', 'aba-liga', 'euroleague', 'kls']);
+
 const PARSERS: Record<string, DocumentParser> = {
   fss: {
     provider: 'fss',
@@ -79,17 +81,21 @@ export function createDocumentLabSource(fixturesUrl: string, parserName: string,
     async load(input): Promise<FeedLoad> {
       const policy = await readPolicy(policyUrl, timeoutMs);
       const wrongSport = parser.sport !== input.team.sport;
+      const selected = !input.fetchProviders || input.fetchProviders.includes(parser.provider);
       let parsed = emptyParse('Keš je još u roku. Izvor nije zvan.');
-      const readNetwork = input.network && !wrongSport && (policy.failure === 'none' || policy.failure === 'incomplete_page');
+      const readNetwork = input.network && selected && !wrongSport && (policy.failure === 'none' || policy.failure === 'incomplete_page');
       if (wrongSport) {
         parsed = emptyParse('Parser ne pripada sportu ovog kluba.', 'http_error');
       } else if (readNetwork) {
         parsed = await readDocument(fixtures.toString(), parser, input.now, timeoutMs);
-      } else if (input.network && policy.failure !== 'none') {
+      } else if (input.network && selected && policy.failure !== 'none') {
         parsed = emptyParse('Laboratorija javlja neuspeh. Dokument nije čitan.', policy.failure);
       }
       const failure: FetchFailureKind = wrongSport ? 'http_error' : policy.failure !== 'none' ? policy.failure : parsed.failure;
-      const drafts = parsed.drafts.filter((draft) => draft.homeTeamId === input.team.id || draft.awayTeamId === input.team.id);
+      const league = LEAGUE_PROVIDERS.has(parser.provider);
+      const drafts = league
+        ? parsed.drafts
+        : parsed.drafts.filter((draft) => draft.homeTeamId === input.team.id || draft.awayTeamId === input.team.id);
       const includePages = failure === 'none' || failure === 'incomplete_page';
       const feed: CompetitionFeed = {
         competitionId: parser.competitionId,
@@ -111,7 +117,8 @@ export function createDocumentLabSource(fixturesUrl: string, parserName: string,
         teams: [input.team],
         competitions: catalogCompetitions(input.team.sport),
         upstreamPlan: 1,
-        technicalSuccess: input.network && failure === 'none' ? [`${parser.provider}:${parser.competitionId}`] : [],
+        technicalSuccess: input.network && selected && failure === 'none' ? [`${parser.provider}:${parser.competitionId}`] : [],
+        shares: { [parser.provider]: league ? 'league' : 'club' },
       };
     },
   };

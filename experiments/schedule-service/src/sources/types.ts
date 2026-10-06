@@ -21,6 +21,12 @@ export interface FeedLoad {
   competitions: Competition[];
   upstreamPlan: number;
   technicalSuccess: string[];
+  /**
+   * league: strana ima sve učesnike tog takmičenja i sme da posluži drugi klub.
+   * club: strana pripada samo traženom klubu. Podrazumevano je club.
+   * Klupski provajderi ostaju club i kada mapa kaže drugačije.
+   */
+  shares?: Readonly<Record<string, 'league' | 'club'>>;
 }
 
 export interface FeedRequest {
@@ -29,6 +35,8 @@ export interface FeedRequest {
   now: string;
   todayLocalDate: string;
   network: boolean;
+  /** Kad je zadato, samo ovi provajderi smeju da povuku sportsko telo. */
+  fetchProviders?: readonly string[];
 }
 
 export interface FeedSource {

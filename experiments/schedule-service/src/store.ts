@@ -1,8 +1,9 @@
-import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FindCacheRecord, ScheduleChange, SourceManifest } from '../../../packages/domain/src/index.ts';
 import type { SchedulePersistence } from './persistence.ts';
+import type { SharedSourcePage } from './source-share.ts';
 
 const LOCK = '.lock';
 
@@ -57,6 +58,7 @@ export class FileScheduleStore implements SchedulePersistence {
   constructor(directory: string) {
     this.directory = directory;
     mkdirSync(join(directory, 'snapshots'), { recursive: true });
+    mkdirSync(join(directory, 'sources'), { recursive: true });
   }
 
   get(key: string): FindCacheRecord | null {
@@ -120,7 +122,60 @@ export class FileScheduleStore implements SchedulePersistence {
     });
   }
 
+  readSource(key: string): SharedSourcePage | null {
+    return withStoreLock(this.directory, () => {
+      const found = readJson<SharedSourcePage | null>(this.sourcePath(key), null);
+      return found ? structuredClone(found) : null;
+    });
+  }
+
+  writeSource(page: SharedSourcePage): void {
+    withStoreLock(this.directory, () => {
+      writeJson(this.sourcePath(page.key), page);
+    });
+  }
+
+  listSources(): SharedSourcePage[] {
+    return withStoreLock(this.directory, () => this.readSourceFiles());
+  }
+
+  deleteSources(match: { competitionId: string; seasonId: string; provider: string }): void {
+    withStoreLock(this.directory, () => {
+      for (const found of this.readSourceFiles()) {
+        if (
+          found.competitionId !== match.competitionId ||
+          found.seasonId !== match.seasonId ||
+          found.provider !== match.provider
+        ) {
+          continue;
+        }
+        rmSync(this.sourcePath(found.key), { force: true });
+      }
+    });
+  }
+
+  readSourceFiles(): SharedSourcePage[] {
+    let names: string[] = [];
+    try {
+      names = readdirSync(join(this.directory, 'sources'));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+    const pages: SharedSourcePage[] = [];
+    for (const name of names) {
+      if (!name.endsWith('.json') || name.includes('.tmp')) continue;
+      const found = readJson<SharedSourcePage | null>(join(this.directory, 'sources', name), null);
+      if (found) pages.push(structuredClone(found));
+    }
+    return pages;
+  }
+
   snapshotPath(key: string): string {
     return join(this.directory, 'snapshots', `${encodeURIComponent(key)}.json`);
+  }
+
+  sourcePath(key: string): string {
+    return join(this.directory, 'sources', `${encodeURIComponent(key)}.json`);
   }
 }

@@ -9,6 +9,7 @@ import { createGateSource } from './sources/gate.ts';
 import { createDocumentLabSource } from './sources/html-lab.ts';
 import { createLabSource } from './sources/lab.ts';
 import type { FeedSource } from './sources/types.ts';
+import { SourceFlight } from './source-share.ts';
 import { ensureScheduleSchema, sessionFrom, SqliteQuotaBook, SqliteScheduleStore } from './sqlite-store.ts';
 
 export const SCHEDULE_OBJECT_NAME = 'matchahead-schedule';
@@ -53,6 +54,7 @@ export class ScheduleDirectoryObject {
   #quota: SqliteQuotaBook;
   #verifier: TokenVerifier;
   #tail: Promise<void> = Promise.resolve();
+  #flight = new SourceFlight();
   #nowMs = Date.now();
 
   constructor(state: SqlState, env: ScheduleEnv) {
@@ -106,6 +108,7 @@ export class ScheduleDirectoryObject {
         origins,
         mode,
         trustProxy: this.#env.SCHEDULE_TRUST_PROXY === '1',
+        flight: this.#flight,
         logger: (event) => {
           console.log(JSON.stringify({ status: event.status, code: event.code, teamId: event.teamId }));
         },

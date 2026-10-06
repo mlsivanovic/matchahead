@@ -1,6 +1,6 @@
 # Predaja zadatka 05 — server i unos rasporeda
 
-Datum: 2026-10-01
+Datum: 2026-10-06
 Status: IN_PROGRESS
 
 ## Ostvaren rezultat
@@ -19,12 +19,15 @@ Odgovor filtrira manifeste na traženu sezonu i na takmičenja iz kataloga tog s
 
 `PRODUCTION_ID_MAPPINGS` je prazan. Stari identifikatori `k{kolo}` i `r{kolo}` nisu isporučeni, pa tabela preslikavanja ne postoji. FSS identitet je slug domaćin-gost. Evroliga je slug strana, a kolo samo iz linije `ROUND N` neposredno iznad.
 
+Jedna potpuna ligaška strana služi oba izabrana kluba. Ključ je takmičenje, sezona i provajder. Red stoji u SQLite tabeli `source_page` i u Node direktorijumu `sources/`. Novi proces i gašenje Durable Object-a čitaju isti red. Deljenje važi samo kad izvor izričito kaže `shares[provider] === 'league'`. Četiri klupska sajta i svaki neoznačeni provajder ostaju vezani za jedan klub, pa strana jednog kluba ne puni drugi. Običan pregled unutar 6 sati ne zove telo. Osvežavanje kraće od 15 minuta deli se između klubova i ne pomera `goodAt` sa tuđeg pregleda. Kvota rezerviše samo stvarni izlazni zahtev. Posle kvara, praznog odgovora, 429, isteka ili nepotpune strane ostaje poslednji dobar snimak, a novi pokušaj čeka 15 minuta i kad je taj snimak stariji od 6 sati. Strana bez svih strana, ili sa istim ID-jem i dva različita termina, ne postaje dobar snimak. `unknown` i `forbidden` brišu zajedničku stranu i oba klupska snimka. Produkcija i dalje ima `publication: unknown`, ne zove sportsko telo i vraća `source-blocked`.
+
 Faza nije DONE. Budžet 0 €. Push namespace nije diran. `apps/web` nije menjan.
 
 ## Izmenjene datoteke
 
 - `packages/domain/src/find-fixtures.ts` i `packages/domain/test/find-fixtures.test.ts` — prethodni lokalni datum ostaje i kada su oba UTC polja prazna
 - `experiments/schedule-service/` — Node proba, Worker, SQLite skladište, adapteri, testovi, `wrangler.jsonc`
+- `experiments/schedule-service/src/source-share.ts` i `test/source-share.test.ts` — zajednička ligaška strana, rok, opoziv i opseg kluba
 - `scripts/check-schedule-service.mjs`
 - `.env.example` — samo sportska polja faze 05
 - `docs/handoffs/05-server.md`
@@ -48,7 +51,15 @@ Zid ovog procesa u tom nizu, nije obračunati CPU:
 - workerd sačuvani FSS HTML: `fss-html-wall-ms=35.0`
 - workerd sačuvani Evroliga PDF: `euroleague-pdf-wall-ms=51.0`
 
-`miniflare` je `5.20261001.0-alpha`, `undici` `7.29.1`, `workerd` `1.20261001.1`. `npm audit` u tom paketu javlja 0 ranjivosti. To je razvojna zavisnost, ne deploy. Root je na integrisanom `96aea3d` već javio Node 22, 40/40 i domen 35/35. Ovaj radnik je merio Node 26.7.0.
+`miniflare` je `5.20261001.0-alpha`, `undici` `7.29.1`, `workerd` `1.20261001.1`. `npm audit` u tom paketu javlja 0 ranjivosti. To je razvojna zavisnost, ne deploy. Root je na integrisanom `96aea3d` već javio Node 22, 40/40 i domen 35/35. Ovaj radnik je 1. oktobra merio Node 26.7.0.
+
+Provera 6. oktobra 2026, posle zajedničke ligaške strane. `tsc` iz istog lockfile-a nema greške. Oba procesa su izašla sa statusom 0.
+
+- Node 26.7.0, `node scripts/check-schedule-service.mjs`: 51 PASS, 0 FAIL, 23342 ms. Zid: `euroleague-node-wall-ms=103.6`, `fss-html-wall-ms=39.0`, `euroleague-pdf-wall-ms=49.0`.
+- Node 22.23.3, `npm exec --yes --package=node@22 -- node scripts/check-schedule-service.mjs`: 51 PASS, 0 FAIL, 23512 ms. Zid: `euroleague-node-wall-ms=119.4`, `fss-html-wall-ms=39.0`, `euroleague-pdf-wall-ms=49.0`.
+- `node scripts/check-data-contracts.mjs`: 35 PASS, 0 FAIL, 153 ms, izlaz 0.
+
+Zid je vreme parsiranja sačuvanih fajlova u ovom procesu, ne obračunati CPU i ne živo preuzimanje.
 
 Workerd, isti niz:
 
@@ -63,7 +74,7 @@ Workerd, isti niz:
 - zaglavljeno telo vraća 400 `payload_too_large` i sledeći zahtev prolazi; zaglavljen sertifikat vraća 401 i ne ostaje u kešu
 - tuđe poreklo 403, token u URL-u 401, polje `now` u telu 400
 
-Sačuvani dokumenti u `/tmp/ma-sources`, nisu u gitu. Obavezne provere su u `adapters.test.ts`. Brojevi su sa ovog diska, 1. oktobar 2026:
+Sačuvani dokumenti u `/tmp/ma-sources`, nisu u gitu. Obavezne provere su u `adapters.test.ts`. Brojevi ispod su sa diska 1. oktobra 2026. Ponovno čitanje 6. oktobra samo je potvrdilo iste fajlove. To nije obilazak živih sajtova 6. oktobra i ne dokazuje da FSS, ABA, klupski sajtovi ili Evroliga PDF danas izgledaju isto. Produkcija i dalje nije podešena: izvor ostaje `unknown`, odgovor `source-blocked`, nema deploya ni naplate.
 
 - FSS: 182 nacrta posle odbacivanja istog pregleda 11. kola, `complete`, nijedan `startsAtUtc`. Isti par sa različitim datumom i dalje nije potpuna strana. Nema `k{kolo}` identiteta.
 - ABA: 180 nacrta, `complete`, Partizan 18 i Zvezda 18 posebno. Meč 41 je Igokea m:tel, ne sečenje na dvotački. Meč 15 ostaje `startsAtUtc` null, datum `2026-10-02`, sat `18:30`. Jedini UTC je meč 27, Cluj, `2026-10-11T10:00:00Z` preko Europe/Bucharest.
@@ -91,8 +102,7 @@ Sintetički `allowed` na laboratorijskom domaćinu jeste pravi parser nad kontro
 
 - Nijedan produkcijski izvor nema `publication: allowed`.
 - Živi deploy nije rađen. Nalog i naplata nisu dirani.
-- PWA, agenda i browser tok nisu deo ovog vlasništva. Gemini vežba klijentski validator `eb4a71f` posebno.
-- Node 22 nije pokrenut.
+- PWA, agenda i browser tok nisu deo ovog vlasništva. Gemini vežba klijentski validator `eb4a71f` posebno, na novom integrisanom HEAD-u.
 
 ## Odluke koje sledeći task mora sačuvati
 
@@ -104,6 +114,7 @@ Sintetički `allowed` na laboratorijskom domaćinu jeste pravi parser nad kontro
 - `SCHEDULE_MODE=synthetic` nije dozvoljen kad je `NODE_ENV=production`. `x-matchahead-test-now` važi samo uz sintetički režim i `SCHEDULE_ALLOW_TEST_CLOCK=1`.
 - Token ne ide u URL, log, trajni keš ni Vite. CORS ne zamenjuje prijavu.
 - Ne zvati `api-live.euroleague.net`. Ne označavati izvor `allowed` bez odluke sa dokazom.
+- Ligaška strana se deli samo uz izričit `shares: league`. Klupski sajt i neoznačeni provajder ostaju jednom klubu. Nepotpuna ili protivrečna strana ne sme da zameni poslednji dobar snimak.
 
 ## Potrebni pristupi i ručni koraci
 

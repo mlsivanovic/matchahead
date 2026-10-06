@@ -1,11 +1,10 @@
-import type { CompetitionFeed, FetchFailureKind, FixtureStatus } from '../../../../packages/domain/src/index.ts';
+import type { CompetitionFeed, FetchFailureKind, FixtureStatus, Sport } from '../../../../packages/domain/src/index.ts';
 import { competitionId } from '../../../../packages/domain/src/index.ts';
 import { catalogCompetitions } from '../catalog.ts';
 import { observedDraft } from './draft.ts';
 import type { FeedLoad, FeedSource } from './types.ts';
 
 const LAB_HOST = 'lab.schedule.test';
-const COMPETITION = competitionId('football', 'domestic', 'superliga-srbije');
 
 interface LabPolicy {
   publication: 'allowed' | 'forbidden' | 'unknown';
@@ -36,13 +35,15 @@ export function createLabSource(fixturesUrl: string, timeoutMs = 5000): FeedSour
   return {
     async load(input): Promise<FeedLoad> {
       const policy = await readPolicy(policyUrl, timeoutMs);
-      const includeFixtures = input.network && (policy.failure === 'none' || policy.failure === 'incomplete_page');
+      const competition = leagueCompetition(input.team.sport);
+      const selected = !input.fetchProviders || input.fetchProviders.includes('lab');
+      const includeFixtures = input.network && selected && (policy.failure === 'none' || policy.failure === 'incomplete_page');
       const rows = includeFixtures ? await readFixtures(fixtures.toString(), timeoutMs) : [];
       const drafts = rows
-        .filter((row) => row.homeTeamId === input.team.id || row.awayTeamId === input.team.id)
+        .filter((row) => rowInSport(row, input.team.sport))
         .map((row) => observedDraft({
           sport: input.team.sport,
-          competitionId: COMPETITION,
+          competitionId: competition,
           seasonId: input.seasonId,
           homeTeamId: row.homeTeamId,
           awayTeamId: row.awayTeamId,
@@ -59,7 +60,7 @@ export function createLabSource(fixturesUrl: string, timeoutMs = 5000): FeedSour
           fetchedAt: input.now,
         }));
       const feed: CompetitionFeed = {
-        competitionId: COMPETITION,
+        competitionId: competition,
         seasonId: input.seasonId,
         provider: 'lab',
         providerCompetitionId: null,
@@ -78,10 +79,20 @@ export function createLabSource(fixturesUrl: string, timeoutMs = 5000): FeedSour
         teams: [input.team],
         competitions: catalogCompetitions(input.team.sport),
         upstreamPlan: 1,
-        technicalSuccess: policy.failure === 'none' ? [`lab:${COMPETITION}`] : [],
+        technicalSuccess: input.network && policy.failure === 'none' ? [`lab:${competition}`] : [],
+        shares: { lab: 'league' },
       };
     },
   };
+}
+
+function leagueCompetition(sport: Sport): string {
+  if (sport === 'basketball') return competitionId('basketball', 'regional', 'aba-liga');
+  return competitionId('football', 'domestic', 'superliga-srbije');
+}
+
+function rowInSport(row: LabFixture, sport: Sport): boolean {
+  return row.homeTeamId.startsWith(`${sport}:`) || row.awayTeamId.startsWith(`${sport}:`);
 }
 
 async function readPolicy(url: string, timeoutMs: number): Promise<LabPolicy> {
