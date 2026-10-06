@@ -27,6 +27,8 @@ Koordinatorska dopuna: servis odlučuje o preuzimanju po ključu izvora, a zatim
 
 Koordinatorova negativna proba nad `8db3ad1` preuzela je pomeren derbi, ali vratila stari datum zbog svežeg klupskog snimka novijeg kupa. Posle korekcije isti helper `/tmp/matchahead-05-existing-provider-regression.mjs` prolazi, sa stvarnim odgovorima kroz `parseFindResponse`. Node 22 tsc + servis/workerd: 55/55, exit 0 (`/tmp/matchahead-05-root-projection-service-fixed.log`); domen 35/35. Završna nezavisna prihvatljivost čeka Gemini proveru konačnog integrisanog commita.
 
+Poslednja korekcija zbirnog sata: pri čitanju sačuvanih strana `checkedAt`/`lastSuccessAt` uzimaju najnoviji stvarni `goodAt` među izvorima koji sadrže traženi klub, saglasno domenskom ugovoru. Novo čitanje ne pomera nijedan `goodAt` ni manifest. Rok 6 sati proverava se zasebno po izvoru, a ne po zbirnom satu. Node 22 servis/tsc/workerd ostaje 55/55, exit 0 (`/tmp/matchahead-05-final-aggregate-service.log`).
+
 ## Izmenjene datoteke
 
 - `packages/domain/src/find-fixtures.ts` i `packages/domain/test/find-fixtures.test.ts` — prethodni lokalni datum ostaje i kada su oba UTC polja prazna

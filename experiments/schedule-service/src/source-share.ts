@@ -178,7 +178,7 @@ export function recordsAfterAttempt(input: {
   return { write, revoke };
 }
 
-/** Sat deljenog snimka, da klupski zapis ne produži rok posle tuđeg pregleda. */
+/** Poslednji stvarni uspeh za traženi klub; rok svakog izvora ostaje njegov goodAt. */
 export function servedClock(
   pages: readonly SharedSourcePage[],
   feeds: readonly CompetitionFeed[],
@@ -190,7 +190,10 @@ export function servedClock(
   for (const feed of feeds) {
     const page = findPage(pages, shares, teamId, feed);
     if (!page) continue;
-    if (page.goodAt && (goodAt === null || page.goodAt < goodAt)) goodAt = page.goodAt;
+    const containsTeam = page.good?.pages.some((part) => part.fixtures.some(
+      (draft) => draft.homeTeamId === teamId || draft.awayTeamId === teamId,
+    ));
+    if (containsTeam && page.goodAt && (goodAt === null || page.goodAt > goodAt)) goodAt = page.goodAt;
     if (attemptAt === null || page.lastAttemptAt > attemptAt) attemptAt = page.lastAttemptAt;
   }
   return { goodAt, attemptAt };

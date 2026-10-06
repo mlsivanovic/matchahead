@@ -204,8 +204,8 @@ test('mešani provajderi: novo preuzimanje ne briše već sačuvanu ligu', async
   assert.equal(app.bodies.cup, 1);
   assert.equal(laterBody.result.cacheStatus, 'reused');
   assert.equal(laterBody.result.upstreamRequests, 0);
-  assert.equal(laterBody.result.checkedAt, START);
-  assert.equal(laterBody.result.lastSuccessAt, START);
+  assert.equal(laterBody.result.checkedAt, secondAt);
+  assert.equal(laterBody.result.lastSuccessAt, secondAt);
   assert.equal(laterBody.result.futureFixtures.some((item) => item.providerFixtureId === 'kup-p'), true);
   assert.equal(laterBody.result.futureFixtures.find((item) => item.providerFixtureId === 'derbi')?.revision, firstDerby?.revision);
   assert.equal(laterBody.result.coverage.every((row) => row.requestsPerRefresh === 0), true);
