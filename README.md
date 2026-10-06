@@ -6,7 +6,7 @@ Projektni folder za razvoj sa Grokom, u zasebnim taskovima.
 
 Lokalna implementacija faze 05 i Gemini završni pregled prihvaćeni su: Grokov server/SQLite Durable Object i parseri, Muse klijent i jedinstvena agenda integrisani su. Servis ima 55 prolaznih testova, klijent 113; [QA izveštaj](docs/reviews/05-schedule-service-and-client.md) navodi dodatne browser, PWA i emulator dokaze. Postoje probe ligaških HTML izvora i zvaničnog PDF-a Evrolige za 2026/27. Produkciono korišćenje izvora, puna pokrivenost svih takmičenja i živi sportski endpoint još nisu potvrđeni; javni raspored ostaje sintetički DEMO. [Ugovor faze 05](docs/phase-05-work-contract.md), [audit izvora](docs/phase-05-source-audit.md) i [aktuelni napredak](docs/progress.md) beleže dokaze i prepreke.
 
-Push osnova ima 27 lokalnih testova, uključujući 4 workerd testa. Fizička isporuka na zatvorenoj PWA i edge CPU još nisu provereni; push kapije ostaju ugašene. Firebase naplata je isključena, Cloudflare plan nije verifikovan dokazom. Budžet ostaje 0 €. Poslednja potvrđena Pages objava je `be48495` ([aplikacija](https://mlsivanovic.github.io/matchahead/)); novija lokalna integracija još nije objavljena.
+Push osnova ima 27 lokalnih testova, uključujući 4 workerd testa. Fizička isporuka na zatvorenoj PWA i edge CPU još nisu provereni; push kapije ostaju ugašene. Firebase naplata je isključena, Cloudflare plan nije verifikovan dokazom. Budžet ostaje 0 €. Integracija i završni pregled faze 05 push-ovani su na GitHub 6. oktobra 2026. Pages objava prati rezultat [GitHub Actions provera](https://github.com/mlsivanovic/matchahead/actions); [javna aplikacija](https://mlsivanovic.github.io/matchahead/) i dalje koristi DEMO rasporede.
 
 ## Početak
 
