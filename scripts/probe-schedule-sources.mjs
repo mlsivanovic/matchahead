@@ -251,21 +251,23 @@ async function probeFkCzv() {
     };
   }
 
-  // Compare hero countdown widget vs table row for Radnički 1923
-  const hasHero1300 = page.text.includes('10.10.2026 13:00') || (page.text.includes('10.10.2026') && page.text.includes('13:00'));
-  const hasTable0000 = page.text.includes('10.10.2026') && page.text.includes('00:00');
-  const hasConferenceLugano = page.text.includes('Liga konferencije') && page.text.includes('LUGANO') && page.text.includes('15.10.2026');
+  // Record dated printed clock text without asserting cause
+  const clockMatch = page.text.match(/10\.10\.2026\s+(\d{2}:\d{2})/);
+  const datedClock = clockMatch ? clockMatch[1] : 'Not found';
+  const hasMidnight = page.text.includes('10.10.2026') && page.text.includes('00:00');
+  const hasConferenceLugano = /LUGANO/i.test(page.text) && page.text.includes('15.10.2026');
+  const hasRadnicki = /Radnički|РАДНИЧКИ/i.test(page.text);
 
   return {
     name: 'FK Crvena zvezda (crvenazvezdafk.com)',
     url: 'https://www.crvenazvezdafk.com/sr-latn/raspored-rezultati',
     status: page.status,
-    heroCountdownTimeForRadnicki: hasHero1300 ? '13:00' : 'Not found',
-    scheduleTableRowTimeForRadnicki: hasTable0000 ? '00:00' : 'Not found',
-    conflictingSourceFieldsDemonstrated: Boolean(hasHero1300 && hasTable0000),
-    observedConflict: 'Hero section shows 13:00 while schedule table row shows 00:00 (placeholder for unconfirmed time). Regex matching 13:00 from hero is an invalid heuristic, not match proof.',
+    datedClockObservation: datedClock,
+    unscopedMidnightObserved: hasMidnight,
+    clockObservation: `Printed date shows ${datedClock} alongside occurrences of 00:00/date-only. Source clock/zone confirmation remains unknown without explaining cause.`,
     conferenceLeagueLuganoFixtureFound: hasConferenceLugano,
-    verdict: page.status === 200 && hasConferenceLugano && hasHero1300 && hasTable0000 ? 'PASS (Confirmed Observed Conflict: Hero 13:00 vs Table 00:00)' : 'FAIL'
+    superligaRadnickiFixtureFound: hasRadnicki,
+    verdict: page.status === 200 && hasConferenceLugano && hasRadnicki ? 'PASS (FK CZV Accessible with Conference League & Superliga Fixtures)' : 'FAIL'
   };
 }
 
