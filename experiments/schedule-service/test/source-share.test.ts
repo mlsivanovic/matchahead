@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -11,7 +11,7 @@ import { DEFAULT_QUOTA_LIMITS, QuotaBook, type QuotaLimits } from '../src/quota.
 import { ScheduleService, type ScheduleDeps } from '../src/service.ts';
 import { observedDraft } from '../src/sources/draft.ts';
 import type { FeedLoad, FeedRequest, FeedSource } from '../src/sources/types.ts';
-import { pageIsShareable } from '../src/source-share.ts';
+import { pageIsShareable, servedClock, sourceKey, type SharedSourcePage } from '../src/source-share.ts';
 import { FileScheduleStore } from '../src/store.ts';
 
 const ORIGIN = 'https://mlsivanovic.github.io';
@@ -165,6 +165,7 @@ test('mešani provajderi: novo preuzimanje ne briše već sačuvanu ligu', async
   const directory = mkdtempSync(join(tmpdir(), 'ma-mixed-'));
   const app = mixedHarness(directory);
   const first = await app.post(PARTIZAN, false, START);
+  const firstDerby = (first.body as FindFixturesHttpSuccess).result.futureFixtures.find((item) => item.providerFixtureId === 'derbi');
   assert.equal(first.status, 200);
   assert.equal(app.bodies.league, 1);
   assert.equal(app.bodies.cup, 0);
@@ -204,7 +205,16 @@ test('mešani provajderi: novo preuzimanje ne briše već sačuvanu ligu', async
   assert.equal(laterBody.result.cacheStatus, 'reused');
   assert.equal(laterBody.result.upstreamRequests, 0);
   assert.equal(laterBody.result.checkedAt, START);
+  assert.equal(laterBody.result.lastSuccessAt, START);
+  assert.equal(laterBody.result.futureFixtures.some((item) => item.providerFixtureId === 'kup-p'), true);
+  assert.equal(laterBody.result.futureFixtures.find((item) => item.providerFixtureId === 'derbi')?.revision, firstDerby?.revision);
   assert.equal(laterBody.result.coverage.every((row) => row.requestsPerRefresh === 0), true);
+  assert.equal(laterBody.manifests.find((item) => item.provider === 'league')?.lastSuccessAt, START);
+  assert.equal(laterBody.manifests.find((item) => item.provider === 'league')?.lastAttemptAt, START);
+  assert.equal(laterBody.manifests.find((item) => item.provider === 'cup')?.lastSuccessAt, secondAt);
+  assert.equal(new FileScheduleStore(directory).listSources().find((page) => page.provider === 'league')?.goodAt, START);
+  await assertClientValid(second.body);
+  await assertClientValid(later.body);
 });
 
 test('istekli dobar snimak ne zove izvor dok traje cooldown posle kvara', async () => {
@@ -300,6 +310,77 @@ test('klupski i neoznačeni opseg ne dele stranu između klubova', async () => {
   }
 });
 
+test('sat klupskog snimka ne uzima tuđi klub', () => {
+  const base = feed('none');
+  const page = (teamId: string, goodAt: string): SharedSourcePage => ({
+    key: sourceKey('club', teamId, base),
+    competitionId: base.competitionId,
+    seasonId: base.seasonId,
+    provider: base.provider,
+    scope: 'club',
+    ownerTeamId: teamId,
+    good: base,
+    goodAt,
+    lastAttemptAt: goodAt,
+    lastFailure: 'none',
+  });
+  const later = '2027-01-15T12:05:00.000Z';
+  const pages = [page(ZVEZDA, later), page(PARTIZAN, START)];
+  assert.equal(servedClock(pages, [base], { league: 'club' }, PARTIZAN).goodAt, START);
+  assert.equal(servedClock(pages, [base], { league: 'club' }, ZVEZDA).goodAt, later);
+});
+
+test('isti provajder sa drugim takmičenjem ne deli let', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ma-flight-comp-'));
+  const app = splitHarness(directory);
+  const [left, right] = await Promise.all([
+    app.post(PARTIZAN, START),
+    app.post(ZVEZDA, START),
+  ]);
+  assert.equal(left.status, 200);
+  assert.equal(right.status, 200);
+  assert.equal(app.bodies, 2);
+  const partizan = (left.body as FindFixturesHttpSuccess).result.futureFixtures;
+  const zvezda = (right.body as FindFixturesHttpSuccess).result.futureFixtures;
+  assert.equal(partizan.some((item) => item.providerFixtureId === 'aba-p'), true);
+  assert.equal(partizan.some((item) => item.providerFixtureId === 'kup-z'), false);
+  assert.equal(zvezda.some((item) => item.providerFixtureId === 'kup-z'), true);
+  assert.equal(zvezda.some((item) => item.providerFixtureId === 'aba-p'), false);
+});
+
+test('pratioc leta ne pomera sat ni manifest vođe', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ma-follower-'));
+  const app = harness(directory, 'league');
+  let release: () => void = () => undefined;
+  app.hold = new Promise((resolve) => { release = resolve; });
+  const leader = app.post(PARTIZAN, false, START);
+  for (let i = 0; i < 100 && app.bodies === 0; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(app.bodies, 1);
+  const followerAt = '2027-01-15T12:10:00.000Z';
+  const follower = app.post(ZVEZDA, false, followerAt);
+  release();
+  const [leaderReply, followerReply] = await Promise.all([leader, follower]);
+  const leaderBody = leaderReply.body as FindFixturesHttpSuccess;
+  const followerBody = followerReply.body as FindFixturesHttpSuccess;
+  assert.equal(app.bodies, 1);
+  assert.equal(leaderBody.result.upstreamRequests, 1);
+  assert.equal(followerBody.result.upstreamRequests, 0);
+  assert.equal(followerBody.result.cacheStatus, 'reused');
+  assert.equal(followerBody.result.checkedAt, START);
+  assert.equal(followerBody.result.lastSuccessAt, START);
+  assert.equal(followerBody.manifests.find((item) => item.provider === 'league')?.lastSuccessAt, START);
+  assert.equal(followerBody.manifests.find((item) => item.provider === 'league')?.lastAttemptAt, START);
+  const stored = new FileScheduleStore(directory).listSources()[0];
+  assert.equal(stored?.goodAt, START);
+  assert.equal(stored?.lastAttemptAt, START);
+  assert.equal(
+    followerBody.result.futureFixtures.find((item) => item.providerFixtureId === 'derbi')?.id,
+    leaderBody.result.futureFixtures.find((item) => item.providerFixtureId === 'derbi')?.id,
+  );
+});
+
 interface Row {
   providerFixtureId: string;
   homeTeamId: string;
@@ -316,6 +397,7 @@ interface Harness {
   failure: FetchFailureKind;
   publication: 'allowed' | 'forbidden' | 'unknown';
   duplicateDerby: boolean;
+  hold: Promise<void> | null;
   post(teamId: string, refresh: boolean, now: string): Promise<{ status: number; body: unknown }>;
 }
 
@@ -328,6 +410,7 @@ function harness(directory: string, scope: 'league' | 'club' | 'default', limits
     failure: 'none' as FetchFailureKind,
     publication: 'allowed' as 'allowed' | 'forbidden' | 'unknown',
     duplicateDerby: false,
+    hold: null as Promise<void> | null,
     rows: [
       row('derbi', PARTIZAN, ZVEZDA, '2027-03-02', '19:00', '2027-03-02T18:00:00Z'),
       row('gost-p', PARTIZAN, 'basketball:xx:gost', '2027-03-09', '18:00', '2027-03-09T17:00:00Z'),
@@ -339,7 +422,10 @@ function harness(directory: string, scope: 'league' | 'club' | 'default', limits
       if (!input.network) state.describes += 1;
       const selected = !input.fetchProviders || input.fetchProviders.includes('league');
       const readBody = input.network && selected && (state.failure === 'none' || state.failure === 'incomplete_page');
-      if (readBody) state.bodies += 1;
+      if (readBody) {
+        state.bodies += 1;
+        if (state.hold) await state.hold;
+      }
       const visible = scope === 'league' ? state.rows : state.rows.filter((item) => item.homeTeamId === input.team.id || item.awayTeamId === input.team.id);
       return loadFrom(input, visible, state.publication, state.failure, scope, readBody, state.duplicateDerby);
     },
@@ -365,6 +451,8 @@ function harness(directory: string, scope: 'league' | 'club' | 'default', limits
     set publication(value: 'allowed' | 'forbidden' | 'unknown') { state.publication = value; },
     get duplicateDerby() { return state.duplicateDerby; },
     set duplicateDerby(value: boolean) { state.duplicateDerby = value; },
+    get hold() { return state.hold; },
+    set hold(value: Promise<void> | null) { state.hold = value; },
     post(teamId: string, refresh: boolean, now: string) {
       nowIso = now;
       return service.handle({
@@ -608,4 +696,114 @@ function row(
   startsAtUtc: string,
 ): Row {
   return { providerFixtureId: id, homeTeamId: home, awayTeamId: away, scheduledLocalDate, printedLocalTime, startsAtUtc };
+}
+
+function splitHarness(directory: string): {
+  bodies: number;
+  post(teamId: string, now: string): Promise<{ status: number; body: unknown }>;
+} {
+  let nowIso = START;
+  let bodies = 0;
+  const clock: Clock = { now: () => new Date(nowIso) };
+  const source: FeedSource = {
+    async load(input: FeedRequest): Promise<FeedLoad> {
+      const partizan = input.team.id === PARTIZAN;
+      const competition = partizan ? COMPETITION : CUP;
+      const fixtureId = partizan ? 'aba-p' : 'kup-z';
+      const away = 'basketball:xx:gost';
+      const when = partizan
+        ? row(fixtureId, PARTIZAN, away, '2027-03-02', '19:00', '2027-03-02T18:00:00Z')
+        : row(fixtureId, ZVEZDA, away, '2027-03-20', '19:00', '2027-03-20T18:00:00Z');
+      const readBody = Boolean(input.network && (!input.fetchProviders || input.fetchProviders.includes('league')));
+      if (readBody) bodies += 1;
+      const drafts = readBody
+        ? [observedDraft({
+          sport: input.team.sport,
+          competitionId: competition,
+          seasonId: input.seasonId,
+          homeTeamId: when.homeTeamId,
+          awayTeamId: when.awayTeamId,
+          scheduledLocalDate: when.scheduledLocalDate,
+          printedLocalTime: when.printedLocalTime,
+          startsAtUtc: when.startsAtUtc,
+          sourceTimeZone: 'Europe/Belgrade',
+          status: 'scheduled',
+          venue: null,
+          round: '1',
+          sourceUrl: 'https://lab.schedule.test/fixtures',
+          provider: 'league',
+          providerFixtureId: when.providerFixtureId,
+          fetchedAt: input.now,
+        })]
+        : [];
+      return {
+        feeds: [{
+          competitionId: competition,
+          seasonId: input.seasonId,
+          provider: 'league',
+          providerCompetitionId: null,
+          publication: 'allowed',
+          organizerMarkedUnpublished: false,
+          teamNotInCompetition: false,
+          failure: 'none',
+          totalPages: 1,
+          pages: [{ page: 1, fixtures: drafts }],
+          evidence: 'kontrolisana ligaška strana',
+          sourceUrl: 'https://lab.schedule.test/fixtures',
+          checkedAt: input.todayLocalDate,
+        }],
+        teams: [input.team],
+        competitions: [{
+          id: competition,
+          sport: input.team.sport,
+          name: partizan ? 'ABA liga' : 'Kup',
+          scope: partizan ? 'regional' as const : 'domestic' as const,
+          country: partizan ? null : 'RS',
+          aliases: [],
+          providerIds: {},
+        }],
+        upstreamPlan: 1,
+        technicalSuccess: readBody ? [`league:${competition}`] : [],
+        shares: { league: 'league' },
+      };
+    },
+  };
+  const service = new ScheduleService({
+    clock,
+    verifier: { async verify() { return { uid: 'user-1' }; } },
+    store: new FileScheduleStore(directory),
+    quota: new QuotaBook(directory, DEFAULT_QUOTA_LIMITS),
+    source,
+    origins: [ORIGIN],
+    mode: 'synthetic',
+    logger() {},
+  } satisfies ScheduleDeps);
+  return {
+    get bodies() { return bodies; },
+    post(teamId: string, now: string) {
+      nowIso = now;
+      return service.handle({
+        method: 'POST',
+        path: '/api/find-fixtures',
+        origin: ORIGIN,
+        authorization: 'Bearer good',
+        queryKeys: [],
+        bodyText: JSON.stringify({ sport: 'basketball', teamId, seasonId: '2026-2027', refresh: false }),
+        remoteAddress: '203.0.113.8',
+      });
+    },
+  };
+}
+
+const CLIENT_VALIDATOR = '/home/mls/GIT/matchahead/apps/web/src/logic/schedule-api.ts';
+
+async function assertClientValid(body: unknown): Promise<void> {
+  const parsed = body as FindFixturesHttpSuccess;
+  assert.equal(parsed.result.futureFixtures.length > 0, true);
+  assert.equal(parsed.result.checkedAt !== null, true);
+  assert.equal(parsed.result.lastSuccessAt !== null, true);
+  assert.equal(JSON.stringify(parsed.result.nextFixture), JSON.stringify(parsed.result.futureFixtures[0]));
+  if (!existsSync(CLIENT_VALIDATOR)) return;
+  const mod = await import(CLIENT_VALIDATOR) as { parseFindResponse(value: unknown): unknown };
+  mod.parseFindResponse(body);
 }

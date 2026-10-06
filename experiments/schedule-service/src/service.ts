@@ -33,6 +33,7 @@ import {
   planSharedReads,
   recordsAfterAttempt,
   servedClock,
+  sourceKey,
   sourceScope,
   type FlightClaim,
   type SharePlan,
@@ -261,13 +262,11 @@ export class ScheduleService {
     let claim: FlightClaim | null = null;
     let upstream = plan.fetchProviders.length;
     if (upstream > 0) {
-      const clubScoped = plan.fetchProviders.some((provider) => sourceScope(provider, described.shares) === 'club');
-      const flightKey = [
-        team.sport,
-        request.request.seasonId,
-        clubScoped ? team.id : '*',
-        plan.fetchProviders.slice().sort().join('\n'),
-      ].join('\n');
+      const flightKey = described.feeds
+        .filter((feed) => plan.fetchProviders.includes(feed.provider) && feed.provider !== 'listed-gap')
+        .map((feed) => sourceKey(sourceScope(feed.provider, described.shares), team.id, feed))
+        .sort()
+        .join('\n');
       claim = this.flight.claim(flightKey);
       if (!claim.leader) upstream = 0;
     }
@@ -294,8 +293,9 @@ export class ScheduleService {
           network: true,
           fetchProviders: plan.fetchProviders,
         });
-        claim.finish(raw);
         fetched = this.normalizeLoad(raw);
+        this.persistAttempt(fetched, plan.fetchProviders, team.id, now, true);
+        claim.finish(raw);
       } catch (error) {
         claim.fail(error);
         throw error;
@@ -303,7 +303,6 @@ export class ScheduleService {
     } else if (claim) {
       fetched = this.normalizeLoad(await claim.join());
     }
-    if (fetched) this.persistAttempt(fetched, plan.fetchProviders, team.id, now, true);
     if (plan.touchProviders.length > 0) this.persistAttempt(described, plan.touchProviders, team.id, now, false);
     const policyOnly = !plan.clubCacheHit
       && plan.serve === null
@@ -336,6 +335,7 @@ export class ScheduleService {
       competitions: mergeById(described.competitions, (fetched ?? policy)?.competitions ?? []),
       technicalSuccess: fetched?.technicalSuccess ?? [],
     };
+    this.projectNewFeeds(cacheKey, loaded.feeds, now);
     const previous = this.deps.store.get(cacheKey)?.fixtures ?? [];
     let result: FindFixturesResult;
     try {
@@ -364,8 +364,9 @@ export class ScheduleService {
         coverage: result.coverage.map((row) => fetchedNow.includes(row.provider) ? row : { ...row, requestsPerRefresh: 0 }),
       };
     }
-    if (plan.serve) {
-      const clock = servedClock(this.deps.store.listSources(), loaded.feeds);
+    const joined = Boolean(claim && !claim.leader);
+    if (plan.serve || joined) {
+      const clock = servedClock(this.deps.store.listSources(), loaded.feeds, described.shares, team.id);
       const saved = this.deps.store.get(cacheKey);
       const lastSuccessAt = saved && saved.fixtures.length > 0 ? (clock.goodAt ?? saved.lastSuccessAt ?? null) : null;
       const lastAttemptAt = clock.attemptAt ?? saved?.lastAttemptAt ?? result.lastAttemptAt;
@@ -374,7 +375,7 @@ export class ScheduleService {
       }
       result = {
         ...result,
-        cacheStatus: plan.serve,
+        cacheStatus: plan.serve ?? 'reused',
         upstreamRequests: 0,
         checkedAt: lastSuccessAt,
         lastSuccessAt,
@@ -386,9 +387,9 @@ export class ScheduleService {
     const changes = kind === 'source-blocked' ? [] : diffFixtures(previous, stored);
     this.deps.store.appendChanges(changes);
     this.deps.store.writePolicy(cacheKey, policyFingerprint(loaded.feeds));
-    const recordManifest = plan.fetchProviders.length > 0
+    const recordManifest = Boolean(claim?.leader)
       || plan.touchProviders.length > 0
-      || (plan.serve === null && !plan.clubCacheHit);
+      || (plan.serve === null && !plan.clubCacheHit && claim === null);
     const manifestLoad = fetched ?? policy ?? described;
     const storedManifests = recordManifest
       ? this.writeManifests(manifestLoad, now, changes, stored)
@@ -420,6 +421,23 @@ export class ScheduleService {
       technicalSuccess: [],
       feeds: mapped.map((feed) => ({ ...feed, publication: 'unknown' as const, pages: [] })),
     };
+  }
+
+  /** Svež klupski snimak ne sme da sakrije provajdera koji zajednička strana već ima. */
+  projectNewFeeds(cacheKey: string, feeds: readonly CompetitionFeed[], now: string): void {
+    const saved = this.deps.store.get(cacheKey);
+    if (!saved) return;
+    const known = new Set(saved.coverage.map((row) => `${row.competitionId}\t${row.provider}`));
+    const missing = feeds.some((feed) =>
+      feed.publication === 'allowed'
+      && feed.failure === 'none'
+      && feed.pages.some((page) => page.fixtures.length > 0)
+      && !known.has(`${feed.competitionId}\t${feed.provider}`),
+    );
+    if (!missing) return;
+    const staleSuccess = new Date(Date.parse(now) - (DEFAULT_ON_DEMAND_POLICY.reuseWithinMinutes + 1) * 60_000).toISOString();
+    const staleAttempt = new Date(Date.parse(now) - DEFAULT_ON_DEMAND_POLICY.minRefreshMinutes * 60_000).toISOString();
+    this.deps.store.set(cacheKey, { ...saved, lastSuccessAt: staleSuccess, lastAttemptAt: staleAttempt });
   }
 
   applyRevokes(items: SharePlan['revoke']): void {

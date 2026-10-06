@@ -182,13 +182,13 @@ export function recordsAfterAttempt(input: {
 export function servedClock(
   pages: readonly SharedSourcePage[],
   feeds: readonly CompetitionFeed[],
+  shares: Readonly<Record<string, 'league' | 'club'>> | undefined,
+  teamId: string,
 ): { goodAt: string | null; attemptAt: string | null } {
   let goodAt: string | null = null;
   let attemptAt: string | null = null;
   for (const feed of feeds) {
-    const page = pages.find(
-      (item) => item.competitionId === feed.competitionId && item.seasonId === feed.seasonId && item.provider === feed.provider,
-    );
+    const page = findPage(pages, shares, teamId, feed);
     if (!page) continue;
     if (page.goodAt && (goodAt === null || page.goodAt < goodAt)) goodAt = page.goodAt;
     if (attemptAt === null || page.lastAttemptAt > attemptAt) attemptAt = page.lastAttemptAt;

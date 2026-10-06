@@ -19,7 +19,7 @@ Odgovor filtrira manifeste na traženu sezonu i na takmičenja iz kataloga tog s
 
 `PRODUCTION_ID_MAPPINGS` je prazan. Stari identifikatori `k{kolo}` i `r{kolo}` nisu isporučeni, pa tabela preslikavanja ne postoji. FSS identitet je slug domaćin-gost. Evroliga je slug strana, a kolo samo iz linije `ROUND N` neposredno iznad.
 
-Jedna potpuna ligaška strana služi oba izabrana kluba. Ključ je takmičenje, sezona i provajder. Red stoji u SQLite tabeli `source_page` i u Node direktorijumu `sources/`. Novi proces i gašenje Durable Object-a čitaju isti red. Deljenje važi samo kad izvor izričito kaže `shares[provider] === 'league'`. Četiri klupska sajta i svaki neoznačeni provajder ostaju vezani za jedan klub, pa strana jednog kluba ne puni drugi. Običan pregled unutar 6 sati ne zove telo. Osvežavanje kraće od 15 minuta deli se između klubova i ne pomera `goodAt` sa tuđeg pregleda. Kvota rezerviše samo stvarni izlazni zahtev. Posle kvara, praznog odgovora, 429, isteka ili nepotpune strane ostaje poslednji dobar snimak, a novi pokušaj čeka 15 minuta i kad je taj snimak stariji od 6 sati. Strana bez svih strana, ili sa istim ID-jem i dva različita termina, ne postaje dobar snimak. `unknown` i `forbidden` brišu zajedničku stranu i oba klupska snimka. Produkcija i dalje ima `publication: unknown`, ne zove sportsko telo i vraća `source-blocked`.
+Jedna potpuna ligaška strana služi oba izabrana kluba. Ključ je takmičenje, sezona i provajder. Red stoji u SQLite tabeli `source_page` i u Node direktorijumu `sources/`. Novi proces i gašenje Durable Object-a čitaju isti red. Deljenje važi samo kad izvor izričito kaže `shares[provider] === 'league'`. Četiri klupska sajta i svaki neoznačeni provajder ostaju vezani za jedan klub, pa strana jednog kluba ne puni drugi. Običan pregled unutar 6 sati ne zove telo. Osvežavanje kraće od 15 minuta deli se između klubova i ne pomera `goodAt` sa tuđeg pregleda. Kvota rezerviše samo stvarni izlazni zahtev. Posle kvara, praznog odgovora, 429, isteka ili nepotpune strane ostaje poslednji dobar snimak, a novi pokušaj čeka 15 minuta i kad je taj snimak stariji od 6 sati. Strana bez svih strana, ili sa istim ID-jem i dva različita termina, ne postaje dobar snimak. `unknown` i `forbidden` brišu zajedničku stranu i oba klupska snimka. Svež klupski snimak ne sakriva takmičenje koje je drugi klub dobio iz zajedničke strane. Pratioc istovremenog leta ne pomera sat ni manifest vođe. Produkcija i dalje ima `publication: unknown`, ne zove sportsko telo i vraća `source-blocked`.
 
 Faza nije DONE. Budžet 0 €. Push namespace nije diran. `apps/web` nije menjan.
 
@@ -55,8 +55,8 @@ Zid ovog procesa u tom nizu, nije obračunati CPU:
 
 Provera 6. oktobra 2026, posle zajedničke ligaške strane. `tsc` iz istog lockfile-a nema greške. Oba procesa su izašla sa statusom 0.
 
-- Node 26.7.0, `node scripts/check-schedule-service.mjs`: 51 PASS, 0 FAIL, 23342 ms. Zid: `euroleague-node-wall-ms=103.6`, `fss-html-wall-ms=39.0`, `euroleague-pdf-wall-ms=49.0`.
-- Node 22.23.3, `npm exec --yes --package=node@22 -- node scripts/check-schedule-service.mjs`: 51 PASS, 0 FAIL, 23512 ms. Zid: `euroleague-node-wall-ms=119.4`, `fss-html-wall-ms=39.0`, `euroleague-pdf-wall-ms=49.0`.
+- Node 26.7.0, `node scripts/check-schedule-service.mjs`: 54 PASS, 0 FAIL, 23439 ms. Zid: `euroleague-node-wall-ms=115.8`, `fss-html-wall-ms=38.0`, `euroleague-pdf-wall-ms=53.0`.
+- Node 22.23.3, `npm exec --yes --package=node@22 -- node scripts/check-schedule-service.mjs`: 54 PASS, 0 FAIL, 23619 ms. Zid: `euroleague-node-wall-ms=112.1`, `fss-html-wall-ms=38.0`, `euroleague-pdf-wall-ms=51.0`.
 - `node scripts/check-data-contracts.mjs`: 35 PASS, 0 FAIL, 153 ms, izlaz 0.
 
 Zid je vreme parsiranja sačuvanih fajlova u ovom procesu, ne obračunati CPU i ne živo preuzimanje.
