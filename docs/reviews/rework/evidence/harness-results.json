@@ -1,0 +1,223 @@
+{
+  "timestamp": "2026-10-07T15:33:50.586Z",
+  "total": 43,
+  "passed": 43,
+  "failed": 0,
+  "results": [
+    {
+      "name": "kapija-h1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kapija-nastavi",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kapija-opis",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kapija-pilot",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kapija-nema-demo",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kapija-nema-nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tema-inicijalna",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "pre-react-root-prazan-bez-h1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "pre-react-dark-bez-react-modula",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tema-dark-ucitana",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "prijava-unlocked",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stanje-0-utakmica",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stanje-1-utakmica",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stanje-1-sledeca-bedz",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "derbi-jednom",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "derbi-oba-razloga",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "derbi-ostaje-nakon-otpracivanja",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stanje-20-utakmica-redova",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stanje-20-paginator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stanje-20-strana-1-od-1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "paginacija-105-strana1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "paginacija-20-po-strani",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "paginacija-105-strana2",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "selekcija-svih-105",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "selekcija-reset-promenom-filtera",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kompatibilnost-rute-#/",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kompatibilnost-rute-#/utakmice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kompatibilnost-rute-#/moje",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kompatibilnost-rute-#/klubovi",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kompatibilnost-rute-#/podesavanja",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "modal-otvoren",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "modal-fokus-unutra",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "modal-zatvaranje-escape",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "modal-zatvaranje-back",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "preliv-mobile-360",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "touch-targets-mobile-360",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "preliv-mobile-390",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "touch-targets-mobile-390",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "preliv-mobile-430",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "touch-targets-mobile-430",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "preliv-landscape-844x390",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "preliv-desktop-1280",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "fallback-ostecena-tema",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

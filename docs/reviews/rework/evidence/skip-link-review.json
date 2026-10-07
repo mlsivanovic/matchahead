@@ -1,0 +1,22 @@
+{
+  "scope": "Real App gate keyboard activation; no authenticated tab or emulator/API integration claimed",
+  "beforeFix": false,
+  "results": [
+    {
+      "initialHash": "#/klubovi",
+      "expectedHistoryLength": 2,
+      "hash": "#/klubovi",
+      "focus": "sadrzaj",
+      "historyLength": 2,
+      "ok": true
+    },
+    {
+      "initialHash": "#/podesavanja",
+      "expectedHistoryLength": 3,
+      "hash": "#/podesavanja",
+      "focus": "sadrzaj",
+      "historyLength": 3,
+      "ok": true
+    }
+  ]
+}

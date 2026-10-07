@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INITIAL_SEASON_ID } from '../../../../packages/domain/src/schedule-api.ts';
 import { selectableTeams } from '../../../../packages/domain/src/selectable-teams.ts';
 import type { FindFixturesResponseKind } from '../../../../packages/domain/src/schedule-api.ts';
-import type { Fixture, ScheduleAvailability, Sport, Team } from '../../../../packages/domain/src/types.ts';
+import type { Fixture, ScheduleAvailability, Sport } from '../../../../packages/domain/src/types.ts';
 import {
   fixtureTitle,
   formatFetchedAt,
   kickoffText,
-  statusLabel,
+  reasonsForFixture,
+  scheduleStatusLabel,
 } from '../logic/agenda.ts';
 import { sportLabel } from '../logic/clubs.ts';
 import {
@@ -30,6 +31,8 @@ import {
   type LastGoodSchedule,
 } from '../logic/schedule-store.ts';
 import type { KeyValueStore } from '../logic/user-local.ts';
+import { ModalPanel } from './ModalPanel.tsx';
+import { catalogRowState, reasonLabel } from './PersonalAgendaHelpers.ts';
 
 export interface ScheduleFinderDeps {
   apiBase: string | null;
@@ -67,6 +70,18 @@ export function scheduleAvailabilityLabel(value: ScheduleAvailability): string {
 export function formatCooldownWait(waitMs: number): string {
   const minutes = Math.max(1, Math.ceil(waitMs / 60000));
   return minutes === 1 ? '1 minut' : `${minutes} minuta`;
+}
+
+/** Korisniku ne pokazuj putanju odgovora ni status servera. Poslednji dobar raspored ostaje jasan. */
+function visibleScheduleError(reason: unknown): string {
+  if (reason instanceof ScheduleApiError && reason.code === 'wrong-response') {
+    return 'Dobijeni raspored nije ispravan. Prikaz je iz poslednjeg sačuvanog stanja.';
+  }
+  if (reason instanceof ScheduleApiError && reason.code === 'server') {
+    return 'Server rasporeda nije dostupan. Prikaz je iz poslednjeg sačuvanog stanja.';
+  }
+  if (reason instanceof ScheduleApiError) return reason.message;
+  return 'Pronalaženje nije uspelo. Prikaz je iz poslednjeg sačuvanog stanja.';
 }
 
 export function useScheduleFinder(deps: ScheduleFinderDeps) {
@@ -128,6 +143,17 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     pending.current = null;
     setTeamId(next);
     setError(null);
+  }
+
+  function focusTeam(nextSport: Sport, nextTeamId: string) {
+    // Otvaranje rasporeda ne šalje zahtev. Prekida tuđi let i ne upisuje ga.
+    seq.current += 1;
+    pending.current?.abort();
+    pending.current = null;
+    setSport(nextSport);
+    setTeamId(nextTeamId);
+    setError(null);
+    setWorking(false);
   }
 
   const find = useCallback(async (refresh: boolean) => {
@@ -199,9 +225,7 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     } catch (reason) {
       // Zastareli let ćuti: greška starog klika ne sme da pregazi noviji prikaz.
       if (seq.current !== current) return;
-      setError(reason instanceof ScheduleApiError
-        ? reason.message
-        : 'Pronalaženje nije uspelo. Prikaz je iz poslednjeg sačuvanog stanja.');
+      setError(visibleScheduleError(reason));
     } finally {
       if (pending.current === controller && seq.current === current) {
         pending.current = null;
@@ -212,7 +236,7 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
   }, [apiBase, getIdToken, store, activeTeamId, sport, online]);
 
   return {
-    sport, pickSport, teams, teamId: activeTeamId, pickTeam,
+    sport, pickSport, teams, teamId: activeTeamId, pickTeam, focusTeam,
     seasonId: INITIAL_SEASON_ID, working, error, lastGood, displayed, cooldown, snapshots, find,
     abortPending, configured: apiBase !== null,
   };
@@ -223,137 +247,202 @@ export type ScheduleFinderState = ReturnType<typeof useScheduleFinder>;
 export function ScheduleFinder(props: {
   state: ScheduleFinderState;
   timeZone: string;
+  now: number;
+  online: boolean;
+  teamId: string;
   followed: readonly string[];
   manualFixtureIds: readonly string[];
   onToggleManual: (fixtureId: string) => void;
 }) {
   const { state, timeZone } = props;
+  const [about, setAbout] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const saved = state.displayed?.teamId === props.teamId ? state.displayed : null;
+  const hasSchedule = saved !== null;
+  const refreshBlocked = hasSchedule && !state.cooldown.allowed;
+  const detail = saved?.response.result.futureFixtures.find((fixture) => fixture.id === detailId) ?? null;
+  useEffect(() => {
+    setDetailId(null);
+    setAbout(false);
+  }, [props.teamId]);
   return (
-    <section aria-label="Raspored na zahtev">
-      <h2>Raspored na zahtev</h2>
-      <p className="lead">
-        Izaberi klub i pritisni „Pronađi utakmice”. Raspored je za sezonu {state.seasonId}.
-      </p>
-      <div className="filters" role="group" aria-label="Sport">
-        <button type="button" aria-pressed={state.sport === 'football'} onClick={() => state.pickSport('football')}>
-          Fudbal
-        </button>
-        <button type="button" aria-pressed={state.sport === 'basketball'} onClick={() => state.pickSport('basketball')}>
-          Košarka
-        </button>
-      </div>
-      <div className="filters" role="group" aria-label="Klub">
-        {state.teams.map((team) => (
-          <button
-            key={team.id}
-            type="button"
-            aria-pressed={state.teamId === team.id}
-            onClick={() => state.pickTeam(team.id)}
-          >
-            {team.name}
-          </button>
-        ))}
-      </div>
-      {!state.configured ? (
-        <p className="warning" role="status">{scheduleServerDisabledMessage()}</p>
-      ) : null}
-      <div className="filters">
+    <section aria-label="Raspored kluba">
+      <div className="schedule-toolbar">
         <button
           type="button"
-          disabled={state.working || !state.configured}
-          onClick={() => void state.find(false)}
+          className="primary"
+          disabled={state.working || !state.configured || refreshBlocked}
+          onClick={() => void state.find(hasSchedule)}
         >
-          {state.working ? 'Tražim…' : 'Pronađi utakmice'}
+          {state.working ? 'Tražim…' : hasSchedule ? 'Osveži' : 'Pronađi utakmice'}
         </button>
-        <button
-          type="button"
-          disabled={state.working || !state.configured || (!state.cooldown.allowed)}
-          title={state.cooldown.allowed ? undefined : `Osvežavanje je moguće za ${formatCooldownWait(state.cooldown.waitMs)}.`}
-          onClick={() => void state.find(true)}
-        >
-          Osveži raspored
-        </button>
+        {refreshBlocked ? (
+          <p className="meta">Osvežavanje je moguće za {formatCooldownWait(state.cooldown.waitMs)}.</p>
+        ) : null}
+        {!state.configured ? <p className="warning" role="status">{scheduleServerDisabledMessage()}</p> : null}
+        {state.error ? <p className="warning" role="alert">{state.error}</p> : null}
+        {saved?.kind === 'source-blocked' ? (
+          <p className="warning" role="status">Izvor je blokiran. Prikaz je iz poslednjeg sačuvanog rasporeda.</p>
+        ) : null}
+        {!props.online && saved ? <p className="warning">Van mreže. Prikazan je poslednji sačuvani raspored.</p> : null}
       </div>
-      {!state.cooldown.allowed ? (
-        <p className="meta">Osvežavanje je moguće za {formatCooldownWait(state.cooldown.waitMs)}. Keš poštuje najkraći razmak.</p>
+      {saved ? (
+        <ScheduleMatchList saved={saved} timeZone={timeZone} now={props.now} onOpen={setDetailId} />
+      ) : (
+        <p>Još nema sačuvanog rasporeda.</p>
+      )}
+      {saved ? (
+        <button type="button" onClick={() => setAbout(true)}>O rasporedu</button>
       ) : null}
-      {state.error ? <p className="warning" role="alert">{state.error}</p> : null}
-      {state.displayed ? (
-        <ScheduleResult
-          lastGood={state.displayed}
+      {about && saved ? (
+        <ModalPanel title="O rasporedu" onClose={() => setAbout(false)}>
+          <ScheduleAbout saved={saved} timeZone={timeZone} />
+        </ModalPanel>
+      ) : null}
+      {detail && saved ? (
+        <ScheduleFixtureDetail
+          fixture={detail}
+          teams={saved.response.teams}
+          competitions={saved.response.competitions}
           timeZone={timeZone}
+          now={props.now}
           followed={props.followed}
           manualFixtureIds={props.manualFixtureIds}
           onToggleManual={props.onToggleManual}
+          onClose={() => setDetailId(null)}
         />
-      ) : (
-        <p className="meta">Još nema sačuvanog rasporeda za ovaj klub i sezonu.</p>
-      )}
+      ) : null}
     </section>
   );
 }
 
-export function ScheduleResult(props: {
-  lastGood: DisplayedSchedule;
+function ScheduleMatchList(props: {
+  saved: DisplayedSchedule;
   timeZone: string;
+  now: number;
+  onOpen: (fixtureId: string) => void;
+}) {
+  const { saved, timeZone } = props;
+  const competitions = new Map(saved.response.competitions.map((competition) => [competition.id, competition]));
+  const fixtures = saved.response.result.futureFixtures;
+  if (fixtures.length === 0) return <p>Nema pronađenih utakmica za ovaj klub.</p>;
+  return (
+    <div className="agenda-list" data-schedule-kind={saved.kind} data-provenance={saved.checkedAt ?? undefined}>
+      {fixtures.map((fixture) => (
+        <article key={fixture.id} className="match-row" data-fixture-id={fixture.id}>
+          <div>
+            <button type="button" className="match-open" onClick={() => props.onOpen(fixture.id)}>
+              <span className="match-title">{fixtureTitle(fixture, saved.response.teams)}</span>
+            </button>
+            <p className="match-meta">
+              {kickoffText(fixture, timeZone)}
+              {' · '}
+              {competitions.get(fixture.competitionId)?.name ?? fixture.competitionId}
+            </p>
+            <p className="match-status">{scheduleStatusLabel(fixture, props.now)}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ScheduleFixtureDetail(props: {
+  fixture: Fixture;
+  teams: readonly { id: string; name: string }[];
+  competitions: readonly { id: string; name: string }[];
+  timeZone: string;
+  now: number;
   followed: readonly string[];
   manualFixtureIds: readonly string[];
   onToggleManual: (fixtureId: string) => void;
+  onClose: () => void;
 }) {
-  const { lastGood, timeZone } = props;
-  const { response } = lastGood;
-  const competitions = new Map(response.competitions.map((competition) => [competition.id, competition]));
+  const { fixture } = props;
+  const title = fixtureTitle(fixture, props.teams);
+  const competition = props.competitions.find((item) => item.id === fixture.competitionId)?.name ?? fixture.competitionId;
+  const manual = catalogRowState(fixture, props.followed, props.manualFixtureIds);
+  const reasons = reasonsForFixture(fixture, props.followed, props.manualFixtureIds);
   return (
-    <div data-schedule-kind={lastGood.kind} data-provenance={lastGood.checkedAt ?? undefined}>
-      <p className="meta">
-        <strong>{KIND_LABEL[lastGood.kind]}</strong>
-        {lastGood.kind === 'source-blocked' ? ' — blokirane utakmice se ne prikazuju kao proverene; važi poslednje sačuvano stanje.' : null}
-      </p>
-      {lastGood.checkedAt ? (
+    <ModalPanel title={title} onClose={props.onClose}>
+      <p className="match-meta">{kickoffText(fixture, props.timeZone)}</p>
+      <p className="match-status">{scheduleStatusLabel(fixture, props.now)}</p>
+      <dl>
+        <div>
+          <dt>Takmičenje</dt>
+          <dd>{competition}</dd>
+        </div>
+        <div>
+          <dt>Sezona</dt>
+          <dd>{fixture.seasonId}</dd>
+        </div>
+        {fixture.venue ? (
+          <div>
+            <dt>Mesto</dt>
+            <dd>{fixture.venue}</dd>
+          </div>
+        ) : null}
+        {fixture.round ? (
+          <div>
+            <dt>Kolo</dt>
+            <dd>{fixture.round}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>Izvor</dt>
+          <dd>
+            <a href={fixture.sourceUrl} data-source-url={fixture.sourceUrl} rel="noreferrer">{fixture.provider}</a>
+          </dd>
+        </div>
+      </dl>
+      {reasons.length > 0 ? (
+        <ul className="agenda-reasons" aria-label="Razlozi praćenja">
+          {reasons.map((reason, index) => (
+            <li key={`${reason.kind}-${index}`}>{reasonLabel(reason, props.teams)}</li>
+          ))}
+        </ul>
+      ) : null}
+      <button type="button" aria-pressed={manual.manuallySelected} onClick={() => props.onToggleManual(fixture.id)}>
+        {manual.toggleLabel}
+      </button>
+      {manual.toggleNote ? <p className="meta">{manual.toggleNote}</p> : null}
+    </ModalPanel>
+  );
+}
+
+function ScheduleAbout(props: { saved: DisplayedSchedule; timeZone: string }) {
+  const { saved, timeZone } = props;
+  const competitions = new Map(saved.response.competitions.map((competition) => [competition.id, competition]));
+  return (
+    <>
+      {saved.checkedAt ? (
         <p>
-          Poslednja uspešna provera:{' '}
-          <time dateTime={lastGood.checkedAt}>{formatFetchedAt(lastGood.checkedAt, timeZone)}</time>.
+          Poslednja provera:{' '}
+          <time dateTime={saved.checkedAt}>{formatFetchedAt(saved.checkedAt, timeZone)}</time>.
         </p>
       ) : (
-        <p>Još nema uspešne provere izvora.</p>
+        <p>Još nema uspešne provere.</p>
       )}
-      {response.result.futureFixtures.length === 0 ? (
-        <p>Nema pronađenih budućih utakmica. Prazan odgovor nije tvrdnja da utakmica nema.</p>
-      ) : null}
-      {response.result.futureFixtures.map((fixture) => (
-        <ServerFixtureCard
-          key={fixture.id}
-          fixture={fixture}
-          teams={response.teams}
-          competitionName={competitions.get(fixture.competitionId)?.name ?? fixture.competitionId}
-          timeZone={timeZone}
-          tracked={props.followed.some((id) => fixture.homeTeamId === id || fixture.awayTeamId === id)
-            || props.manualFixtureIds.includes(fixture.id)}
-          onToggleManual={props.onToggleManual}
-        />
-      ))}
-      <h3>Pokriće po takmičenju</h3>
+      <h3>Takmičenja</h3>
       <ul className="club-list">
-        {response.result.coverage.map((row) => (
+        {saved.response.result.coverage.map((row) => (
           <li key={row.id} data-coverage={row.competitionId} data-availability={row.scheduleAvailability}>
             <div>
               <strong>{competitions.get(row.competitionId)?.name ?? row.competitionId}</strong>
               <p className="meta">
-                {AVAILABILITY_LABEL[row.scheduleAvailability]} · {sportLabel(lastGood.sport as Sport)}
-                {row.timePrecision ? ` · sat: ${row.timePrecision}` : ''}
-                {row.requestsPerRefresh !== null ? ` · zahtevi: ${row.requestsPerRefresh}` : ''}
+                {AVAILABILITY_LABEL[row.scheduleAvailability]} · {sportLabel(saved.sport as Sport)}
               </p>
-              <p className="meta">{row.evidence}</p>
             </div>
           </li>
         ))}
       </ul>
-      <h3>Izvori i svežina</h3>
+      <h3>Izvori</h3>
       <ul className="club-list">
-        {response.manifests.map((manifest) => (
+        {saved.response.manifests.map((manifest) => (
           <li key={`${manifest.provider}:${manifest.competitionId}`}>
             <div>
-              <strong>{manifest.provider} · {competitions.get(manifest.competitionId)?.name ?? manifest.competitionId}</strong>
+              <strong>{manifest.provider}</strong>
+              <p className="meta">{competitions.get(manifest.competitionId)?.name ?? manifest.competitionId}</p>
               <p className="meta" data-manifest-success={manifest.lastSuccessAt ?? ''}>
                 {manifest.lastSuccessAt
                   ? `Poslednji uspeh: ${formatFetchedAt(manifest.lastSuccessAt, timeZone)}`
@@ -363,50 +452,7 @@ export function ScheduleResult(props: {
           </li>
         ))}
       </ul>
-      {response.changes.length > 0 ? (
-        <p className="meta">Promene od prošlog stanja: {response.changes.map((change) => change.kind).join(', ')}.</p>
-      ) : null}
-    </div>
-  );
-}
-
-export function ServerFixtureCard(props: {
-  fixture: Fixture;
-  teams?: readonly Team[];
-  competitionName: string;
-  timeZone: string;
-  tracked: boolean;
-  onToggleManual: (fixtureId: string) => void;
-}) {
-  const { fixture, timeZone } = props;
-  const teams = props.teams ?? selectableTeams(fixture.sport);
-  return (
-    <article className="card">
-      <p className="kicker">
-        <span>{sportLabel(fixture.sport)}</span>
-        <span>{props.competitionName}</span>
-      </p>
-      <h3>{fixtureTitle(fixture, teams)}</h3>
-      <p>{kickoffText(fixture, timeZone)}</p>
-      <p className="meta">
-        {statusLabel(fixture.status)}
-        {fixture.venue ? ` · ${fixture.venue}` : ''}
-        {fixture.round ? ` · ${fixture.round}` : ''}
-      </p>
-      <p className="meta">
-        Izvor:{' '}
-        <a href={fixture.sourceUrl} data-source-url={fixture.sourceUrl} rel="noreferrer">
-          {fixture.provider}
-        </a>
-      </p>
-      <button
-        type="button"
-        aria-pressed={props.tracked}
-        onClick={() => props.onToggleManual(fixture.id)}
-      >
-        {props.tracked ? 'Pratim u aplikaciji' : 'Prati'}
-      </button>
-    </article>
+    </>
   );
 }
 

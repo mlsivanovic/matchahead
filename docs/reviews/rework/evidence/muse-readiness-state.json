@@ -1,0 +1,147 @@
+{
+  "id": "ff626b85-e131-4d2c-8073-6e95073eceba",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_3ede930c96f8",
+      "runId": "run_61a465d30bfe",
+      "taskId": "task_df549b9a3814",
+      "task_id": "task_df549b9a3814",
+      "contractVersion": 1,
+      "assigneeHandle": null,
+      "assigneePaneKey": null,
+      "processIncarnation": null,
+      "capabilityRevokedAt": "2026-10-07T13:32:49.473Z",
+      "retryOfDispatchId": "ctx_32379a7b994f",
+      "creatorDispatchId": null,
+      "hostScope": null,
+      "status": "failed",
+      "failureCount": 0,
+      "lastFailure": "timeout",
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-10-07 13:32:34",
+      "completedAt": "2026-10-07T13:32:49.473Z",
+      "createdAt": "2026-10-07 13:32:34",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_3ede930c96f8",
+      "runtimeEpoch": "09a5584b-690d-4e9a-b9f2-d62497329046",
+      "state": "failed",
+      "stage": "agent_readiness",
+      "worktreeId": "ab78b92d-4834-47bf-aa08-73374a811707::/home/mls/GIT/matchahead",
+      "agentTerminalHandle": "term_cdfcf01f-18ed-4b8b-9016-c3669404542c",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "ab78b92d-4834-47bf-aa08-73374a811707::/home/mls/GIT/matchahead"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "reused",
+          "id": "term_cdfcf01f-18ed-4b8b-9016-c3669404542c"
+        }
+      ],
+      "residualResources": [],
+      "startOptions": {
+        "worktree": "current",
+        "mode": {
+          "mode": "terminal",
+          "preferred": "terminal",
+          "reason": "user_default",
+          "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+        },
+        "resolvedWorktreeId": "ab78b92d-4834-47bf-aa08-73374a811707::/home/mls/GIT/matchahead",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": "term_cdfcf01f-18ed-4b8b-9016-c3669404542c",
+        "agent": null,
+        "launch": {
+          "requested": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          },
+          "effective": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          }
+        },
+        "timeoutMs": 15000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": "timeout",
+      "createdAt": "2026-10-07 13:32:34",
+      "updatedAt": "2026-10-07T13:32:49.473Z"
+    },
+    "projection": {
+      "id": "ctx_3ede930c96f8",
+      "dispatchId": "ctx_3ede930c96f8",
+      "taskId": "task_df549b9a3814",
+      "runId": "run_61a465d30bfe",
+      "role": "worker",
+      "parent": null,
+      "provider": null,
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "ab78b92d-4834-47bf-aa08-73374a811707::/home/mls/GIT/matchahead",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "failed",
+        "dispatch": "failed",
+        "detail": "agent_readiness",
+        "activity": "unknown"
+      },
+      "outcome": "failed",
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      },
+      "resource": {
+        "state": "absent",
+        "reason": "not_materialized"
+      },
+      "nextAction": {
+        "kind": "none",
+        "argv": []
+      },
+      "attention": {
+        "categories": [
+          "failure",
+          "unverifiable"
+        ],
+        "requiresAction": true
+      }
+    },
+    "terminal": null,
+    "observation": {
+      "status": "identity_changed",
+      "exactWorker": false
+    },
+    "terminalResource": null
+  },
+  "_meta": {
+    "runtimeId": "09a5584b-690d-4e9a-b9f2-d62497329046"
+  }
+}

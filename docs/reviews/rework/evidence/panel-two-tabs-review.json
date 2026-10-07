@@ -1,0 +1,35 @@
+{
+  "scope": "Component fixture two-page modal focus isolation; no Firebase/Auth claims",
+  "steps": [
+    {
+      "cycle": 1,
+      "title": "Nalog",
+      "focusInside": true,
+      "ok": true
+    },
+    {
+      "cycle": 2,
+      "title": "Nalog",
+      "focusInside": true,
+      "ok": true
+    },
+    {
+      "cycle": 3,
+      "title": "Nalog",
+      "focusInside": true,
+      "ok": true
+    },
+    {
+      "cycle": 4,
+      "title": "Nalog",
+      "focusInside": true,
+      "ok": true
+    },
+    {
+      "cycle": 5,
+      "title": "Nalog",
+      "focusInside": true,
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+PASS: izolovani emulatori dostupni
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 89 modules transformed.
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/firestore/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts, /home/mls/GIT/matchahead/apps/web/src/logic/account-remote.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/auth/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/schedule-auth.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/App.tsx, /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-auth-browser-dist/404.html                     0.41 kB │ gzip:   0.27 kB
+../../../../../../tmp/matchahead-auth-browser-dist/manifest.webmanifest         0.53 kB
+../../../../../../tmp/matchahead-auth-browser-dist/index.html                   2.28 kB │ gzip:   0.92 kB
+../../../../../../tmp/matchahead-auth-browser-dist/assets/index-HdN8_KX2.css   10.69 kB │ gzip:   2.96 kB
+../../../../../../tmp/matchahead-auth-browser-dist/assets/index-BLSdGd9g.js   855.60 kB │ gzip: 258.35 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.73s
+
+PWA v1.3.0
+Building src/sw.ts service worker ("es" format)...
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 59 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-auth-browser-dist/sw.mjs  58.81 kB │ gzip: 14.91 kB
+✓ built in 73ms
+
+PWA v1.3.0
+mode      injectManifest
+format:   es
+precache  12 entries (860.28 KiB)
+files generated
+  ../../../../../../tmp/matchahead-auth-browser-dist/sw.js
+PASS kapija
+PASS tudji-odjavljen
+PASS tudji-bez-profila
+PASS prijava-a-ui :: mls.ivanovic@gmail.com
+PASS profil-a-kreiran
+PASS omiljeni-sacuvani
+PASS podsetnik-sacuvan
+PASS prati-klik
+PASS pracenje-sacuvano
+PASS klub-oznaka
+PASS agenda-prikazana
+PASS reload-sesija
+PASS reload-favoriti-netaknuti
+PASS drugi-tab
+PASS odjava-install-id :: dev-VfUY-JjbjMoeywRhnF
+PASS odjava-seed
+PASS odjava-klik
+PASS odjava-ui
+PASS odjava-sesija
+PASS odjava-unlink :: ["dev-drugi-uredjaj-0001"]
+PASS odjava-kapija
+PASS relogin-a :: mls.ivanovic@gmail.com
+PASS relogin-favorit
+PASS relogin-pracenje
+PASS ciklus-1-out
+PASS ciklus-1-in :: mls.ivanovic@gmail.com
+PASS ciklus-2-out
+PASS ciklus-2-in :: mls.ivanovic@gmail.com
+PASS obavestenja-panel
+PASS prefs-reload-select
+PASS prefs-server
+STEP 7C: START
+STEP 7C: NEW PAGE CREATED
+STEP 7C: TAB B LOADED
+STEP 7C: TAB B SETTINGS LIST
+STEP 7C: TAB B NALOG OPENED
+STEP 7C: TAB B EMAIL VERIFIED
+STEP 7C: PAGE ON SETTINGS
+STEP 7C: PAGE NALOG OPENED
+PASS crosstab-out
+STEP 7C: PAGE SIGN OUT CLICKED
+PASS crosstab-cisti
+PASS crosstab-relogin
+PASS pred-brisanje-out
+PASS cancel-klik
+PASS cancel-popup
+PASS cancel-spreman
+PASS cancel-poruka
+PASS prijava-brisanje :: mls.ivanovic@gmail.com
+PASS brisanje-korak1
+PASS brisanje-korak2
+PASS brisanje-ui
+PASS profil-obrisan
+PASS brava-ostaje :: {"status":"in_progress","startedAt":"2026-10-07T15:31:23.626Z","updatedAt":"2026-10-07T15:31:23.626Z"}
+PASS brava-bez-profila :: status,startedAt,updatedAt
+PASS nema-profila
+PASS: browser provera završena (47 provera)

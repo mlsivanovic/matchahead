@@ -1,63 +1,115 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
-import type { Sport } from '../../../../packages/domain/src/types.ts';
+import { selectableTeams } from '../../../../packages/domain/src/selectable-teams.ts';
+import type { Sport, Team } from '../../../../packages/domain/src/types.ts';
 import { APP_BUILD } from '../build.ts';
-import { clubChoices, sportLabel } from '../logic/clubs.ts';
+import { sportLabel } from '../logic/clubs.ts';
 import { isStandaloneDisplay, needsIosInstallHelp } from '../logic/install.ts';
+import type { ThemePreference } from '../logic/theme.ts';
 import type { DevicePrefs } from '../logic/user-local.ts';
+import { AccountPanel, TimeZonePicker, type AccountPrefsInput } from './AccountPanel.tsx';
+import type { AccountSnapshot } from '../logic/account-controller.ts';
+import { ModalPanel } from './ModalPanel.tsx';
+import { ScheduleFinder, type ScheduleFinderState } from './ScheduleFinder.tsx';
+import { ThemePicker } from './ThemePicker.tsx';
+
+type SettingsPane = 'appearance' | 'timezone' | 'notifications' | 'account' | 'install' | 'about';
+
+const SETTINGS: readonly { id: SettingsPane; label: string }[] = [
+  { id: 'appearance', label: 'Izgled' },
+  { id: 'timezone', label: 'Vremenska zona' },
+  { id: 'notifications', label: 'Obaveštenja' },
+  { id: 'account', label: 'Nalog' },
+  { id: 'install', label: 'Instalacija i pomoć' },
+  { id: 'about', label: 'O aplikaciji' },
+];
 
 export function ClubsScreen(props: {
+  active: boolean;
   followed: readonly string[];
+  manualFixtureIds: readonly string[];
   onToggle: (teamId: string) => void;
-  finder?: ReactNode;
+  onToggleManual: (fixtureId: string) => void;
+  finder: ScheduleFinderState;
+  timeZone: string;
+  now: number;
+  online: boolean;
 }) {
-  const [sport, setSport] = useState<Sport>('football');
-  const [query, setQuery] = useState('');
-  const choices = clubChoices(sport, query);
+  const teams = selectableTeams();
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!props.active) setOpenId(null);
+  }, [props.active]);
+  const openTeam = teams.find((team) => team.id === openId) ?? null;
+  const groups: { sport: Sport; title: string }[] = [
+    { sport: 'football', title: 'Fudbal' },
+    { sport: 'basketball', title: 'Košarka' },
+  ];
   return (
     <section>
       <h1>Klubovi</h1>
-      <p className="lead">U prvoj verziji možeš pratiti samo četiri kluba. Protivnici iz utakmica nisu u ovom spisku.</p>
-      <div className="filters" role="group" aria-label="Sport">
-        <FilterButton pressed={sport === 'football'} onClick={() => setSport('football')}>Fudbal</FilterButton>
-        <FilterButton pressed={sport === 'basketball'} onClick={() => setSport('basketball')}>Košarka</FilterButton>
-      </div>
-      <label htmlFor="club-search">Pretraga kluba</label>
-      <input
-        id="club-search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        type="search"
-        autoComplete="off"
-        placeholder="Zvezda, Partizan"
-      />
-      {choices.length === 0 ? <p>Nema kluba za ovu pretragu. Katalog ima samo Crvenu zvezdu i Partizan.</p> : null}
-      <ul className="club-list">
-        {choices.map((team) => {
-          const active = props.followed.includes(team.id);
-          return (
-            <li key={team.id}>
-              <div>
-                <strong>{team.name}</strong>
-                <p className="meta">{sportLabel(team.sport)} · {team.city}</p>
-              </div>
-              <button type="button" aria-pressed={active} onClick={() => props.onToggle(team.id)}>
-                {active ? 'Pratim u aplikaciji' : 'Prati'}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {props.finder ?? null}
+      {groups.map((group) => (
+        <section key={group.sport} aria-label={group.title}>
+          <h2>{group.title}</h2>
+          <ul className="club-list">
+            {teams.filter((team) => team.sport === group.sport).map((team) => (
+              <ClubRow
+                key={team.id}
+                team={team}
+                followed={props.followed.includes(team.id)}
+                onToggle={() => props.onToggle(team.id)}
+                onOpen={() => {
+                  props.finder.focusTeam(team.sport, team.id);
+                  setOpenId(team.id);
+                }}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+      {props.active && openTeam ? (
+        <ModalPanel title={openTeam.name} onClose={() => setOpenId(null)}>
+          <ScheduleFinder
+            state={props.finder}
+            timeZone={props.timeZone}
+            now={props.now}
+            online={props.online}
+            teamId={openTeam.id}
+            followed={props.followed}
+            manualFixtureIds={props.manualFixtureIds}
+            onToggleManual={props.onToggleManual}
+          />
+        </ModalPanel>
+      ) : null}
     </section>
   );
 }
 
+function ClubRow(props: { team: Team; followed: boolean; onToggle: () => void; onOpen: () => void }) {
+  return (
+    <li className="club-row" data-team-id={props.team.id}>
+      <div>
+        <strong>{props.team.name}</strong>
+        <p className="meta">{sportLabel(props.team.sport)} · {props.team.city}</p>
+      </div>
+      <button type="button" aria-pressed={props.followed} onClick={props.onToggle}>
+        {props.followed ? 'Pratim' : 'Prati'}
+      </button>
+      <button type="button" className="club-open" onClick={props.onOpen}>Raspored</button>
+    </li>
+  );
+}
+
 export function SettingsScreen(props: {
+  active: boolean;
   prefs: DevicePrefs;
   onPrefs: (prefs: DevicePrefs) => void;
+  onTheme: (theme: ThemePreference) => void;
   onClear: () => void;
-  account?: ReactNode;
+  account: AccountSnapshot;
+  onSignOut: () => void;
+  onSaveAccount: (prefs: AccountPrefsInput) => void;
+  onDeleteAccount: () => void;
   install: {
     standalone: boolean;
     ios: boolean;
@@ -65,66 +117,105 @@ export function SettingsScreen(props: {
     onInstall: () => void;
   };
 }) {
-  const zones = ['Europe/Belgrade', 'Europe/Zagreb', 'Europe/London', 'UTC'];
-  // Zona uređaja van skraćene liste čuva se kao izabrana opcija.
-  const deviceZones = zones.includes(props.prefs.timeZone) ? zones : [props.prefs.timeZone, ...zones];
+  const [pane, setPane] = useState<SettingsPane | null>(null);
+  useEffect(() => {
+    if (!props.active) setPane(null);
+  }, [props.active]);
+  const current = SETTINGS.find((item) => item.id === pane) ?? null;
   return (
     <section>
       <h1>Podešavanja</h1>
-      <h2>Instalacija</h2>
-      {props.install.standalone ? <p data-standalone="true">Aplikacija je otvorena u samostalnom prozoru.</p> : null}
-      {props.install.canPrompt ? (
-        <button type="button" data-install="prompt" onClick={props.install.onInstall}>Instaliraj</button>
-      ) : null}
-      {!props.install.standalone && !props.install.canPrompt ? (
-        <p>Ovaj pregledač još nije ponudio instalaciju. Na računaru je to stavka u meniju pregledača, kada su manifest i service worker spremni.</p>
-      ) : null}
-      <div className={props.install.ios ? 'callout' : undefined} data-ios-install={props.install.ios ? 'true' : 'false'}>
-        <h3>iPhone i iPad</h3>
-        <p>Otvori stranicu u Safari-ju, izaberi deljenje, pa Dodaj na početni ekran. MatchAhead ne može sam da doda ikonu. Dozvola za obaveštenja traži se tek iz tako dodate aplikacije, i to nije provereno.</p>
-      </div>
-      <h2>Obaveštenja</h2>
-      <p>Push dok je aplikacija zatvorena nije proveren. Faza 02 je BLOCKED. Ova faza ne traži dozvolu i ne registruje drugi service worker.</p>
-      <fieldset>
-        <legend>Predloženi podsetnik</legend>
-        <p className="meta">Slanje nije uključeno. Izbor ostaje na ovom uređaju.</p>
-        {([15, 30, 60, 0] as const).map((minutes) => (
-          <label key={minutes} className="choice">
-            <input
-              type="radio"
-              name="reminder"
-              checked={props.prefs.reminderMinutes === minutes}
-              onChange={() => props.onPrefs({ ...props.prefs, reminderMinutes: minutes })}
-            />
-            {minutes === 0 ? 'Isključeno' : `${minutes} minuta`}
-          </label>
+      <ul className="settings-list">
+        {SETTINGS.map((item) => (
+          <li key={item.id}>
+            <button type="button" className="settings-row" onClick={() => setPane(item.id)}>
+              <span>{item.label}</span>
+              <span aria-hidden="true">›</span>
+            </button>
+          </li>
         ))}
-      </fieldset>
-      <label htmlFor="zone">Vremenska zona</label>
-      <select
-        id="zone"
-        value={props.prefs.timeZone}
-        onChange={(event) => props.onPrefs({ ...props.prefs, timeZone: event.target.value })}
-      >
-        {deviceZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
-      </select>
-      {props.account ?? (
-        <>
-          <h2>Nalog</h2>
-          <p>Google prijava nije deo ove faze. Lični unos ove sesije nije nalog i ne čuva se trajno po korisniku dok prijava ne postoji.</p>
-        </>
-      )}
-      <h2>Lokalna sesija</h2>
-      <p>Lokalna beleška ostaje u ovoj sesiji i briše se sa ovog uređaja. Nije nalog.</p>
-      <button type="button" onClick={props.onClear}>Obriši lokalni sadržaj ove sesije</button>
-      <p className="meta" data-app-build={APP_BUILD}>Izdanje {APP_BUILD}. Zona prikaza: {props.prefs.timeZone}.</p>
+      </ul>
+      {props.active && current ? (
+        <ModalPanel title={current.label} onClose={() => setPane(null)}>
+          <SettingsBody pane={current.id} {...props} />
+        </ModalPanel>
+      ) : null}
     </section>
   );
 }
 
-function FilterButton(props: { pressed: boolean; onClick: () => void; children: string }) {
+function SettingsBody(props: {
+  pane: SettingsPane;
+  prefs: DevicePrefs;
+  onTheme: (theme: ThemePreference) => void;
+  onPrefs: (prefs: DevicePrefs) => void;
+  onClear: () => void;
+  account: AccountSnapshot;
+  onSignOut: () => void;
+  onSaveAccount: (prefs: AccountPrefsInput) => void;
+  onDeleteAccount: () => void;
+  install: {
+    standalone: boolean;
+    ios: boolean;
+    canPrompt: boolean;
+    onInstall: () => void;
+  };
+}) {
+  if (props.pane === 'appearance') {
+    return <ThemePicker value={props.prefs.theme} onChange={props.onTheme} />;
+  }
+  if (props.pane === 'timezone') {
+    return (
+      <TimeZonePicker
+        account={props.account}
+        deviceTimeZone={props.prefs.timeZone}
+        onSaveAccount={props.onSaveAccount}
+        onSaveDevice={(timeZone) => props.onPrefs({ ...props.prefs, timeZone })}
+      />
+    );
+  }
+  if (props.pane === 'notifications') {
+    return <p>Još nisu dostupna.</p>;
+  }
+  if (props.pane === 'account') {
+    return (
+      <AccountPanel
+        account={props.account}
+        onSignOut={props.onSignOut}
+        onDeleteAccount={props.onDeleteAccount}
+      />
+    );
+  }
+  if (props.pane === 'install') return <InstallHelp install={props.install} />;
   return (
-    <button type="button" aria-pressed={props.pressed} onClick={props.onClick}>{props.children}</button>
+    <>
+      <p data-app-build={APP_BUILD}>Izdanje {APP_BUILD}.</p>
+      <button type="button" onClick={props.onClear}>Obriši lokalnu belešku</button>
+    </>
+  );
+}
+
+function InstallHelp(props: {
+  install: {
+    standalone: boolean;
+    ios: boolean;
+    canPrompt: boolean;
+    onInstall: () => void;
+  };
+}) {
+  return (
+    <div data-ios-install={props.install.ios ? 'true' : 'false'} data-standalone={props.install.standalone ? 'true' : 'false'}>
+      {props.install.standalone ? <p>Aplikacija je instalirana.</p> : null}
+      {props.install.canPrompt ? (
+        <button type="button" className="primary" data-install="prompt" onClick={props.install.onInstall}>Instaliraj</button>
+      ) : null}
+      {props.install.ios && !props.install.standalone ? (
+        <p>U Safari-ju izaberi deljenje, pa Dodaj na početni ekran.</p>
+      ) : null}
+      {!props.install.standalone && !props.install.canPrompt && !props.install.ios ? (
+        <p>Instalacija se nudi iz menija pregledača.</p>
+      ) : null}
+    </div>
   );
 }
 

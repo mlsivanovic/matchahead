@@ -85,6 +85,10 @@ test('prekid brisanja traži novu prijavu i ne skida zastavicu', async () => {
   assert.equal(flagged, true);
   assert.equal(safeFirebaseMessage('auth/requires-recent-login').includes('ana@example.com'), false);
   assert.equal(safeFirebaseMessage('auth/internal-error').includes('token'), false);
+  const network = safeFirebaseMessage('auth/network-request-failed');
+  assert.equal(network.includes('Firebase'), false);
+  assert.match(network, /Nema mreže/);
+  assert.match(network, /Prijava nije uspela/);
 });
 
 test('prazna Firebase konfiguracija nije prijava', () => {

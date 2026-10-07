@@ -1,0 +1,162 @@
+{
+  "scope": "Actual React components with isolated fixture props and mock callbacks. Not full App auth/API/nav integration, not a physical phone.",
+  "results": [
+    {
+      "name": "component rows 0",
+      "ok": true
+    },
+    {
+      "name": "component no duplicate IDs 0",
+      "ok": true
+    },
+    {
+      "name": "component rows 1",
+      "ok": true
+    },
+    {
+      "name": "component no duplicate IDs 1",
+      "ok": true
+    },
+    {
+      "name": "component rows 20",
+      "ok": true
+    },
+    {
+      "name": "component no duplicate IDs 20",
+      "ok": true
+    },
+    {
+      "name": "component rows 105",
+      "ok": true
+    },
+    {
+      "name": "component no duplicate IDs 105",
+      "ok": true
+    },
+    {
+      "name": "first match visible 390",
+      "ok": true
+    },
+    {
+      "name": "sticky controls while scrolling",
+      "ok": true
+    },
+    {
+      "name": "navigation visible while scrolling",
+      "ok": true
+    },
+    {
+      "name": "select all eligible beyond page",
+      "ok": true
+    },
+    {
+      "name": "selection persists page change",
+      "ok": true
+    },
+    {
+      "name": "filter clears selection and page",
+      "ok": true
+    },
+    {
+      "name": "matches light no overflow",
+      "ok": true
+    },
+    {
+      "name": "clubs light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Izgled light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Vremenska zona light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Obaveštenja light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Nalog light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Instalacija i pomoć light no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings O aplikaciji light no overflow",
+      "ok": true
+    },
+    {
+      "name": "matches dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "clubs dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Izgled dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Vremenska zona dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Obaveštenja dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Nalog dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings Instalacija i pomoć dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "settings O aplikaciji dark no overflow",
+      "ok": true
+    },
+    {
+      "name": "component layout 360x740",
+      "ok": true
+    },
+    {
+      "name": "component layout 430x932",
+      "ok": true
+    },
+    {
+      "name": "component layout 844x390",
+      "ok": true
+    },
+    {
+      "name": "component layout 1280x800",
+      "ok": true
+    },
+    {
+      "name": "component enlarged text no overflow",
+      "ok": true
+    },
+    {
+      "name": "component offline warning",
+      "ok": true
+    },
+    {
+      "name": "component no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

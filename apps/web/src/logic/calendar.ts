@@ -73,7 +73,7 @@ export async function insertCalendarEvent(event: CalendarEvent, token: string, s
     throw new Error('Događaj sa ovim ID-jem postoji, ali upis nije potvrđen. Proveri Google kalendar.');
   }
   if (response.status === 401) throw new Error('Google dozvola je istekla. Pokreni dodavanje ponovo.');
-  if (response.status === 403) throw new Error('Google je odbio upis. Proveri dozvolu za kalendar i OAuth test nalog.');
+  if (response.status === 403) throw new Error('Google je odbio upis. Proveri dozvolu za kalendar.');
   if (response.status === 429) throw new Error('Google trenutno ograničava upise. Pokušaj kasnije.');
   throw new Error('Upis nije potvrđen. Pokušaj ponovo; ista utakmica neće napraviti duplikat.');
 }

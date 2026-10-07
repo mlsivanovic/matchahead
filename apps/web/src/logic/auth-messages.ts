@@ -10,7 +10,7 @@ const SAFE_CODES: Record<string, string> = {
   'auth/popup-closed-by-user': 'Prozor prijave je zatvoren. Nalog nije otvoren.',
   'auth/cancelled-popup-request': 'Prijava je otkazana. Nalog nije otvoren.',
   'auth/popup-blocked': 'Pregledač je blokirao prozor prijave. Nalog nije otvoren.',
-  'auth/network-request-failed': 'Nema mreže ili Firebase ne odgovara. Prijava nije uspela.',
+  'auth/network-request-failed': 'Nema mreže ili prijava ne odgovara. Prijava nije uspela.',
   'auth/requires-recent-login': RECENT_LOGIN_MESSAGE,
   'auth/user-disabled': 'Ovaj nalog je onemogućen. Prijava nije uspela.',
   'auth/operation-not-allowed': 'Google prijava nije uključena. Nalog nije otvoren.',

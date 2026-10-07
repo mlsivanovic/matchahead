@@ -1,0 +1,11 @@
+Light text: 16.03:1 PASS
+Light secondary: 5.58:1 PASS
+Light accent: 5.20:1 PASS
+Light accent button: 6.23:1 PASS
+Dark text: 13.81:1 PASS
+Dark secondary: 7.16:1 PASS
+Dark accent: 6.47:1 PASS
+Dark accent button: 8.14:1 PASS
+Light warning: 6.46:1 PASS
+Dark warning: 10.06:1 PASS
+Calculated WCAG relative luminance for token pairs; browser layout/focus audit pending.

@@ -1,0 +1,283 @@
+✔ samo verifikovan Google nalog mls.ivanovic@gmail.com prolazi klijentsku dozvolu (0.825557ms)
+✔ drugi nalog, neverifikovan email i tuđ provajder ne prolaze (0.157068ms)
+✔ odbijeni nalog ne otvara profil, a poruka preživljava null događaj (0.873102ms)
+✔ zakašnjela greška starog pokušaja ne kvari novi nalog (15.201637ms)
+✔ greška važi za tiket tekućeg pokušaja (0.213657ms)
+✔ stari failure posle novog klika ostaje bez dejstva (0.142943ms)
+✔ stari failure posle dolaska i kraja identiteta ostaje bez dejstva (0.432378ms)
+✔ null odjek bez vlasnika ne poništava tekući pokušaj (0.21128ms)
+✔ settleUidAfterAccountEnd čuva uid novijeg vlasnika (0.68161ms)
+✔ kasni odgovor prethodnog uid-a ne puni novi prikaz (29.828506ms)
+✔ prekid brisanja traži novu prijavu i ne skida zastavicu (1.472182ms)
+✔ prazna Firebase konfiguracija nije prijava (0.613258ms)
+✔ odjava i dalje briše samo sesiju i taj uid (0.591789ms)
+✔ izvorni kod jezgra ne ugrađuje javni ključ ni trajni Firestore keš (0.370761ms)
+✔ kante prate groupUserAgenda (16.274744ms)
+✔ podrazumevani prikaz drži nepotvrđen sat, odlaganje i otkazivanje, bez arhive (20.082219ms)
+✔ period Danas i 7 dana, bez datuma ostaje samo u Sve (3.951025ms)
+✔ strana ima 20, izbor svih obuhvata svaku podobnu, promena filtera ga briše (6.630685ms)
+✔ Sledeća je najbliži potvrđeni meč, a 17:00 važi samo za nepoznat sat (0.801735ms)
+✔ Promene drže pomeraj potvrđenog meča, nepotvrđen sat i otkazivanje (2.200284ms)
+✔ Sledeća preskače odloženo i uživo i uzima razrešen termin (0.318908ms)
+✔ isti dan drži potvrđen i nepoznat sat, a strane prate taj redosled (9.613863ms)
+✔ grupisanje po danu i broj aktivnih filtera (1.516803ms)
+✔ unija: dva praćena protivnika daju jedan red sa oba razloga (10.087177ms)
+✔ unija: ručni izbor i praćenje iste utakmice daju jedan red sa oba razloga (1.467723ms)
+✔ uklanjanje jednog razloga čuva utakmicu koju pokriva drugi razlog (1.177236ms)
+✔ ručni izbor van praćenih klubova ulazi; nepoznat ručni ID se ignoriše (0.414921ms)
+✔ dupliran stabilan ID daje jedan red; prazni ulazi daju praznu agendu (0.569068ms)
+✔ reasonsForFixture vraća prazno za utakmicu van agende (2.315479ms)
+✔ deterministički redosled: UTC rastuće, stabilan ključ za jednake termine (13.672194ms)
+✔ grupe: predstojeće, termin naknadno, poremećaj i arhiva (0.546715ms)
+✔ sledeća: najraniji termin; istovremene vraćaju sve; TBD i prošle otpadaju (0.515518ms)
+✔ sledeća nad agendom slaže se sa postojećim nextConfirmedFixtures (0.599187ms)
+✔ bezbedan status: prošla po rasporedu, nikad izvedeno uživo ili završeno (0.464748ms)
+✔ izričit live nema odbrojavanje ni uz budući potvrđen termin (0.197892ms)
+✔ ponoć UTC ostaje potvrđen termin; nepoznat sat nikad nije ponoć (0.429671ms)
+✔ DST: isti UTC trenutak pada u različite lokalne datume pre i posle prelaza (11.348145ms)
+✔ promena zone: isti termin grupiše se u drugi lokalni dan (0.535139ms)
+✔ ponoćna granica: 23:30Z je juče u UTC, a sutra u Beogradu (0.510754ms)
+✔ pomeranje termina čuva prethodni datum; otkazivanje ima raniji datum (1.935019ms)
+✔ filter po klubu ne skriva gostovanje; košarka ostaje odvojena (0.314291ms)
+✔ utakmica bez poznatog protivnika ulazi preko praćenog domaćina (0.174582ms)
+✔ sledeća utakmica je najraniji potvrđen termin, bez lažnog odbrojavanja (26.477362ms)
+✔ danas i narednih sedam dana koriste zonu, a gostovanje ostaje vidljivo (18.25035ms)
+✔ odjava odmah čisti prikaz; kasno učitavanje starog uid-a se odbacuje (15.924726ms)
+✔ zamena naloga: tiket prethodnog uid-a ne puni novi prikaz (0.697982ms)
+✔ upis posle zamene naloga ne čita niti puni tuđi prikaz (0.692442ms)
+✔ greška učitavanja ne ostavlja privatne podatke i ne otkriva nalog (0.349091ms)
+✔ omiljeni klubovi ostaju odvojeni: agenda prima samo praćenja i ručne izbore (0.936679ms)
+✔ brzi uzastopni klikovi na omiljene ne gaze jedan drugi (0.783265ms)
+✔ neuspeo upis ne predstavlja podatke kao sačuvane (0.780103ms)
+✔ lokalni DEMO ručni izbori ostaju lokalni i odbacuju nevažeće ID-jeve (0.542749ms)
+✔ brisanje: brava ostaje, dokumenti nestaju, zastavica se čisti (0.966131ms)
+✔ zastarela prijava ostavlja zastavicu; ponovna prijava samo briše Auth (0.672093ms)
+✔ brava na serveru nastavlja brisanje pri sledećoj prijavi bez otvaranja profila (0.273598ms)
+✔ brisanje zadržava potvrdu i posle null događaja Auth brisanja (0.409991ms)
+✔ potvrda brisanja ne prelazi na novi uid koji je preuzeo prikaz (0.532527ms)
+✔ odjava prvo uklanja vezu uređaja dok je vlasnik autentifikovan (0.40363ms)
+✔ zaglavljeni unlink ne blokira lokalnu odjavu (6.485622ms)
+✔ zona profila je overlay: nevažeća zona pada na Beograd bez diranja uređaja (0.490039ms)
+✔ OAuth i Google API se ne keširaju, a DEMO fajl više nije keš kandidat (1.614973ms)
+✔ privatni /api/ odgovori su network-only (0.463164ms)
+✔ aktivacija briše stari DEMO keš i čuva workbox precache (0.236784ms)
+✔ nova verzija čeka dok traje unos (0.279757ms)
+✔ iPhone traži ručni postupak, samostalni prozor ne (0.475466ms)
+✔ nepromenjen izvor gradi događaj jednom (22.558611ms)
+✔ promena fixtura tokom digesta gradi događaj iz nove slike (2.939975ms)
+✔ otkazivanje tokom digesta preskače već izgrađen događaj (2.312658ms)
+✔ druga promena tokom ponovne izgradnje ne vraća zastareo događaj (4.673871ms)
+✔ otkazivanje posle prve izmene i dalje je preskok (1.623208ms)
+✔ nestabilan podoban izvor ostaje za ponovni pokušaj i ne šalje zastareo događaj (2.233158ms)
+✔ nepodoban red se preskače, a sledeći stabilan ide u upis (1.440429ms)
+✔ gubitak naloga zaustavlja seriju bez upisa tekućeg reda (1.191105ms)
+✔ gubitak naloga tokom digesta prekida izgradnju (1.061097ms)
+✔ beleška i sat ulaze u poređenje izvora (0.58611ms)
+✔ unknown kickoff is 17h in source zone, not viewer zone, with explicit note (39.317092ms)
+✔ 17h honors winter, summer and DST transition dates (2.351007ms)
+✔ confirmed kickoff keeps exact UTC, event ID stays stable after schedule change (4.189494ms)
+✔ unconfirmed clock is ignored; source without zone uses user zone (1.716825ms)
+✔ unknown date and disrupted matches cannot be exported (2.08229ms)
+✔ insertion uses bearer header and network-only POST without attendee notifications (35.00933ms)
+✔ retry after ambiguous POST confirms matching existing event, rejects unrelated or deleted event (3.119288ms)
+✔ expired token, denied permission and rate limit remain explicit failures (2.490863ms)
+✔ izbor su samo četiri kluba iz selectableTeams (2.776993ms)
+✔ pretraga nalazi Zvezdu i Partizan, ne protivnika i ne drugi klub (0.956663ms)
+✔ razlozi razlikuju praćeni klub i ručni izbor; omiljeno se ne pominje (1.784953ms)
+✔ nepoznat tim i neodređen protivnik imaju bezbedan tekst (0.258835ms)
+✔ uklanjanje ručnog izbora ne skida utakmicu koju pokriva praćenje (0.659548ms)
+✔ ručni red van praćenih klubova ne tvrdi pokriće praćenjem (1.106431ms)
+✔ filteri: sport, klub i takmičenje (13.417571ms)
+✔ promena sporta poništava nekompatibilan izbor kluba i takmičenja (0.328286ms)
+✔ opcije kluba i takmičenja važe samo za izabrani sport (0.677844ms)
+✔ opcije klubova i takmičenja dolaze iz agende (0.413395ms)
+✔ hash rute pokrivaju četiri ekrana (1.494761ms)
+✔ link ostaje hash, bez serverske putanje (0.274916ms)
+✔ navigacija prikazuje Utakmice umesto Moje (0.243987ms)
+✔ tri taba: početna i stare utakmice su isti ekran (0.899128ms)
+✔ pronalazak šalje tipizovan zahtev i čuva Authorization samo u zaglavlju (5.727932ms)
+✔ bez prijave nema Authorization zaglavlja, poziv i dalje ide na server (0.524804ms)
+✔ pogrešan sport, klub i sezona ne idu na mrežu (0.924489ms)
+✔ nekonfigurisan server je poštena greška bez mreže (0.407084ms)
+✔ 401 traži prijavu, 429 nosi kuldaun, 500 čuva prethodno stanje (2.542776ms)
+✔ pogrešan odgovor servera je greška, ne prazan prikaz (1.487161ms)
+✔ neobjavljeno takmičenje i nepoznat termin prolaze kao pokrivenost, ne kao utakmica (0.944749ms)
+✔ source-blocked sme da bude prazan, synthetic-demo ostaje označen (0.351219ms)
+✔ kuldaun: prvi klik prolazi, drugi čeka, prozor ističe (0.613358ms)
+✔ zamena naloga briše sesiju, a javni raspored na uređaju ostaje bez privatnih tragova (0.91802ms)
+✔ bez Firebase sesije nema tokena; adresa servera je javna konfiguracija (0.810871ms)
+✔ adresa servera: HTTPS uvek, HTTP samo loopback, bez tajni u URL-u (0.303183ms)
+✔ datumi su stvarni kalendarski datumi, trenuci strogi ISO sa zonom (0.520593ms)
+✔ prva blokada sa checkedAt null je validna i nije lažni uspeh (0.239253ms)
+✔ DEMO se ne upisuje u trajno stanje; oštećen zapis se ne čita (0.348192ms)
+✔ prekinut zahtev pri zameni naloga se nikad ne upisuje (0.273696ms)
+✔ podrazumevani rok je 20 s do kraja čitanja tela (0.063951ms)
+✔ zaglavlja 200 pa viseće telo daje timeout u kratkom roku (50.440719ms)
+✔ prekid posle zaglavlja (odjava u letu) daje aborted, ne kasni upis (21.102512ms)
+✔ kasni odgovor posle odjave se nikad ne vraća kao uspeh (10.84792ms)
+✔ derbi iz dva snimka postoji jednom, sa najvišom revizijom bez obzira na redosled (8.690496ms)
+✔ unificirana agenda spaja praćenja oba kluba bez duplikata (0.673404ms)
+✔ forbidden opoziv briše izvor iz svih snimaka; unknown čuva prikaz (1.82195ms)
+✔ opozvani izvor ne ulazi u unificiranu agendu (0.326923ms)
+✔ allowed pa unknown je opoziv u unificiranoj agendi i u trajnom stanju (0.858657ms)
+✔ ista revizija sa različitim sadržajem se ne objavljuje (0.290596ms)
+✔ semantika odgovora odbija nedosledne revizije, izvore, odnose i next pokazivače (1.854565ms)
+✔ sintetički režim sme sintetički izvor, ali nikad javascript (0.325496ms)
+✔ mrežni pad i tajmaut su server, ne izmišljen uspeh (5.59247ms)
+✔ utakmica učesnika koga nema u imeniku se odbija (0.410355ms)
+✔ next pokazivači moraju biti jednaki vraćenim podacima, ne samo isti id (0.440445ms)
+✔ budući spisak mora biti kanonski uređen po danu, terminu i id-u (0.363101ms)
+✔ dozvoljeni delimični uspeh uz zabranu drugog takmičenja prolazi (0.179063ms)
+✔ dozvoljena zastarela source_error pokrivenost čuva poslednji snimak (0.231773ms)
+✔ blokada bez dokaza ne sme nositi utakmice; prazna je validna (0.300491ms)
+✔ traženi izborni tim važi i uz prazne imenike; neizborni se odbija (0.178948ms)
+✔ duplirani ključevi imenika se odbijaju (0.123125ms)
+✔ validan odgovor za drugi klub ili sezonu ne može zameniti traženi raspored (0.367988ms)
+✔ neusklađeni metapodaci snimka čuvaju poslednji dobar zapis (1.205095ms)
+✔ produkcija nema DEMO raspored ni generator (1.331189ms)
+✔ prag zastarelosti i dalje računa časove (0.307849ms)
+✔ neoznačen raspored se odbija (0.878295ms)
+(node:4127623) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ preklopljeni dispose čeka isto gašenje; nova sesija tek posle kraja (58.390373ms)
+✔ jednostruki dispose gasi sesiju; sledeća je sveža (1.878049ms)
+✔ klik/remount tokom tuđeg gašenja: barijera pa sveža sesija bez bacanja (51.56198ms)
+✔ ensure tokom gašenja baca; posle kraja nova sesija je sveža (2.510016ms)
+✔ neispravna tema je Auto, a ručni izbor ima prednost nad sistemom (1.527848ms)
+✔ dokument dobija razrešenu temu i prati sistem samo dok je Auto (0.697705ms)
+✔ ručni Dark ostaje i kad upis ne uspe, a sistem pređe na svetlo (0.510899ms)
+✔ tema u podešavanjima uređaja preživljava čitanje (0.522034ms)
+✔ tema se primenjuje pre React modula (0.751911ms)
+✔ odjava briše samo taj uid i sesiju (4.272246ms)
+✔ podrazumevana zona je Beograd, podsetnik 30, tema Auto (0.253215ms)
+✔ neispravna tema ne briše zonu i postaje Auto (0.172062ms)
+✔ odbijen storage ne baca (0.406482ms)
+ℹ tests 152
+ℹ suites 0
+ℹ pass 152
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 410.499701
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 89 modules transformed.
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/firestore/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts, /home/mls/GIT/matchahead/apps/web/src/logic/account-remote.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/auth/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/schedule-auth.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/App.tsx, /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-sched-ui-dist/404.html                     0.41 kB │ gzip:   0.28 kB
+../../../../../../tmp/matchahead-sched-ui-dist/manifest.webmanifest         0.54 kB
+../../../../../../tmp/matchahead-sched-ui-dist/index.html                   2.31 kB │ gzip:   0.92 kB
+../../../../../../tmp/matchahead-sched-ui-dist/assets/index-HdN8_KX2.css   10.69 kB │ gzip:   2.96 kB
+../../../../../../tmp/matchahead-sched-ui-dist/assets/index-CYvTpC7m.js   856.07 kB │ gzip: 258.47 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.68s
+
+PWA v1.3.0
+Building src/sw.ts service worker ("es" format)...
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 59 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-sched-ui-dist/sw.mjs  58.81 kB │ gzip: 14.91 kB
+✓ built in 78ms
+
+PWA v1.3.0
+mode      injectManifest
+format:   es
+precache  12 entries (860.78 KiB)
+files generated
+  ../../../../../../tmp/matchahead-sched-ui-dist/sw.js
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 89 modules transformed.
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/firestore/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts, /home/mls/GIT/matchahead/apps/web/src/logic/account-remote.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/auth/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/schedule-auth.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/App.tsx, /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-sched-nocfg-dist/404.html                     0.41 kB │ gzip:   0.28 kB
+../../../../../../tmp/matchahead-sched-nocfg-dist/manifest.webmanifest         0.54 kB
+../../../../../../tmp/matchahead-sched-nocfg-dist/index.html                   2.31 kB │ gzip:   0.92 kB
+../../../../../../tmp/matchahead-sched-nocfg-dist/assets/index-HdN8_KX2.css   10.69 kB │ gzip:   2.96 kB
+../../../../../../tmp/matchahead-sched-nocfg-dist/assets/index-CCRpKRMj.js   856.05 kB │ gzip: 258.45 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.73s
+
+PWA v1.3.0
+Building src/sw.ts service worker ("es" format)...
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 59 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-sched-nocfg-dist/sw.mjs  58.81 kB │ gzip: 14.91 kB
+✓ built in 80ms
+
+PWA v1.3.0
+mode      injectManifest
+format:   es
+precache  12 entries (860.76 KiB)
+files generated
+  ../../../../../../tmp/matchahead-sched-nocfg-dist/sw.js
+PAGE CONSOLE: info Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+PASS: sekcija rasporeda u modalnom panelu kluba, bez poziva pre klika
+PASS: pronalaženje — lista, izvori, neobjavljeno, nepoznat termin, tačno poreklo
+PASS: kuldaun osvežavanja poštuje najkraći razmak
+PAGE CONSOLE: error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+PASS: pad servera čuva poslednji dobar prikaz uz poruku greške
+PASS: pogrešan odgovor servera je greška, prikaz sačuvan
+PASS: source-blocked — pokrivenost, razlog, zadržana utakmica
+PASS: sintetički odgovor je odbijen, sačuvano stanje ostaje
+PASS: pronalaženje drugog kluba (Partizan)
+PASS: početna — unificirana agenda, derbi jednom, bedž Sledeća
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+PAGE CONSOLE: error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+STATUSES IN PAGE: Dodato: 1. Već u kalendaru: 0. Preostale utakmice nisu dodate. Upis nije potvrđen. Pokušaj ponovo; ista utakmica neće napraviti duplikat. | Utakmice bez poznate satnice upisuju se u 17:00. Proveri zvaničan termin. | Dodato: 1. Već u kalendaru: 0. Preostale utakmice nisu dodate. Upis nije potvrđen. Pokušaj ponovo; ista utakmica neće napraviti duplikat.
+PASS: delimičan upis u kalendar prekinut na prvoj grešci, prva utakmica uspešna
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+STATUSES IN PAGE: Dodato: 2. Već u kalendaru: 0.
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+PAGE CONSOLE: error Failed to load resource: the server responded with a status of 409 (Conflict)
+INTERCEPTED CALENDAR REQ: GET https://www.googleapis.com/calendar/v3/calendars/primary/events/4e5bcbbaaa44171f955d5fceda90e8c93132197d298b03efbfaf8eacf34c9049
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+PAGE CONSOLE: error Failed to load resource: the server responded with a status of 409 (Conflict)
+INTERCEPTED CALENDAR REQ: GET https://www.googleapis.com/calendar/v3/calendars/primary/events/03f9a98a35bc1a6b90ef4c1d84bd2659c802ba12772a8238e1334fa7f7b29b99
+INTERCEPTED CALENDAR REQ: POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none
+PAGE CONSOLE: error Failed to load resource: the server responded with a status of 409 (Conflict)
+INTERCEPTED CALENDAR REQ: GET https://www.googleapis.com/calendar/v3/calendars/primary/events/131793d5d56d7d2fe7d3cf57507fe2466817b4da2594deb22aba4090dfec1413
+STATUSES IN PAGE: Dodato: 0. Već u kalendaru: 3.
+PASS: kalendar — izbor svih, beleška, delimičan uspeh, nastavak, 17h, 409 conflict i potvrđeni GET pozivi bez duplikata
+PASS: filteri — sport, klub modal i dugme Poništi
+PASS: 360px širina bez preliva
+PASS: rad van mreže čuva sačuvani raspored i prikazuje upozorenje
+PASS: opoziv prava objave briše izvor iz svih klupskih snimaka i agende
+PASS: svi zahtevi nose Authorization zaglavlje uz emulator token
+PASS: nekonfigurisan server je pošteno onemogućen
+SVE PROVERE RASPOREDA SU PROŠLE

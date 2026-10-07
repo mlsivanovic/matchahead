@@ -1,0 +1,139 @@
+✔ Beogradski zidni sat ima zimski i letnji pomeraj (20.383015ms)
+✔ poznati klubovi dobijaju rs identitet, protivnik zadržava sponzora (0.793755ms)
+✔ mapiranje je izričito, a isti par bez mape nije isti ID (0.251228ms)
+✔ ABA potvrđuje Beograd samo uz Cluj i različite satove (3.857237ms)
+✔ FSS nema zonu, 00:00 nije termin, rezultat zatvara utakmicu (3.647538ms)
+✔ Partizanov javni blok ne veruje praznoj zoni ni nuli (1.332467ms)
+✔ stranica Zvezde ne koristi hero sat i nema zonu (1.429708ms)
+✔ pogrešna sezona, JS šablon i prazan KLS nisu prazan raspored (0.696375ms)
+✔ mali PDF čita GMT kao UTC bez spoljnog procesa (44.48083ms)
+✔ WebCrypto prima X.509 sertifikat i odbija alg none (8.123135ms)
+✔ RS256 token sa pravom publikom prolazi, none i tuđa publika ne prolaze (6.666433ms)
+✔ sintetički režim ne sme u produkcioni NODE_ENV (1.244081ms)
+✔ katalog ne zove Euroleague Game Center (0.308772ms)
+✔ HTTP: trajnost, prazan diff, pomeranje, otkaz, kvarovi, kvote, CORS i prijava (125.796531ms)
+✔ HTTP indeks beleži odlaganje i zadržava id (12.20759ms)
+✔ opoziv unutar minuta briše i tuđi snimak, a produkcija ne objavljuje telo (17.375514ms)
+✔ kvote po nalogu, IP i globalno ne brišu raspored i ne zovu izvor (23.240107ms)
+✔ X-Forwarded-For se ignoriše dok TRUST_PROXY nije uključen (14.327703ms)
+✔ opciono: ABA snimak (49.037832ms)
+✔ opciono: FSS snimak (60.837453ms)
+✔ opciono: Partizan snimak (11.766401ms)
+✔ opciono: Zvezda snimak (4.03511ms)
+✔ opciono: KK Partizan, KK Zvezda i KLS (2.021187ms)
+euroleague-node-wall-ms=112.8
+✔ opciono: Evroliga PDF snimak (121.403337ms)
+✔ SHA-256 se poklapa sa referentnim vektorom i ne ostavlja sirovi IP (2.361ms)
+✔ prazna i nepotpuna strana nisu deljiv snimak (1.743115ms)
+✔ jedna ligaška strana služi oba kluba, novi proces čita istu datoteku, klubski sajt ne (49.897915ms)
+✔ osvežavanje 15 minuta i obična upotreba 6 sati dele se, pomeraj derbija je isti (18.36519ms)
+✔ kvar čuva poslednju dobru stranu, opoziv briše oba kluba, kvota broji jedno preuzimanje (21.264065ms)
+✔ mešani provajderi: novo preuzimanje ne briše već sačuvanu ligu (17.469758ms)
+✔ istekla liga objavljuje pomeraj i dok je klupski snimak kupa još svež (8.924897ms)
+✔ istekli dobar snimak ne zove izvor dok traje cooldown posle kvara (8.764726ms)
+✔ neispravna potpuna strana ne zamenjuje poslednji dobar snimak (8.251267ms)
+✔ istovremeni zahtevi dele jedno preuzimanje (4.281581ms)
+✔ klupski i neoznačeni opseg ne dele stranu između klubova (11.428038ms)
+✔ sat klupskog snimka ne uzima tuđi klub (0.381947ms)
+✔ isti provajder sa drugim takmičenjem ne deli let (6.289198ms)
+✔ pratioc leta ne pomera sat ni manifest vođe (15.723211ms)
+✔ Worker paket ne vuče Node skladište, PDF ni privatni Euroleague endpoint (1.608258ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd čuva raspored posle gašenja objekta i ne izmišlja otkazivanje (5333.059933ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:crvena-zvezda"}
+✔ workerd opoziv u minutu briše i drugi klub (123.406067ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd produkcija ostaje source-blocked i ne zove izvor (108.460266ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd odgovor drži manifeste samo sporta koji je tražen (115.495097ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":429,"code":"quota_user","teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":429,"code":"quota_ip","teamId":"football:rs:partizan"}
+{"status":429,"code":"quota_global","teamId":"football:rs:partizan"}
+✔ workerd kvote po nalogu, IP i globalno opstaju posle gašenja (5333.218609ms)
+{"status":401,"code":"unauthorized","teamId":null}
+{"status":429,"code":"quota_ip","teamId":null}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":429,"code":"quota_ip","teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd zaustavlja neuspele prijave pre provere i ne veruje X-Forwarded-For (339.201988ms)
+{"status":401,"code":"unauthorized","teamId":null}
+{"status":403,"code":"forbidden_origin","teamId":null}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":204,"code":null,"teamId":null}
+{"status":400,"code":"invalid_body","teamId":null}
+✔ workerd CORS, token u URL-u i tuđe vreme (117.502507ms)
+✔ čitanje tela odustaje i sledeće čitanje radi (82.358671ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":400,"code":"payload_too_large","teamId":null}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd ne drži red zbog zaglavljenog tela (314.611267ms)
+{"status":401,"code":"unauthorized","teamId":null}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd prekida zaglavljen sertifikat i pušta sledeći zahtev (315.48539ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+✔ workerd dozvoljeni HTML prolazi kroz pravi FSS parser i preživljava gašenje (5116.407953ms)
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+✔ workerd dozvoljeni PDF ide kroz inflate u objektu (109.906028ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+fss-html-wall-ms=41.0
+✔ workerd meri sačuvani FSS HTML (154.116909ms)
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+euroleague-pdf-wall-ms=51.0
+✔ workerd meri sačuvani Evroliga PDF (164.048345ms)
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+✔ workerd jedna ligaška strana služi oba košarkaška kluba (5215.29023ms)
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":200,"code":null,"teamId":"basketball:rs:partizan"}
+{"status":200,"code":null,"teamId":"basketball:rs:crvena-zvezda"}
+{"status":429,"code":"quota_global","teamId":"basketball:rs:partizan"}
+✔ workerd istovremeni klubovi i globalna kvota dele jedno preuzimanje lige (259.785212ms)
+{"status":200,"code":null,"teamId":"football:rs:partizan"}
+{"status":200,"code":null,"teamId":"football:rs:crvena-zvezda"}
+{"status":401,"code":"unauthorized","teamId":null}
+{"status":403,"code":"forbidden_origin","teamId":null}
+✔ workerd produkcija objavljuje odobren FSS gostima, deli ligu i odbija lažan token (146.052133ms)
+ℹ tests 56
+ℹ suites 0
+ℹ pass 56
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 23978.134564

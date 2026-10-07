@@ -1,5 +1,6 @@
 import { isSelectableTeamId } from '../../../../packages/domain/src/selectable-teams.ts';
 import { FIXTURE_DOC_ID_PATTERN } from '../../../../packages/domain/src/user-account.ts';
+import { parseThemePreference, type ThemePreference } from './theme.ts';
 
 export const SESSION_PREFIX = 'matchahead.session.';
 export const USER_PREFIX = 'matchahead.user.';
@@ -30,18 +31,76 @@ export function memoryStore(initial: Record<string, string> = {}): KeyValueStore
 
 export function browserStore(storage: Storage): KeyValueStore {
   return {
-    getItem: (key) => storage.getItem(key),
-    setItem: (key, value) => storage.setItem(key, value),
-    removeItem: (key) => storage.removeItem(key),
-    keys: () => {
-      const names: string[] = [];
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key) names.push(key);
+    getItem: (key) => {
+      try {
+        return storage.getItem(key);
+      } catch {
+        return null;
       }
-      return names;
+    },
+    setItem: (key, value) => {
+      try {
+        storage.setItem(key, value);
+      } catch {
+        // Odbijen ili pun storage ne sme da sruši prijavu ni temu.
+      }
+    },
+    removeItem: (key) => {
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Isto: brisanje koje storage odbije ostavlja prikaz živim.
+      }
+    },
+    keys: () => {
+      try {
+        const names: string[] = [];
+        for (let index = 0; index < storage.length; index += 1) {
+          const key = storage.key(index);
+          if (key) names.push(key);
+        }
+        return names;
+      } catch {
+        return [];
+      }
     },
   };
+}
+
+/** Kad je sam pristup storage-u zabranjen, memorija drži sesiju dok se ekran ne sruši. */
+export function ensureAccessibleStorage(target: Pick<Window, 'localStorage' | 'sessionStorage'> = window): void {
+  for (const name of ['localStorage', 'sessionStorage'] as const) {
+    try {
+      void target[name].getItem(DEVICE_PREFS_KEY);
+    } catch {
+      const data = new Map<string, string>();
+      const memory = {
+        get length() {
+          return data.size;
+        },
+        clear() {
+          data.clear();
+        },
+        getItem(key: string) {
+          return data.has(key) ? data.get(key) ?? null : null;
+        },
+        key(index: number) {
+          return [...data.keys()][index] ?? null;
+        },
+        removeItem(key: string) {
+          data.delete(key);
+        },
+        setItem(key: string, value: string) {
+          data.set(key, value);
+        },
+      } satisfies Storage;
+      try {
+        Object.defineProperty(target, name, { configurable: true, get: () => memory });
+      } catch {
+        // Pozivi kroz browserStore i dalje hvataju grešku ako se zamena ne prihvati.
+      }
+    }
+  }
 }
 
 export function assertUid(uid: string): string {
@@ -117,15 +176,21 @@ export function clearUserLocalContent(local: KeyValueStore, session: KeyValueSto
 export interface DevicePrefs {
   timeZone: string;
   reminderMinutes: 0 | 15 | 30 | 60;
+  theme: ThemePreference;
 }
 
 export function defaultDevicePrefs(): DevicePrefs {
-  return { timeZone: 'Europe/Belgrade', reminderMinutes: 30 };
+  return { timeZone: 'Europe/Belgrade', reminderMinutes: 30, theme: 'auto' };
 }
 
 export function readDevicePrefs(local: KeyValueStore): DevicePrefs {
   const fallback = defaultDevicePrefs();
-  const raw = local.getItem(DEVICE_PREFS_KEY);
+  let raw: string | null;
+  try {
+    raw = local.getItem(DEVICE_PREFS_KEY);
+  } catch {
+    return fallback;
+  }
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw) as Partial<DevicePrefs>;
@@ -136,12 +201,20 @@ export function readDevicePrefs(local: KeyValueStore): DevicePrefs {
     const reminderMinutes = reminder === 0 || reminder === 15 || reminder === 30 || reminder === 60
       ? reminder
       : fallback.reminderMinutes;
-    return { timeZone, reminderMinutes };
+    return { timeZone, reminderMinutes, theme: parseThemePreference(parsed.theme) };
   } catch {
     return fallback;
   }
 }
 
 export function writeDevicePrefs(local: KeyValueStore, prefs: DevicePrefs): void {
-  local.setItem(DEVICE_PREFS_KEY, JSON.stringify(prefs));
+  try {
+    local.setItem(DEVICE_PREFS_KEY, JSON.stringify({
+      timeZone: prefs.timeZone,
+      reminderMinutes: prefs.reminderMinutes,
+      theme: parseThemePreference(prefs.theme),
+    }));
+  } catch {
+    // Tema u memoriji i dalje važi; sledeće čitanje bez zapisa daje Auto.
+  }
 }

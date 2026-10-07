@@ -1,0 +1,8 @@
+{
+  "build": "rework-local-20261007",
+  "controlled": true,
+  "overflow": 0,
+  "theme": "dark",
+  "origin": "http://127.0.0.1:4180/matchahead/",
+  "method": "Orca embedded browser; SW update button activated via DOM click, not physical device"
+}

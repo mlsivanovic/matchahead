@@ -1,0 +1,46 @@
+
+> @matchahead/web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 89 modules transformed.
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/firestore/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts, /home/mls/GIT/matchahead/apps/web/src/logic/account-remote.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/auth/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/schedule-auth.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/App.tsx, /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/404.html                     0.42 kB │ gzip:   0.28 kB
+dist/manifest.webmanifest         0.56 kB
+dist/index.html                   2.34 kB │ gzip:   0.92 kB
+dist/assets/index-HdN8_KX2.css   10.69 kB │ gzip:   2.96 kB
+dist/assets/index-PQoK2K66.js   856.19 kB │ gzip: 258.58 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.65s
+
+PWA v1.3.0
+Building src/sw.ts service worker ("es" format)...
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 59 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/sw.mjs  58.81 kB │ gzip: 14.91 kB
+✓ built in 69ms
+
+PWA v1.3.0
+mode      injectManifest
+format:   es
+precache  12 entries (860.96 KiB)
+files generated
+  dist/sw.js

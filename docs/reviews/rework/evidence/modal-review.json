@@ -1,0 +1,54 @@
+[
+  {
+    "name": "StrictMode one history entry",
+    "ok": true
+  },
+  {
+    "name": "dialog initially focused",
+    "ok": true
+  },
+  {
+    "name": "Tab into first control",
+    "ok": true
+  },
+  {
+    "name": "focus wraps to last action",
+    "ok": true
+  },
+  {
+    "name": "Back closes child only",
+    "ok": true
+  },
+  {
+    "name": "Escape closes parent",
+    "ok": true
+  },
+  {
+    "name": "focus restored",
+    "ok": true
+  },
+  {
+    "name": "programmatic close consumes marker",
+    "ok": true
+  },
+  {
+    "name": "nested programmatic dismissal consumes all markers",
+    "ok": true
+  },
+  {
+    "name": "mobile no horizontal overflow",
+    "ok": true
+  },
+  {
+    "name": "layout 360",
+    "ok": true
+  },
+  {
+    "name": "layout 430",
+    "ok": true
+  },
+  {
+    "name": "layout 1200",
+    "ok": true
+  }
+]

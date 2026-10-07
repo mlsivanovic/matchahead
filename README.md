@@ -27,6 +27,12 @@ VITE_SCHEDULE_API_URL=https://matchahead-schedule.mls-ivanovic.workers.dev
 
 Bez validne konfiguracije prijava i pristup aplikaciji nisu dostupni. Firebase Google provider i dozvoljeni domeni moraju biti podešeni za lokalni i objavljeni host. Admin ključevi i sportski API tokeni ne pripadaju Vite promenljivama niti browseru.
 
+## Interfejs
+
+Tri taba su **Utakmice, Klubovi i Podešavanja**. Utakmice koriste jednu listu po danima, sa 20 redova po strani i stalno dostupnim filterima. Izbor za kalendar uključuje kontrole u toj istoj listi; izbor svih važi za sve podobne rezultate aktivnih filtera. Promena filtera briše izbor, promena strane ga čuva.
+
+Klubovi imaju **Prati** i raspored na zahtev. Praćenje ne učitava raspored. Raniji omiljeni ostaju sačuvani, bez kontrola u interfejsu i bez pretvaranja u praćenja. Podešavanja otvaraju kratke panele. **Auto** je podrazumevana tema; prati sistem, a Light/Dark izbor ostaje na uređaju i posle odjave. Obaveštenja su budući zadatak.
+
 ## Google kalendar
 
 U tabu **Utakmice** korisnik bira sve dostupne utakmice ili označava pojedinačne, pa pokreće dodavanje u Google kalendar. Dozvola `calendar.events` za kalendar traži se pri toj radnji, odvojeno od osnovne prijave. Upisuje se u glavni kalendar naloga, sa trajanjem događaja od dva sata. Ako utakmica ima datum ali nema potvrđeno vreme, događaj koristi **17:00** uz napomenu **„Vreme nije poznato“**. Utakmici bez poznatog datuma ne izmišlja se termin. Otkazane, odložene i završene utakmice ne nude se za izvoz. Ponovni pokušaj proverava stabilni ID događaja i izbegava duplikate. Ovo je jednokratni upis: kasnije promene rasporeda ne menjaju već dodate događaje.

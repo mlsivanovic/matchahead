@@ -46,13 +46,13 @@ function png(size, insetRatio) {
       const mark = nx >= 0 && ny >= 0 && nx <= 1 && ny <= 1 && onMark(nx, ny);
       const offset = 1 + x * 3;
       if (mark) {
-        row[offset] = 232;
-        row[offset + 1] = 196;
-        row[offset + 2] = 108;
+        row[offset] = 255;
+        row[offset + 1] = 255;
+        row[offset + 2] = 255;
       } else {
-        row[offset] = 15;
-        row[offset + 1] = 21;
-        row[offset + 2] = 18;
+        row[offset] = 36;
+        row[offset + 1] = 91;
+        row[offset + 2] = 196;
       }
     }
     rows.push(row);

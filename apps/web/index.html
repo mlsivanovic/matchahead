@@ -2,8 +2,32 @@
 <html lang="sr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0f1512" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#F7F9FC" />
+    <script>
+      (function () {
+        var preference = 'auto';
+        try {
+          var raw = localStorage.getItem('matchahead.device.prefs');
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            var theme = parsed && parsed.theme;
+            if (theme === 'light' || theme === 'dark' || theme === 'auto') preference = theme;
+          }
+        } catch (error) {}
+        var systemDark = false;
+        try {
+          systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+        } catch (error) {}
+        var resolved = preference === 'dark' || (preference === 'auto' && systemDark) ? 'dark' : 'light';
+        var root = document.documentElement;
+        root.setAttribute('data-theme', resolved);
+        root.style.colorScheme = resolved;
+        root.style.backgroundColor = resolved === 'dark' ? '#111318' : '#F7F9FC';
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', resolved === 'dark' ? '#111318' : '#F7F9FC');
+      })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="MatchAhead" />

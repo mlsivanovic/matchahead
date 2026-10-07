@@ -1,0 +1,6 @@
+import {StrictMode,useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {ModalPanel} from './src/ui/ModalPanel.tsx';
+import './src/styles.css';
+function Test(){const [open,setOpen]=useState(false);const [child,setChild]=useState(false);return <><button id="open" onClick={()=>setOpen(true)}>Open</button>{open?<ModalPanel title="Parent" onClose={()=>setOpen(false)}><input id="note"/><button id="nested" onClick={()=>setChild(true)}>Nested</button><button id="apply" onClick={()=>setOpen(false)}>Apply</button>{child?<ModalPanel title="Child" onClose={()=>setChild(false)}><button>Action</button><button id="dismiss-all" onClick={()=>{setChild(false);setOpen(false)}}>Dismiss all</button></ModalPanel>:null}</ModalPanel>:null}</>};
+createRoot(document.getElementById('root')!).render(<StrictMode><Test/></StrictMode>);

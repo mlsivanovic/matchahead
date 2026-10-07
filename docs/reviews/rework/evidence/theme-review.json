@@ -1,0 +1,31 @@
+[
+  {
+    "name": "default Auto light",
+    "ok": true
+  },
+  {
+    "name": "Auto live system dark",
+    "ok": true
+  },
+  {
+    "name": "manual Light overrides dark",
+    "ok": true
+  },
+  {
+    "name": "Light persists reload",
+    "ok": true
+  },
+  {
+    "name": "manual Dark stays on denied persistence + system change",
+    "ok": true
+  },
+  {
+    "name": "no horizontal scroll login 390",
+    "ok": true
+  },
+  {
+    "name": "page errors",
+    "errors": [],
+    "ok": true
+  }
+]

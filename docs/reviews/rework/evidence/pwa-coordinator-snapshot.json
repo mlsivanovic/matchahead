@@ -1,0 +1,6 @@
+{
+  "source": "apps/web/scripts/check-pwa.mjs",
+  "sha256": "7613a21fdba6e12c0415e95ad9a4321bb5d85a77c6518040529c893af9ce2582",
+  "changes": "Only module resolution, absolute webRoot and distinct temporary directories. No assertions changed.",
+  "script": "/tmp/matchahead-pwa-coordinator.mjs"
+}

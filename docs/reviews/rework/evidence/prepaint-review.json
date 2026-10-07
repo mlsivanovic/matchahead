@@ -1,0 +1,57 @@
+[
+  {
+    "name": "default-dark",
+    "ok": true,
+    "observed": {
+      "theme": "dark",
+      "bg": "rgb(17, 19, 24)",
+      "colorScheme": "dark",
+      "meta": "#111318",
+      "rendered": false
+    }
+  },
+  {
+    "name": "saved-light",
+    "ok": true,
+    "observed": {
+      "theme": "light",
+      "bg": "rgb(247, 249, 252)",
+      "colorScheme": "light",
+      "meta": "#F7F9FC",
+      "rendered": false
+    }
+  },
+  {
+    "name": "saved-dark",
+    "ok": true,
+    "observed": {
+      "theme": "dark",
+      "bg": "rgb(17, 19, 24)",
+      "colorScheme": "dark",
+      "meta": "#111318",
+      "rendered": false
+    }
+  },
+  {
+    "name": "invalid-auto",
+    "ok": true,
+    "observed": {
+      "theme": "dark",
+      "bg": "rgb(17, 19, 24)",
+      "colorScheme": "dark",
+      "meta": "#111318",
+      "rendered": false
+    }
+  },
+  {
+    "name": "denied-auto",
+    "ok": true,
+    "observed": {
+      "theme": "dark",
+      "bg": "rgb(17, 19, 24)",
+      "colorScheme": "dark",
+      "meta": "#111318",
+      "rendered": false
+    }
+  }
+]

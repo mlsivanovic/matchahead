@@ -1,101 +1,291 @@
 import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { AgendaEntry } from '../logic/agenda.ts';
-import { fixtureTitle, kickoffText } from '../logic/agenda.ts';
+import { fixtureTitle } from '../logic/agenda.ts';
 import { authorizeCalendar } from '../logic/calendar-auth.ts';
-import { buildCalendarEvent, calendarEligible, insertCalendarEvent } from '../logic/calendar.ts';
+import { buildCalendarEvent, calendarEligible, type CalendarEvent, type CalendarWriteResult, insertCalendarEvent } from '../logic/calendar.ts';
 import { activeFirebaseSession } from '../logic/firebase-app.ts';
+import type { Fixture } from '../../../../packages/domain/src/types.ts';
 import type { NamedRef } from './PersonalAgendaHelpers.ts';
 
-export function CalendarExport(props: { entries: readonly AgendaEntry[]; teams: readonly NamedRef[]; competitions: readonly NamedRef[]; timeZone: string; note: string; onNoteChange?: (value: string) => void }) {
-  const eligible = props.entries.filter((entry) => calendarEligible(entry.fixture));
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+export interface CalendarExportResult {
+  created: number;
+  existing: number;
+  failed: number;
+  remaining: string[];
+  aborted: boolean;
+}
+
+export interface CalendarExportInput {
+  entries: readonly AgendaEntry[];
+  teams: readonly NamedRef[];
+  competitions: readonly NamedRef[];
+  timeZone: string;
+  note: string;
+  accountIdentity: string;
+}
+
+const EMPTY_RESULT: CalendarExportResult = { created: 0, existing: 0, failed: 0, remaining: [], aborted: true };
+
+/**
+ * Podaci koji ulaze u događaj. Stabilan ID i dalje zavisi samo od fixture.id.
+ * Sat nepoznatog termina i dalje računa buildCalendarEvent.
+ */
+export interface CalendarWriteSource {
+  fixture: Fixture;
+  title: string;
+  competition: string;
+  timeZone: string;
+  note: string;
+}
+
+export type FreshCalendarEvent =
+  | { status: 'ready'; event: CalendarEvent }
+  | { status: 'skip' }
+  | { status: 'retry' }
+  | { status: 'aborted' };
+
+/** Vidljivo upozorenje kada je red još podoban, ali se raspored promenio tokom izgradnje. */
+export const CALENDAR_SCHEDULE_CHANGED = 'Raspored se promenio. Pokušaj ponovo.';
+
+/** Polja koja menjaju telo događaja ili podobnost. Ostala polja fixtura ne pokreću novu izgradnju. */
+function fixtureWriteStamp(fixture: Fixture): string {
+  return [
+    fixture.id,
+    fixture.status,
+    fixture.timeConfirmed,
+    fixture.startsAtUtc,
+    fixture.scheduledLocalDate,
+    fixture.sourceTimeZone,
+    fixture.sourceUrl,
+    fixture.venue,
+    fixture.homeTeamId,
+    fixture.awayTeamId,
+    fixture.competitionId,
+  ].join('\u001f');
+}
+
+export function calendarWriteSourceChanged(left: CalendarWriteSource, right: CalendarWriteSource): boolean {
+  return left.title !== right.title
+    || left.competition !== right.competition
+    || left.timeZone !== right.timeZone
+    || left.note !== right.note
+    || fixtureWriteStamp(left.fixture) !== fixtureWriteStamp(right.fixture);
+}
+
+/** Trenutni podoban red. Nepodoban ili nestao red nije izvor za upis. */
+export function readCalendarWriteSource(
+  entries: readonly AgendaEntry[],
+  id: string,
+  teams: readonly NamedRef[],
+  competitions: readonly NamedRef[],
+  timeZone: string,
+  note: string,
+): CalendarWriteSource | null {
+  const entry = entries.find((next) => next.fixture.id === id && calendarEligible(next.fixture));
+  if (!entry) return null;
+  const competition = competitions.find((item) => item.id === entry.fixture.competitionId)?.name
+    ?? entry.fixture.competitionId;
+  return {
+    fixture: entry.fixture,
+    title: fixtureTitle(entry.fixture, teams),
+    competition,
+    timeZone,
+    note,
+  };
+}
+
+/**
+ * buildCalendarEvent čeka digest pre povratka. Za to vreme izvor može da se promeni.
+ * Posle svakog await-a izvor se čita ponovo. Ako se promenio, događaj se gradi iznova.
+ * Ako ni druga slika nije stabilna, zastareo događaj se ne vraća: red je još podoban,
+ * pa je ishod ponovni pokušaj. Ako red više nije podoban, ishod je preskok.
+ */
+export async function calendarEventForInsert(
+  read: () => CalendarWriteSource | null,
+  build: (source: CalendarWriteSource) => Promise<CalendarEvent>,
+  stillOwned: () => boolean,
+): Promise<FreshCalendarEvent> {
+  const first = read();
+  if (!first || !stillOwned()) return first ? { status: 'aborted' } : { status: 'skip' };
+  const built = await build(first);
+  if (!stillOwned()) return { status: 'aborted' };
+  const second = read();
+  if (!second) return { status: 'skip' };
+  if (!calendarWriteSourceChanged(first, second)) return { status: 'ready', event: built };
+  const rebuilt = await build(second);
+  if (!stillOwned()) return { status: 'aborted' };
+  const third = read();
+  if (!third) return { status: 'skip' };
+  if (calendarWriteSourceChanged(second, third)) return { status: 'retry' };
+  return { status: 'ready', event: rebuilt };
+}
+
+export interface CalendarInsertBatch {
+  created: number;
+  existing: number;
+  failed: number;
+  remaining: string[];
+  notice: string;
+}
+
+/**
+ * Serijski upis. Nepodoban red se preskače i serija ide dalje.
+ * Podoban red koji se promeni dvaput staje seriju, bez POST-a, i ostaje u ostatku
+ * zajedno sa redovima koji još nisu pokušani.
+ */
+export async function runCalendarInsertBatch(
+  requested: readonly string[],
+  read: (id: string) => CalendarWriteSource | null,
+  build: (source: CalendarWriteSource) => Promise<CalendarEvent>,
+  stillOwned: () => boolean,
+  insert: (event: CalendarEvent) => Promise<CalendarWriteResult>,
+): Promise<CalendarInsertBatch> {
+  let created = 0;
+  let existing = 0;
+  let failed = 0;
+  let notice = '';
+  const succeeded = new Set<string>();
+  const skipped = new Set<string>();
+  for (const id of requested) {
+    if (!stillOwned()) break;
+    try {
+      const fresh = await calendarEventForInsert(() => read(id), build, stillOwned);
+      if (fresh.status === 'aborted' || !stillOwned()) break;
+      if (fresh.status === 'skip') {
+        skipped.add(id);
+        continue;
+      }
+      if (fresh.status === 'retry') {
+        failed += 1;
+        notice = CALENDAR_SCHEDULE_CHANGED;
+        break;
+      }
+      const result = await insert(fresh.event);
+      if (!stillOwned()) break;
+      if (result === 'created') created += 1;
+      else existing += 1;
+      succeeded.add(id);
+    } catch (error) {
+      if (!stillOwned()) break;
+      failed += 1;
+      notice = error instanceof Error ? error.message : 'Upis nije potvrđen.';
+      break;
+    }
+  }
+  return {
+    created,
+    existing,
+    failed,
+    remaining: requested.filter((id) => !succeeded.has(id) && !skipped.has(id)),
+    notice,
+  };
+}
+
+/**
+ * Isti upis kao ranije: posebna Google dozvola, stabilan ID, prekid na prvoj
+ * grešci, ostatak ostaje za ponovni pokušaj. Nepodoban red se i dalje proverava
+ * i preskače. Nestabilan podoban red staje seriju bez upisa. Nema posebne liste za izbor.
+ */
+export function useCalendarExport(props: CalendarExportInput) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const pending = useRef<AbortController | null>(null);
   const current = useRef(props);
   current.current = props;
   const mounted = useRef(true);
+  const epoch = useRef(0);
+
   useEffect(() => {
+    const operation = ++epoch.current;
     mounted.current = true;
+    setMessage('');
+    setBusy(false);
+    pending.current?.abort();
+    pending.current = null;
     const session = activeFirebaseSession();
     const uid = session?.auth.currentUser?.uid;
     const unsubscribe = session ? onAuthStateChanged(session.auth, (user) => {
       if (user?.uid !== uid) pending.current?.abort();
     }) : () => {};
-    return () => { mounted.current = false; pending.current?.abort(); unsubscribe(); };
-  }, []);
+    return () => {
+      pending.current?.abort();
+      unsubscribe();
+      if (epoch.current === operation) mounted.current = false;
+    };
+  }, [props.accountIdentity]);
 
-  async function exportSelected() {
-    if (pending.current || selected.size === 0) return;
-    const chosen = eligible.filter((entry) => selected.has(entry.fixture.id));
-    if (!chosen.length) return;
+  function cancel() {
+    pending.current?.abort();
+  }
+
+  async function exportIds(ids: readonly string[]): Promise<CalendarExportResult> {
+    if (pending.current || ids.length === 0) return { ...EMPTY_RESULT, remaining: [...ids] };
+    const operation = epoch.current;
+    const requested = current.current.entries
+      .filter((entry) => ids.includes(entry.fixture.id) && calendarEligible(entry.fixture))
+      .map((entry) => entry.fixture.id);
+    if (!requested.length) {
+      if (mounted.current) setMessage('Nema utakmica za dodavanje.');
+      return { created: 0, existing: 0, failed: 0, remaining: [], aborted: false };
+    }
     const controller = new AbortController();
     pending.current = controller;
+    const live = () => mounted.current && epoch.current === operation && !controller.signal.aborted;
     setBusy(true);
     setMessage('Tražim Google dozvolu za kalendar…');
     let created = 0;
     let existing = 0;
     let failed = 0;
-    const succeeded = new Set<string>();
+    const finish = (aborted: boolean, remaining: readonly string[]): CalendarExportResult => ({
+      created,
+      existing,
+      failed,
+      remaining: [...remaining],
+      aborted,
+    });
     try {
-      // Called before any await so the user's click opens the OAuth popup.
+      // Poziv pre drugog await-a da klik otvori OAuth prozor.
       const auth = await authorizeCalendar();
-      const stillOwned = () => !controller.signal.aborted && activeFirebaseSession()?.auth.currentUser?.uid === auth.uid;
-      for (const entry of chosen) {
-        if (!stillOwned()) break;
-        // A revoked or removed fixture cannot be exported from a stale selection.
-        const latest = current.current.entries.find((next) => next.fixture.id === entry.fixture.id && calendarEligible(next.fixture));
-        if (!latest) continue;
-        try {
-          const competition = props.competitions.find((item) => item.id === entry.fixture.competitionId)?.name ?? entry.fixture.competitionId;
-          const event = await buildCalendarEvent(latest.fixture, fixtureTitle(latest.fixture, current.current.teams), competition, current.current.timeZone, current.current.note);
-          if (!stillOwned()) break;
-          const result = await insertCalendarEvent(event, auth.token, controller.signal);
-          if (!stillOwned()) break;
-          if (result === 'created') created++; else existing++;
-          succeeded.add(entry.fixture.id);
-        } catch (error) {
-          if (!stillOwned()) break;
-          failed++;
-          setMessage(error instanceof Error ? error.message : 'Upis nije potvrđen.');
-          // Stop on first error: preserve remaining selection for deliberate retry.
-          break;
-        }
-      }
-      if (mounted.current && stillOwned()) {
-        setSelected((before) => new Set([...before].filter((id) => !succeeded.has(id))));
+      const stillOwned = () => live() && activeFirebaseSession()?.auth.currentUser?.uid === auth.uid;
+      const batch = await runCalendarInsertBatch(
+        requested,
+        (id) => readCalendarWriteSource(
+          current.current.entries,
+          id,
+          current.current.teams,
+          current.current.competitions,
+          current.current.timeZone,
+          current.current.note,
+        ),
+        (source) => buildCalendarEvent(source.fixture, source.title, source.competition, source.timeZone, source.note),
+        stillOwned,
+        (event) => insertCalendarEvent(event, auth.token, controller.signal),
+      );
+      created = batch.created;
+      existing = batch.existing;
+      failed = batch.failed;
+      if (batch.notice && stillOwned()) setMessage(batch.notice);
+      const owned = stillOwned();
+      if (owned) {
         setMessage((before) => `Dodato: ${created}. Već u kalendaru: ${existing}.${failed ? ` Preostale utakmice nisu dodate. ${before}` : ''}`);
       }
+      return finish(!owned, batch.remaining);
     } catch (error) {
-      if (mounted.current && !controller.signal.aborted) {
+      const aborted = controller.signal.aborted || epoch.current !== operation || !mounted.current;
+      if (!aborted) {
         const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
-        setMessage(code.startsWith('auth/') ? 'Google dozvola nije dobijena. Zatvoren prozor, odbijena dozvola ili pogrešan nalog — pokušaj ponovo.' : error instanceof Error ? error.message : 'Dodavanje nije uspelo.');
+        setMessage(code.startsWith('auth/')
+          ? 'Google dozvola nije dobijena. Zatvoren prozor, odbijena dozvola ili pogrešan nalog — pokušaj ponovo.'
+          : error instanceof Error ? error.message : 'Dodavanje nije uspelo.');
+        failed = Math.max(failed, 1);
       }
+      return finish(aborted, requested);
     } finally {
-      pending.current = null;
-      if (mounted.current) setBusy(false);
+      if (pending.current === controller) pending.current = null;
+      if (mounted.current && epoch.current === operation) setBusy(false);
     }
   }
 
-  if (!props.entries.length) return null;
-  return (
-    <section className="card calendar-export" aria-labelledby="calendar-heading">
-      <h2 id="calendar-heading">Google kalendar</h2>
-      <p className="meta">Izaberi utakmice za jednokratni upis u svoj glavni Google kalendar. Nepoznata satnica: 17:00 uz napomenu „Vreme nije poznato“. Trajanje događaja je 2 sata; promene rasporeda se ne sinhronizuju automatski.</p>
-      <div className="agenda-actions">
-        <button type="button" disabled={busy || !eligible.length} onClick={() => setSelected(new Set(eligible.map((entry) => entry.fixture.id)))}>Izaberi sve</button>
-        <button type="button" disabled={busy || !selected.size} onClick={() => setSelected(new Set())}>Poništi izbor</button>
-      </div>
-      <ul className="calendar-selection">
-        {props.entries.map(({ fixture }) => {
-          const enabled = calendarEligible(fixture);
-          return <li key={fixture.id}><label><input type="checkbox" disabled={busy || !enabled} checked={enabled && selected.has(fixture.id)} onChange={(event) => setSelected((before) => { const next = new Set(before); if (event.target.checked) next.add(fixture.id); else next.delete(fixture.id); return next; })} /> <span>{fixtureTitle(fixture, props.teams)}<small className="meta" style={{ display: 'block' }}>{kickoffText(fixture, props.timeZone)}{!enabled ? ' — nije dostupna za dodavanje' : ''}</small></span></label></li>;
-        })}
-      </ul>
-      {props.onNoteChange ? <div className="note" data-draft-dirty={props.note.trim() ? 'true' : 'false'}><label htmlFor="draft-note">Beleška za izabrane događaje</label><textarea id="draft-note" value={props.note} onChange={(event) => props.onNoteChange?.(event.target.value)} rows={2} maxLength={2000} placeholder="Opciona beleška" /><p className="meta">Beleška se čuva u ovoj sesiji i briše odjavom.</p></div> : null}
-      <button type="button" className="primary" disabled={busy || !eligible.some((entry) => selected.has(entry.fixture.id))} onClick={() => void exportSelected()}>{busy ? 'Dodavanje…' : `Dodaj u Google kalendar (${eligible.filter((entry) => selected.has(entry.fixture.id)).length})`}</button>
-      <p role="status" aria-live="polite">{message}</p>
-    </section>
-  );
+  return { busy, message, exportIds, cancel };
 }

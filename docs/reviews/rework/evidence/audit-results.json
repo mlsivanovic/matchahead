@@ -1,0 +1,418 @@
+{
+  "timestamp": "2026-10-07T16:47:44.926Z",
+  "total": 82,
+  "passed": 82,
+  "failed": 0,
+  "auditResults": [
+    {
+      "name": "audit-kapija-naslov",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kapija-dugme",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kapija-pilot",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kapija-nema-demo",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kapija-light-tema",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kapija-dark-tema",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-pre-react-root-prazan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-pre-react-dark-postavljen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-prijava-uspesna",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-klubovi-ruta-pre-skip",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-skip-fokus-na-main",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-skip-cuva-hash-klubovi",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-skip-cuva-hash-podesavanja",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-klubovi-grupe",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-klubovi-ukupno",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-0-utakmica",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-1-utakmica",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-1-sledeca-bedz",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-prva-vidljiva-390px",
+      "ok": true,
+      "detail": "top=393.296875, bottom=529.296875"
+    },
+    {
+      "name": "audit-derbi-jednom",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-derbi-razlozi-dva",
+      "ok": true,
+      "detail": "count=2"
+    },
+    {
+      "name": "audit-derbi-razlog-zvezda",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-derbi-razlog-partizan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-derbi-ostaje-posle-otpracivanja",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-derbi-razlog-pada-na-1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-derbi-razlog-samo-zvezda",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-manual-razlog-dodat",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-manual-dugme-ukloni",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-ostaje-rucni-izbor",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-samo-rucni-izbor-razlog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-prazna-nakon-uklanjanja-rucnog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-20-utakmica",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-20-paginator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-105-paginator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-agenda-105-strana-1-redova",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-selekcija-svih-105",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-calendar-bar-sticky-skrol",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-odbijena-dozvola-poruka",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-odbijena-dozvola-cuva-izbor",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-odbijena-nula-upisa",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-reset-selekcije-filterom",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-pojedinacni-modal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-pojedinacni-upisan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-kalendar-pojedinacni-potvrda-vidljiva",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-f13-novi-pregled-bez-stale-statusa",
+      "ok": true,
+      "detail": "status=\"\""
+    },
+    {
+      "name": "audit-deferred-modal-otvoren",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-deferred-modal-dva-dogadjaja",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-deferred-post-zadrzan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-deferred-tabA-odjavljen-pre-odgovora",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-deferred-zero-extra-posts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-deferred-nema-stale-prikaza",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-relogin-posle-odjave",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-back-post-zadrzan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-back-confirm-nestao",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-back-zero-extra-posts",
+      "ok": true,
+      "detail": "atGate=3, after=3"
+    },
+    {
+      "name": "audit-back-nema-potvrde-starog-pokusaja",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-scroll-restore-ocuvan",
+      "ok": true,
+      "detail": "saved=500, restored=500, diff=0px"
+    },
+    {
+      "name": "audit-scroll-query-ocuvan",
+      "ok": true,
+      "detail": "sport=Sve, page=PrethodnaStrana 1 od 6Sledeća"
+    },
+    {
+      "name": "audit-podesavanja-podpaneli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-svih-6-podpanela-light-dark-potvrdjeno",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-filter-kosarka-aktivan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-filter-ocuvan-posle-taba",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-preliv-360",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "audit-touch-targets-48px-360",
+      "ok": true,
+      "detail": "checked=35, labels=20, failures=[]"
+    },
+    {
+      "name": "audit-touch-targets-klubovi-48px-360",
+      "ok": true,
+      "detail": "checked=8, failures=[]"
+    },
+    {
+      "name": "audit-touch-targets-podesavanja-48px-360",
+      "ok": true,
+      "detail": "checked=6, failures=[]"
+    },
+    {
+      "name": "audit-preliv-390",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "audit-touch-targets-48px-390",
+      "ok": true,
+      "detail": "checked=35, labels=20, failures=[]"
+    },
+    {
+      "name": "audit-touch-targets-klubovi-48px-390",
+      "ok": true,
+      "detail": "checked=8, failures=[]"
+    },
+    {
+      "name": "audit-touch-targets-podesavanja-48px-390",
+      "ok": true,
+      "detail": "checked=6, failures=[]"
+    },
+    {
+      "name": "audit-preliv-430",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "audit-touch-targets-48px-430",
+      "ok": true,
+      "detail": "checked=35, labels=20, failures=[]"
+    },
+    {
+      "name": "audit-touch-targets-klubovi-48px-430",
+      "ok": true,
+      "detail": "checked=8, failures=[]"
+    },
+    {
+      "name": "audit-touch-targets-podesavanja-48px-430",
+      "ok": true,
+      "detail": "checked=6, failures=[]"
+    },
+    {
+      "name": "audit-preliv-landscape",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "audit-preliv-desktop",
+      "ok": true,
+      "detail": "diff=0px"
+    },
+    {
+      "name": "audit-zoom-root-32px",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-zoom-nav-uvecan",
+      "ok": true,
+      "detail": "base=72, zoomed=144"
+    },
+    {
+      "name": "audit-zoom-teksta-bez-preliva",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-tastatura-fokus-i-geometrija",
+      "ok": true,
+      "detail": "{\"ok\":true,\"noteFocused\":true,\"closeOk\":true,\"primaryOk\":true,\"overflow\":0}"
+    },
+    {
+      "name": "audit-tastatura-escape-1-ostavlja-detalj",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "audit-tastatura-escape-2-zatvara-sve",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

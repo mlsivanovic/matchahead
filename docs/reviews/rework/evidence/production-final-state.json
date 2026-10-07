@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:4180/matchahead/",
+  "title": "MatchAhead",
+  "text": "Preskoči na sadržaj\nMatchAhead\n\nPrati klubove i dodaj utakmice u Google kalendar.\n\nLight\nDark\nAuto\nNastavi sa Google\n\nPilot je otvoren samo za nalog mls.ivanovic@gmail.com.",
+  "theme": "dark",
+  "overflow": false,
+  "scripts": [
+    "http://127.0.0.1:4180/matchahead/assets/index-PQoK2K66.js"
+  ],
+  "manifest": "http://127.0.0.1:4180/matchahead/manifest.webmanifest"
+}

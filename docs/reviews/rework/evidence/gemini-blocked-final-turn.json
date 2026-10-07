@@ -1,0 +1,155 @@
+{
+  "id": "e589877c-2221-415b-ae25-b6a22dbeccf6",
+  "ok": true,
+  "result": {
+    "dispatchId": "ctx_16e5eeb5048f",
+    "source": "terminal",
+    "sourceIdentity": "yS1PrRl6koRx7b4TpfM3mZ2L67ILYvny",
+    "terminal": {
+      "handle": "term_3daad0c3-64a5-443e-8877-fe8cfafe9748",
+      "status": "running",
+      "tail": [
+        "│ 4153594 node /home/mls/.local/share/mise/installs/npm-firebase-tools/latest/node_modules/.bin/../.mise/firebase-tools@15.32.0/node_modules/firebase-tools/lib/bin/firebase.js emulators:start --con │",
+        "│ fig /tmp/matchahead-authclient/firebase.isolated.json --project demo-matchahead                                                                                                                     │",
+        "╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯",
+        "╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮",
+        "│ ✓  Shell Send status confirming no active processes and lifecycle-blocked state                                                                                                                     │",
+        "│                                                                                                                                                                                                     │",
+        "│ ... first 20 lines hidden (Ctrl+O to show) ...                                                                                                                                                      │",
+        "│     \"mutation\": {                                                                                                                                                                                   │",
+        "│       \"requestId\": \"c0b8aba2-3d66-4f7f-b0ac-66ae407faadd\",                                                                                                                                          │",
+        "│       \"replayed\": false                                                                                                                                                                             │",
+        "│     }                                                                                                                                                                                               │",
+        "│   },                                                                                                                                                                                                │",
+        "│   \"_meta\": {                                                                                                                                                                                        │",
+        "│     \"runtimeId\": \"09a5584b-690d-4e9a-b9f2-d62497329046\"                                                                                                                                             │",
+        "│   }                                                                                                                                                                                                 │",
+        "│ }                                                                                                                                                                                                   │",
+        "╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯",
+        "╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮",
+        "│ ✓  Shell orca orchestration check --terminal term_3daad0c3-64a5-443e-8877-fe8cfafe9748 --ack delivery_e10aa58c75dd --json                                                                           │",
+        "│                                                                                                                                                                                                     │",
+        "│ ... first 14 lines hidden (Ctrl+O to show) ...                                                                                                                                                      │",
+        "│     \"mutation\": {                                                                                                                                                                                   │",
+        "│       \"requestId\": \"098a2281-5840-487b-8055-846427ffaba7\",                                                                                                                                          │",
+        "│       \"replayed\": false                                                                                                                                                                             │",
+        "│     }                                                                                                                                                                                               │",
+        "│   },                                                                                                                                                                                                │",
+        "│   \"_meta\": {                                                                                                                                                                                        │",
+        "│     \"runtimeId\": \"09a5584b-690d-4e9a-b9f2-d62497329046\"                                                                                                                                             │",
+        "│   }                                                                                                                                                                                                 │",
+        "│ }                                                                                                                                                                                                   │",
+        "╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯",
+        "  Baseline Turn Concluded (Lifecycle Blocked): Conclude dispatched turn in lifecycle-blocked state per coordinator recovery guidance.",
+        "",
+        "",
+        "✦ Završni izveštaj o zaključku poteza (Lifecycle-Blocked State)",
+        "",
+        "  U skladu sa koordinacionom porukom msg_772a22354374, nalog je obrađen i potez se završava u statusu lifecycle-blocked radi oporavka i ponovnog korišćenja istog terminala od strane koordinatora:",
+        "",
+        "   1. Potvrda stanja radnog stabla i procesa:",
+        "      - Nema aktivnih modifikacija fajlova niti pozadinskih procesa testiranja.",
+        "      - Svi testovi i artefakti su u mirujućem, potvrđenom stanju:",
+        "        - auth-browser.txt (47/47 PASS, Exit 0, dvosmerna cross-tab odjava potvrđena)",
+        "        - schedule-ui.txt (kompletna regresiona matrica, otpornost 500/malformed/source-blocked/synthetic-demo, mockovan OAuth Calendar tok, 409 + GET provere, Exit 0)",
+        "        - rework-harness.txt (43/43 PASS, Exit 0, empirijski pre-React dokaz sa blokiranjem skripti i matchahead.device.prefs)",
+        "        - pwa-browser.txt (potpuna PWA provera, Exit 0)",
+        "        - gemini-baseline.md (detaljan izveštaj sa jasnim granicama polaznog stanja naspram predstojećeg integrisanog audita)",
+        "        - Screenshot-ovi sačuvani u docs/reviews/rework/evidence/.",
+        "",
+        "   2. Status životnog ciklusa:",
+        "      - Koordinator je nezavisno verifikovao da je generisani preamble za task_aec74bf6b1db bio bez --dispatch-capability zastavice, te da CLI ne nudi regeneraciju tokena.",
+        "      - Poslata je statusna poruka (msg_8471ae61e4f6) koja potvrđuje završetak radova i blokadu životnog ciklusa.",
+        "      - Inbox je u potpunosti pročitan i potvrđen (ACK delivery_e10aa58c75dd).",
+        "      - Ne vrše se dalji pokušaji slanja worker_done niti pogađanje tokena.",
+        "",
+        "  Terminal term_3daad0c3-64a5-443e-8877-fe8cfafe9748 ostaje otvoren i prelazi u stanje mirovanja (idle) dok koordinator ne sprovede oporavak i ne dodeli novi zadatak integrisanog audita.",
+        "",
+        "",
+        "? for shortcuts",
+        "───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        " YOLO Ctrl+Y                                                                                                                                                                   1 GEMINI.md file · 6 skills",
+        "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
+        " *   Type your message or @path/to/file",
+        "▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+        " workspace (/directory)                                     branch                                      sandbox                                        /model                                        quota",
+        " ~/GIT/matchahead                                           main                                        no sandbox                                     Auto                                       18% used"
+      ],
+      "truncated": true,
+      "limited": true,
+      "oldestCursor": "2056816",
+      "nextCursor": "2058813",
+      "latestCursor": "2058813",
+      "returnedLineCount": 65,
+      "source": "stream"
+    },
+    "cursor": "owr1_eyJ2IjoxLCJkIjoiY3R4XzE2ZTVlZWI1MDQ4ZiIsInMiOiJ0ZXJtaW5hbCIsImkiOiJ5UzFQclJsNmtvUng3YjRUcGZNM21aMkw2N0lMWXZueSIsInAiOjIwNTg4MTN9",
+    "status": {
+      "worker": "ready",
+      "terminal": "running",
+      "liveness": "live"
+    },
+    "fallbackReason": null,
+    "warnings": [],
+    "sourceExact": true,
+    "contentComplete": false,
+    "clipping": [
+      "terminal_buffer"
+    ],
+    "projection": {
+      "id": "ctx_16e5eeb5048f",
+      "dispatchId": "ctx_16e5eeb5048f",
+      "taskId": "task_aec74bf6b1db",
+      "runId": "run_61a465d30bfe",
+      "role": "worker",
+      "parent": null,
+      "provider": {
+        "id": "gemini",
+        "model": null
+      },
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "ab78b92d-4834-47bf-aa08-73374a811707::/home/mls/GIT/matchahead",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "ready",
+        "dispatch": "dispatched",
+        "detail": "input_accepted",
+        "activity": "done"
+      },
+      "outcome": "in_progress",
+      "liveness": {
+        "verdict": "live",
+        "observedAt": 1791387565233,
+        "source": "agent_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "fresh",
+        "lastObservedAt": 1791387565233
+      },
+      "resource": {
+        "state": "owned",
+        "id": "wtr_b9e191482fa5",
+        "ownerDispatchId": "ctx_16e5eeb5048f",
+        "releaseState": "not_requested",
+        "terminalState": "active"
+      },
+      "nextAction": {
+        "kind": "none",
+        "argv": []
+      },
+      "attention": {
+        "categories": [],
+        "requiresAction": false
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "09a5584b-690d-4e9a-b9f2-d62497329046"
+  }
+}

@@ -1,0 +1,43 @@
+✔ sintetički skup je označen i nije produkcioni (0.80908ms)
+✔ FK i KK istog imena imaju različite identitete (0.285309ms)
+✔ pomeranje čuva ID, menja UTC i podiže reviziju samo jednom (0.847077ms)
+✔ odlaganje bez novog termina briše sat i pamti prethodni (0.276589ms)
+✔ otkazivanje je eksplicitan status i čuva identitet (0.205126ms)
+✔ nepoznata satnica ne postaje ponoć (0.202123ms)
+✔ ista utakmica dva kluba je jedan zapis (0.163916ms)
+✔ neobjavljen raspored nije greška izvora i praznina nije otkazivanje (0.155547ms)
+✔ dnevna potrošnja se računa iz ciklusa, ne iz broja korisnika (0.207489ms)
+✔ heš ignoriše fetchedAt (0.240784ms)
+✔ izbor je ograničen na FK i KK Crvenu zvezdu i Partizan (3.848369ms)
+✔ sintetički skup pretrage je označen i nije produkcioni (0.387682ms)
+✔ jedan klik spaja takmičenja, baca tuđe mečeve i duplikat istog ID-ja (15.622641ms)
+✔ 00:00, 01:00 i 02:00 ne postaju potvrđen sat (1.304666ms)
+✔ FK i KK istog imena ostaju razdvojeni (1.321182ms)
+✔ promena termina čuva ID, a nestanak iz odgovora nije otkazivanje (2.971214ms)
+✔ prazna ili nedostupna sezona ne znači da utakmica nema (1.690749ms)
+✔ keš deli korisnici, a prerano osvežavanje ne zove izvor (1.352918ms)
+✔ kvota na zahtev: keš štedi, razmak od 15 minuta ne staje u 100 (0.378018ms)
+✔ neuspeh bez prethodnog snimka ne dobija checkedAt, a posle uspeha ga ne pomera (1.417406ms)
+✔ pomeranje samo datuma pamti prethodni datum i ponavljanje ne diže reviziju (1.512545ms)
+✔ nemoguć datum i trenutak ne prolaze kalendarsku proveru (0.145533ms)
+✔ sukob istog ID-ja i neispravan tuđi red ne zamenjuju snimak (0.782383ms)
+✔ zabranjen izvor ne vraća ranije dozvoljen snimak (0.846789ms)
+✔ opoziv dozvole unutar 15 minuta i unutar 6 sati ne vraća stari snimak (1.304597ms)
+✔ opoziv skida ceo izvor i kod drugog kluba, ne samo derbi (0.768756ms)
+✔ derbi deli reviziju između keševa oba kluba (0.403104ms)
+✔ drugi provajder sa istim parom i datumom nije isti ID (0.336567ms)
+✔ putanja i početna sezona su fiksne (0.61304ms)
+✔ zahtev prihvata samo sport, tim, sezonu i refresh (0.273733ms)
+✔ uspešan odgovor ima dogovorena polja, a checkedAt sme da bude null (0.665206ms)
+✔ omiljeni klub ne ulazi u followedTeamIds ni u razlog utakmice (2.312171ms)
+✔ profil prima najviše četiri dozvoljena tima i odbija protivnika (18.596674ms)
+✔ podrazumevani profil ne prati klub i nepoznata zona postaje Beograd (1.082754ms)
+✔ pravila i katalog dele ista četiri tima i ista polja profila (1.431345ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 151.894206

@@ -65,4 +65,8 @@ test('expired token, denied permission and rate limit remain explicit failures',
   for (const [status, pattern] of [[401, /istekla/], [403, /odbio/], [429, /ograničava/], [500, /nije potvrđen/]] as const) {
     await assert.rejects(insertCalendarEvent(event, 'test-token', new AbortController().signal, async () => new Response('{}', { status })), pattern);
   }
+  await assert.rejects(
+    insertCalendarEvent(event, 'test-token', new AbortController().signal, async () => new Response('{}', { status: 403 })),
+    (error: unknown) => error instanceof Error && !/OAuth|test nalog/.test(error.message),
+  );
 });

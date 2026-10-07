@@ -1,0 +1,95 @@
+--- before/PersonalAgenda.tsx
++++ after/PersonalAgenda.tsx
+@@ -88,6 +88,8 @@
+   const [filtersOpen, setFiltersOpen] = useState(false);
+   const [detailId, setDetailId] = useState<string | null>(null);
+   const [confirm, setConfirm] = useState<{ ids: string[]; single: boolean } | null>(null);
++  // Hook keeps the previous calendar.message. This preview shows it only after its own runExport.
++  const [confirmAttemptStarted, setConfirmAttemptStarted] = useState(false);
+   const [singleNotice, setSingleNotice] = useState<SingleExportNotice | null>(null);
+   const calendar = useCalendarExport({
+     entries: agenda.entries,
+@@ -107,6 +109,7 @@
+     setSelecting(false);
+     setFiltersOpen(false);
+     setConfirm(null);
++    setConfirmAttemptStarted(false);
+     setDetailId(null);
+     setSingleNotice(null);
+   }, [props.accountIdentity]);
+@@ -116,6 +119,7 @@
+       setFiltersOpen(false);
+       setDetailId(null);
+       setConfirm(null);
++      setConfirmAttemptStarted(false);
+     }
+   }, [props.active]);
+ 
+@@ -139,6 +143,7 @@
+     && singleNotice.accountIdentity === props.accountIdentity
+     ? singleNotice.text
+     : null;
++  const confirmStatus = confirmAttemptStarted ? calendar.message : '';
+ 
+   function applyQuery(query: AgendaQuery) {
+     setList((state) => changeAgendaQuery(state, query));
+@@ -149,18 +154,22 @@
+     const ids = revalidateSelectedIds(list.selectedIds, visible);
+     if (ids.length === 0) return;
+     setSingleNotice(null);
++    setConfirmAttemptStarted(false);
+     setConfirm({ ids, single: false });
+   }
+ 
+   function openSingle(fixtureId: string) {
+     const ids = revalidateSelectedIds([fixtureId], agenda.entries);
+-    if (ids.length > 0) setConfirm({ ids, single: true });
++    if (ids.length === 0) return;
++    setConfirmAttemptStarted(false);
++    setConfirm({ ids, single: true });
+   }
+ 
+   function dismissConfirm() {
+     confirmEpoch.current += 1;
+     calendar.cancel();
+     setConfirm(null);
++    setConfirmAttemptStarted(false);
+   }
+ 
+   async function runExport() {
+@@ -170,11 +179,13 @@
+     const identity = identityRef.current;
+     const epoch = confirmEpoch.current;
+     setSingleNotice(null);
++    setConfirmAttemptStarted(true);
+     const result = await calendar.exportIds(requested);
+     if (result.aborted || identity !== identityRef.current || epoch !== confirmEpoch.current) return;
+     const done = new Set(requested.filter((id) => !result.remaining.includes(id)));
+     setList((state) => ({ ...state, selectedIds: state.selectedIds.filter((id) => !done.has(id)) }));
+     if (result.failed > 0) {
++      setConfirmAttemptStarted(true);
+       setConfirm({ ids: result.remaining, single });
+       return;
+     }
+@@ -296,7 +307,7 @@
+             Dodaj u kalendar
+           </button>
+           {!props.online ? <p className="meta">Za dodavanje u kalendar potrebna je mreža.</p> : null}
+-          {calendar.message ? <p role="status">{calendar.message}</p> : null}
++          {calendar.message && (!confirm || confirmAttemptStarted) ? <p role="status">{calendar.message}</p> : null}
+         </div>
+       ) : null}
+       {props.active && filtersOpen ? (
+@@ -375,10 +386,10 @@
+               placeholder="Opciona beleška"
+             />
+           </div>
+-          {calendar.message ? <p role="status">{calendar.message}</p> : null}
++          {confirmStatus ? <p role="status">{confirmStatus}</p> : null}
+           <div className="modal-actions">
+             <button type="button" className="primary" disabled={calendar.busy || !props.online} onClick={() => void runExport()}>
+-              {calendar.busy ? 'Dodavanje…' : calendar.message && confirm.ids.length > 0 && /nije|nije dobijena|Pokušaj|Preostale/.test(calendar.message) ? 'Pokušaj ponovo' : 'Dodaj u kalendar'}
++              {calendar.busy ? 'Dodavanje…' : confirmStatus && confirm.ids.length > 0 && /nije|nije dobijena|Pokušaj|Preostale/.test(confirmStatus) ? 'Pokušaj ponovo' : 'Dodaj u kalendar'}
+             </button>
+           </div>
+           {!props.online ? <p className="meta">Za dodavanje u kalendar potrebna je mreža.</p> : null}

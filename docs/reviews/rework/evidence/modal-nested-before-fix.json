@@ -1,0 +1,37 @@
+[
+  {
+    "name": "StrictMode one history entry",
+    "ok": true
+  },
+  {
+    "name": "dialog initially focused",
+    "ok": true
+  },
+  {
+    "name": "Tab into first control",
+    "ok": true
+  },
+  {
+    "name": "focus wraps to last action",
+    "ok": true
+  },
+  {
+    "name": "Back closes child only",
+    "ok": true
+  },
+  {
+    "name": "Escape closes parent",
+    "ok": true
+  },
+  {
+    "name": "focus restored",
+    "ok": true
+  },
+  {
+    "name": "programmatic close consumes marker",
+    "ok": true
+  },
+  {
+    "error": "TimeoutError: Waiting failed: 2000ms exceeded"
+  }
+]

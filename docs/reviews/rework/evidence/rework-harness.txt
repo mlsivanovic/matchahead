@@ -1,0 +1,87 @@
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 89 modules transformed.
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/firestore/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/account-controller.ts, /home/mls/GIT/matchahead/apps/web/src/logic/account-remote.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/node_modules/firebase/auth/dist/esm/index.esm.js is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /home/mls/GIT/matchahead/apps/web/src/logic/firebase-app.ts is dynamically imported by /home/mls/GIT/matchahead/apps/web/src/logic/schedule-auth.ts but also statically imported by /home/mls/GIT/matchahead/apps/web/src/App.tsx, /home/mls/GIT/matchahead/apps/web/src/logic/calendar-auth.ts, /home/mls/GIT/matchahead/apps/web/src/logic/use-account.ts, /home/mls/GIT/matchahead/apps/web/src/ui/CalendarExport.tsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-rework-harness-dist/404.html                     0.41 kB │ gzip:   0.28 kB
+../../../../../../tmp/matchahead-rework-harness-dist/manifest.webmanifest         0.54 kB
+../../../../../../tmp/matchahead-rework-harness-dist/index.html                   2.31 kB │ gzip:   0.92 kB
+../../../../../../tmp/matchahead-rework-harness-dist/assets/index-HdN8_KX2.css   10.69 kB │ gzip:   2.96 kB
+../../../../../../tmp/matchahead-rework-harness-dist/assets/index-Cmf1pTze.js   855.61 kB │ gzip: 258.36 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.70s
+
+PWA v1.3.0
+Building src/sw.ts service worker ("es" format)...
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 59 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/matchahead-rework-harness-dist/sw.mjs  58.81 kB │ gzip: 14.91 kB
+✓ built in 84ms
+
+PWA v1.3.0
+mode      injectManifest
+format:   es
+precache  12 entries (860.33 KiB)
+files generated
+  ../../../../../../tmp/matchahead-rework-harness-dist/sw.js
+PASS kapija-h1
+PASS kapija-nastavi
+PASS kapija-opis
+PASS kapija-pilot
+PASS kapija-nema-demo
+PASS kapija-nema-nav
+PASS tema-inicijalna
+PASS pre-react-root-prazan-bez-h1
+PASS pre-react-dark-bez-react-modula
+PASS tema-dark-ucitana
+PASS prijava-unlocked
+PASS stanje-0-utakmica
+PASS stanje-1-utakmica
+PASS stanje-1-sledeca-bedz
+PASS derbi-jednom
+PASS derbi-oba-razloga
+PASS derbi-ostaje-nakon-otpracivanja
+PASS stanje-20-utakmica-redova
+PASS stanje-20-paginator
+PASS stanje-20-strana-1-od-1
+PASS paginacija-105-strana1
+PASS paginacija-20-po-strani
+PASS paginacija-105-strana2
+PASS selekcija-svih-105
+PASS selekcija-reset-promenom-filtera
+PASS kompatibilnost-rute-#/
+PASS kompatibilnost-rute-#/utakmice
+PASS kompatibilnost-rute-#/moje
+PASS kompatibilnost-rute-#/klubovi
+PASS kompatibilnost-rute-#/podesavanja
+PASS modal-otvoren
+PASS modal-fokus-unutra
+PASS modal-zatvaranje-escape
+PASS modal-zatvaranje-back
+PASS preliv-mobile-360 :: diff=0px
+PASS touch-targets-mobile-360
+PASS preliv-mobile-390 :: diff=0px
+PASS touch-targets-mobile-390
+PASS preliv-mobile-430 :: diff=0px
+PASS touch-targets-mobile-430
+PASS preliv-landscape-844x390 :: diff=0px
+PASS preliv-desktop-1280 :: diff=0px
+PASS fallback-ostecena-tema
+
+SVIH 43 REWORK HARNESS TESTOVA JE PROŠLO.

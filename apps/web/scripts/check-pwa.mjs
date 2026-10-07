@@ -11,7 +11,7 @@ const repoRoot = resolve(webRoot, '../..');
 const dirA = '/tmp/matchahead-pwa-a';
 const dirB = '/tmp/matchahead-pwa-b';
 const dirB2 = '/tmp/matchahead-pwa-b2';
-const chromePath = '/usr/bin/google-chrome-stable';
+const chromePath = process.env.CHROME_PATH ?? (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : '/usr/bin/google-chrome-stable');
 const basePath = '/repo/';
 
 const mime = {
@@ -180,10 +180,11 @@ try {
   await page.goto(`${origin}/repo/`, { waitUntil: 'load' });
   await page.waitForSelector('h1');
   const gateText = await page.$eval('body', (element) => element.innerText);
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Prijava', 'nema kapije prijave');
+  const gateHeading = await page.$eval('h1', (element) => element.textContent);
+  assert(gateHeading === 'MatchAhead', `nema kapije prijave: ${gateHeading}`);
   assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', 'ekran nije kapija');
-  assert(gateText.includes('Google prijava nije podešena'), 'nepodešena prijava nema poruku');
-  assert(gateText.includes('zaključane'), 'kapija ne kaže da su funkcije zaključane');
+  assert(gateText.includes('Prijava trenutno nije dostupna') || gateText.includes('Google prijava nije podešena'), 'nepodešena prijava nema poruku');
+  assert(!gateText.includes('Nastavi sa Google'), 'nepodešena prijava nudi dugme za nastavak');
   assert(!gateText.includes('DEMO'), 'kapija prikazuje DEMO');
   assert(await page.$('nav') === null, 'navigacija je vidljiva pre prijave');
   assert(await page.$('#club-search') === null, 'klubovi su vidljivi pre prijave');
@@ -195,11 +196,11 @@ try {
 
   await page.goto(`${origin}/repo/#/podesavanja`, { waitUntil: 'load' });
   await page.reload({ waitUntil: 'load' });
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Prijava', 'osvežavanje hash putanje otvara podešavanja');
+  assert((await page.$eval('h1', (element) => element.textContent)) === 'MatchAhead', 'osvežavanje hash putanje otvara podešavanja');
   assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', 'hash podešavanja otvara funkcije');
   await page.goto(`${origin}/repo/klubovi`, { waitUntil: 'load' });
   await page.waitForFunction(() => location.pathname === '/repo/' && location.hash === '#/klubovi');
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Prijava', '404 je otvorio klubove bez prijave');
+  assert((await page.$eval('h1', (element) => element.textContent)) === 'MatchAhead', '404 je otvorio klubove bez prijave');
   assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', '404 ruta nije ostala na kapiji');
   console.log('PASS: kapija prijave, 360/1280 px, hash i /repo/klubovi bez funkcija');
 
@@ -277,7 +278,7 @@ try {
   });
   assert(offlineSchedule !== 200, `offline i dalje servira DEMO raspored: ${offlineSchedule}`);
   const offlineText = await page.$eval('body', (element) => element.innerText);
-  assert(offlineText.includes('Prijava'), 'offline je izgubio kapiju');
+  assert(offlineText.includes('MatchAhead'), 'offline je izgubio kapiju');
   assert(!offlineText.includes('DEMO'), 'offline prikazuje DEMO');
   assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', 'offline otvara funkcije');
   console.log('PASS: posle jednog online učitavanja omotač radi offline, bez DEMO rasporeda');
@@ -319,7 +320,7 @@ try {
   assert(failed.build === 'build-a', `neuspeo deploy je zamenio prikaz: ${failed.build}`);
   assert(!failed.waiting, 'neuspeo deploy je ostavio čekajuću verziju');
   const stillThere = await page.$eval('body', (element) => element.innerText);
-  assert(stillThere.includes('Prijava'), 'neuspeo deploy je obrisao kapiju');
+  assert(stillThere.includes('MatchAhead'), 'neuspeo deploy je obrisao kapiju');
   assert(!stillThere.includes('DEMO'), 'neuspeo deploy je vratio DEMO');
   console.log(`PASS: neuspeo novi omotač nije aktiviran i kapija je ostala (update odbijen: ${failed.rejected})`);
 
@@ -333,7 +334,7 @@ try {
   await page.click('[data-update-ready] button');
   await page.waitForFunction(() => document.querySelector('[data-app-build]')?.getAttribute('data-app-build') === 'build-b');
   const updatedText = await page.$eval('body', (element) => element.innerText);
-  assert(updatedText.includes('Prijava'), 'nova verzija nema kapiju');
+  assert(updatedText.includes('MatchAhead'), 'nova verzija nema kapiju');
   assert(!updatedText.includes('DEMO'), 'nova verzija prikazuje DEMO');
   const scopesAfter = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((item) => item.scope));
   assert(scopesAfter.length === 1, `posle ažuriranja ima ${scopesAfter.length} registracija`);
