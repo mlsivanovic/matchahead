@@ -4,7 +4,7 @@ export type RouteId = 'home' | 'mine' | 'clubs' | 'settings';
 export function parseRoute(hash: string): RouteId {
   const raw = hash.replace(/^#/, '').replace(/^\//, '').split(/[?#]/, 1)[0]?.replace(/\/$/, '') ?? '';
   if (raw === '' || raw === 'pocetna') return 'home';
-  if (raw === 'moje') return 'mine';
+  if (raw === 'moje' || raw === 'utakmice') return 'mine';
   if (raw === 'klubovi') return 'clubs';
   if (raw === 'podesavanja') return 'settings';
   return 'home';
@@ -18,7 +18,7 @@ export function routeHash(route: RouteId): string {
 }
 
 export function routeNavLabel(route: RouteId): string {
-  if (route === 'mine') return 'Moje';
+  if (route === 'mine') return 'Utakmice';
   return routeTitle(route);
 }
 

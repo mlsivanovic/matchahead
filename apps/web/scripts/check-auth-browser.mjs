@@ -15,14 +15,15 @@
  * Pokretanje (iz apps/web):
  *   node scripts/check-auth-browser.mjs
  *
- * Skripta sama bilda bundle sa demo+emulator env (nikakvi pravi
- * kredencijali, samo @example.com identiteti), resetuje emulatore,
- * vozi pravi Google popup tok kroz emulator widget i proverava:
- * DEMO bez prijave, prijavu/odjavu, profil/omiljene/praćenja/ručne
- * izbore, agendu, reload sesije, izolaciju dva naloga, uklanjanje
- * veze tekućeg uređaja uz očuvanje drugog (oba posejana pre odjave),
- * ponovne cikluse, prefs round-trip, cross-tab odjavu, otkazani popup
- * i brisanje naloga sa bravom. Browser i server se gase u finally.
+ * Skripta sama bilda bundle sa emulator env (nikakvi pravi Google
+ * kredencijali). Emulator widget lokalno postavlja email_verified i
+ * ne dira Google Cloud konzolu niti listu OAuth test korisnika.
+ * Proverava kapiju pre prijave, odbijanje tuđeg naloga bez profila,
+ * prijavu verifikovanog mls.ivanovic@gmail.com, odjavu, omiljene,
+ * praćenja, reload sesije, uklanjanje veze tekućeg uređaja uz
+ * očuvanje drugog (oba posejana pre odjave), ponovne cikluse, prefs
+ * round-trip, cross-tab odjavu, otkazani popup i brisanje naloga
+ * sa bravom. Browser i server se gase u finally.
  *
  * Granice: live Google popup/mobile NOT_TESTED; requires-recent-login
  * je sintetički samo u jediničnim testovima; isti-uid ponovna prijava
@@ -43,6 +44,8 @@ const PROJECT = 'demo-matchahead';
 const AUTH = 'http://127.0.0.1:9098';
 const STORE = 'http://127.0.0.1:8081';
 const chromePath = process.env.CHROME_PATH ?? '/usr/bin/chromium';
+const ALLOWED_EMAIL = 'mls.ivanovic@gmail.com';
+const DENIED_EMAIL = 'boris@example.com';
 
 const BUILD_ENV = {
   VITE_FIREBASE_API_KEY: 'demo',
@@ -226,7 +229,7 @@ async function appText(page) {
 }
 
 /** Prijava kroz pravi popup + emulator widget. Vraća prijavljeni email. */
-async function signInViaPopup(browser, page, { email }) {
+async function signInViaPopup(browser, page, { email, until = 'Prijavljen:' }) {
   const wait = popupPage(browser);
   const started = await clickLogin(page);
   if (!started) throw new Error('nema dugmeta prijave (bez popup resolvera ovde stajemo)');
@@ -265,8 +268,13 @@ async function signInViaPopup(browser, page, { email }) {
     const finished = await widgetClick(popup, 'Sign in with Google.com');
     if (!finished) throw new Error(`widget nema Sign in; stanje: ${(await widgetText(popup)).slice(0, 400)}`);
   }
-  await page.waitForFunction(() => document.body.innerText.includes('Prijavljen:'), { timeout: 20000 });
+  await page.waitForFunction(
+    (needle) => document.body.innerText.includes(needle),
+    { timeout: 20000 },
+    until,
+  );
   await closePopup(popup);
+  if (until !== 'Prijavljen:') return null;
   const line = (await appText(page)).split(String.fromCharCode(10)).find((item) => item.includes('Prijavljen:')) ?? '';
   return (line.split('Prijavljen:')[1] ?? '').trim();
 }
@@ -281,20 +289,30 @@ async function runFlow(browser, origin) {
   await page.setViewport({ width: 390, height: 844 });
   await page.goto(`${origin}/#/`, { waitUntil: 'load' });
 
-  // 0. DEMO radi odjavljen.
-  await gotoScreen(page, '#/', 'home');
+  // 0. Kapija pre bilo koje funkcije. Hash podešavanja ne otvara ekran.
+  await page.goto(`${origin}/#/podesavanja`, { waitUntil: 'load' });
+  await page.waitForFunction(() => document.querySelector('main')?.dataset.screen === 'gate');
   let text = await appText(page);
-  check('demo-odjavljen', text.includes('DEMO') && text.includes('Sledeća utakmica'));
+  check('kapija', (await page.$eval('h1', (element) => element.textContent)) === 'Prijava'
+    && text.includes('Prijavi se Google nalogom')
+    && !text.includes('DEMO')
+    && await page.$('nav') === null);
 
-  // 1. Prijava A kroz pravi popup.
-  await gotoScreen(page, '#/podesavanja', 'settings');
-  const emailA = await signInViaPopup(browser, page, { email: 'ana@example.com' });
-  check('prijava-a-ui', emailA === 'ana@example.com', emailA);
+  // 0b. Tuđ verifikovan Google nalog se odjavljuje i ne dobija profil.
+  await signInViaPopup(browser, page, { email: DENIED_EMAIL, until: 'nema pristup' });
+  text = await appText(page);
+  check('tudji-odjavljen', text.includes('nema pristup') && !text.includes('Prijavljen:') && !text.includes(DENIED_EMAIL));
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  check('tudji-bez-profila', (await listDocs('users')).length === 0);
+
+  // 1. Dozvoljeni verifikovan nalog kroz pravi popup.
+  const emailA = await signInViaPopup(browser, page, { email: ALLOWED_EMAIL });
+  check('prijava-a-ui', emailA === ALLOWED_EMAIL, emailA);
   let users = await listDocs('users');
   check('profil-a-kreiran', users.length === 1);
   const uidA = users[0].id;
 
-  // 2. Omiljeni + praćenje + ručni izbor.
+  // 2. Omiljeni i praćenje. Ručni katalog DEMO više nije u aplikaciji.
   check('omiljeni-klik', await clickButton(page, 'Dodaj u omiljene'));
   await new Promise((resolve) => setTimeout(resolve, 1500));
   const profile = docFields(await storeGet(`users/${uidA}`));
@@ -304,24 +322,23 @@ async function runFlow(browser, origin) {
   await new Promise((resolve) => setTimeout(resolve, 1500));
   const follows = await listDocs(`users/${uidA}/follows`);
   check('pracenje-sacuvano', follows.some((f) => f.id === 'football:rs:crvena-zvezda' && f.fields.active === true));
-  await gotoScreen(page, '#/moje', 'mine');
-  check('rucni-klik', await clickButton(page, 'Dodaj ručno'));
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const manuals = await listDocs(`users/${uidA}/manualSelections`);
-  check('rucni-sacuvan', manuals.length === 1);
+  check('klub-oznaka', (await page.$eval('.club-list button', (element) => element.textContent ?? '')).includes('Pratim'));
+  await gotoScreen(page, '#/', 'home');
   text = await appText(page);
-  check('agenda-a', text.includes('Ručni izbor') && text.includes('Pratim u aplikaciji'));
+  check('agenda-prazna', text.includes('Agenda je prazna') && !text.includes('DEMO'));
+  await gotoScreen(page, '#/podesavanja', 'settings');
+  check('rucni-prazni', (await appText(page)).includes('Ručni izbori: 0'));
 
   // 3. Druga sesija: reload obnavlja nalog i omiljene; drugi tab je konzistentan.
   await page.reload({ waitUntil: 'load' });
   await gotoScreen(page, '#/podesavanja', 'settings');
-  await page.waitForFunction(() => document.body.innerText.includes('Prijavljen: ana@example.com'), { timeout: 20000 });
+  await page.waitForFunction((email) => document.body.innerText.includes(`Prijavljen: ${email}`), { timeout: 20000 }, ALLOWED_EMAIL);
   text = await appText(page);
   const pressedFavorites = await page.$$eval('.club-list button[aria-pressed="true"]', (items) => items.length);
   check('reload-sesija', text.includes('Omiljeni klub') && pressedFavorites >= 1);
   const tab2 = await browser.newPage();
   await tab2.goto(`${origin}/#/podesavanja`, { waitUntil: 'load' });
-  await tab2.waitForFunction(() => document.body.innerText.includes('Prijavljen: ana@example.com'), { timeout: 20000 });
+  await tab2.waitForFunction((email) => document.body.innerText.includes(`Prijavljen: ${email}`), { timeout: 20000 }, ALLOWED_EMAIL);
   check('drugi-tab', true);
   await tab2.close();
 
@@ -344,7 +361,7 @@ async function runFlow(browser, origin) {
   check('odjava-klik', await clickButton(page, 'Odjavi se'));
   await page.waitForFunction(() => document.body.innerText.includes('Prijavi se Google nalogom'), { timeout: 20000 });
   text = await appText(page);
-  check('odjava-ui', !text.includes('Prijavljen:') && !text.includes('ana@example.com'));
+  check('odjava-ui', !text.includes('Prijavljen:') && (await page.$eval('main', (element) => element.dataset.screen)) === 'gate');
   const leftoverSession = await page.evaluate(() => sessionStorage.getItem('matchahead.session.followedTeamIds')
     ?? sessionStorage.getItem('matchahead.session.manualFixtureIds')
     ?? sessionStorage.getItem('matchahead.session.draftNote'));
@@ -354,35 +371,18 @@ async function runFlow(browser, origin) {
   check('odjava-unlink', leftover.length === 1
     && leftover[0].id === OTHER_DEVICE && leftover[0].fields.installationId === OTHER_DEVICE,
     JSON.stringify(leftover.map((d) => d.id)));
-  await gotoScreen(page, '#/', 'home');
-  check('odjava-agenda-prazna', (await appText(page)).includes('Tvoja agenda je prazna'));
+  check('odjava-kapija', (await page.$eval('h1', (element) => element.textContent)) === 'Prijava');
 
-  // 5. Prijava B: bez Aninih podataka.
-  await gotoScreen(page, '#/podesavanja', 'settings');
-  const emailB = await signInViaPopup(browser, page, { email: 'boris@example.com' });
-  check('prijava-b-ui', emailB === 'boris@example.com' && !(await appText(page)).includes('ana@example.com'), emailB);
-  users = await listDocs('users');
-  check('dva-profila', users.length === 2);
-  const uidB = users.map((u) => u.id).find((id) => id !== uidA);
-  const profileB = docFields(await storeGet(`users/${uidB}`));
-  check('b-bez-favorita', (profileB.favoriteTeamIds ?? []).length === 0);
-  await gotoScreen(page, '#/', 'home');
-  check('b-agenda-prazna', (await appText(page)).includes('Tvoja agenda je prazna'));
-
-  // 6. Ponovna prijava A: sve se vraća.
-  await gotoScreen(page, '#/podesavanja', 'settings');
-  check('odjava-b', await clickButton(page, 'Odjavi se'));
-  await page.waitForFunction(() => document.body.innerText.includes('Prijavi se Google nalogom'), { timeout: 20000 });
-  const emailA2 = await signInViaPopup(browser, page, { email: 'ana@example.com' });
-  check('relogin-a', emailA2 === 'ana@example.com', emailA2);
+  // 5. Ponovna prijava istog naloga vraća omiljene. Hash je i dalje podešavanja.
+  const emailA2 = await signInViaPopup(browser, page, { email: ALLOWED_EMAIL });
+  check('relogin-a', emailA2 === ALLOWED_EMAIL, emailA2);
   check('relogin-favorit', (await page.$$eval('.club-list button[aria-pressed="true"]', (items) => items.length)) >= 1);
-  await gotoScreen(page, '#/moje', 'mine');
-  text = await appText(page);
-  check('relogin-agenda', text.includes('Ručni izbor') && text.includes('Pratim u aplikaciji'));
+  await gotoScreen(page, '#/', 'home');
+  check('relogin-agenda', (await appText(page)).includes('Agenda je prazna'));
 
-  // 7. Brzi ciklusi odjava/prijava ostaju živi (veza sesije se obnavlja).
+  // 6. Brzi ciklusi odjava/prijava ostaju živi (veza sesije se obnavlja).
   await gotoScreen(page, '#/podesavanja', 'settings');
-  for (const [cycle, wanted] of [['1', 'boris@example.com'], ['2', 'ana@example.com']]) {
+  for (const [cycle, wanted] of [['1', ALLOWED_EMAIL], ['2', ALLOWED_EMAIL]]) {
     check(`ciklus-${cycle}-out`, await page.evaluate(() => {
       const match = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('Odjavi se'));
       if (!match) return false;
@@ -406,7 +406,7 @@ async function runFlow(browser, origin) {
   await new Promise((resolve) => setTimeout(resolve, 1500));
   await page.reload({ waitUntil: 'load' });
   await gotoScreen(page, '#/podesavanja', 'settings');
-  await page.waitForFunction(() => document.body.innerText.includes('Prijavljen: ana@example.com'), { timeout: 20000 });
+  await page.waitForFunction((email) => document.body.innerText.includes(`Prijavljen: ${email}`), { timeout: 20000 }, ALLOWED_EMAIL);
   check('prefs-reload-select', (await page.$eval('#account-zone', (el) => el.value)) === 'UTC');
   const anaDoc = (await listDocs('users')).find((u) => u.id === uidA);
   check('prefs-server', anaDoc?.fields?.reminderMinutes === 60 && anaDoc?.fields?.timeZone === 'UTC');
@@ -414,7 +414,7 @@ async function runFlow(browser, origin) {
   // 7c. Cross-tab odjava čisti i drugi tab (deljeno skladište, ne drugi uređaj).
   const tabB = await browser.newPage();
   await tabB.goto(`${origin}/#/podesavanja`, { waitUntil: 'load' });
-  await tabB.waitForFunction(() => document.body.innerText.includes('Prijavljen: ana@example.com'), { timeout: 20000 });
+  await tabB.waitForFunction((email) => document.body.innerText.includes(`Prijavljen: ${email}`), { timeout: 20000 }, ALLOWED_EMAIL);
   await gotoScreen(page, '#/podesavanja', 'settings');
   check('crosstab-out', await page.evaluate(() => {
     const match = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('Odjavi se'));
@@ -427,9 +427,9 @@ async function runFlow(browser, origin) {
   const tabBSession = await tabB.evaluate(() => sessionStorage.getItem('matchahead.session.followedTeamIds')
     ?? sessionStorage.getItem('matchahead.session.manualFixtureIds')
     ?? sessionStorage.getItem('matchahead.session.draftNote'));
-  check('crosstab-cisti', !tabBText.includes('Prijavljen:') && !tabBText.includes('ana@example.com') && tabBSession === null);
+  check('crosstab-cisti', !tabBText.includes('Prijavljen:') && tabBSession === null);
   await tabB.close();
-  check('crosstab-relogin', (await signInViaPopup(browser, page, { email: 'ana@example.com' })) === 'ana@example.com');
+  check('crosstab-relogin', (await signInViaPopup(browser, page, { email: ALLOWED_EMAIL })) === ALLOWED_EMAIL);
 
   // 7d. Otkazani popup: bezbedna poruka bez koda, retry radi.
   check('pred-brisanje-out', await clickButton(page, 'Odjavi se'));
@@ -452,26 +452,20 @@ async function runFlow(browser, origin) {
     check('cancel-poruka', cancelText.includes('Prozor prijave je zatvoren') && cancelText.includes('Pokušaj ponovo') && !cancelText.includes('Prijavljen:'));
   }
 
-  // 8. Brisanje trećeg naloga: vidljiva potvrda + brava bez profila.
-  const emailC = await signInViaPopup(browser, page, { email: 'cara@example.com' });
-  check('prijava-c', emailC.endsWith('@example.com') && emailC !== 'ana@example.com' && emailC !== 'boris@example.com', emailC);
-  users = await listDocs('users');
-  const uidC = users.map((u) => u.id).find((id) => id !== uidA && id !== uidB);
-  check('profil-c', Boolean(uidC));
-  check('omiljeni-c', await clickButton(page, 'Dodaj u omiljene'));
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // 8. Brisanje dozvoljenog naloga: vidljiva potvrda + brava bez profila.
+  const emailAgain = await signInViaPopup(browser, page, { email: ALLOWED_EMAIL });
+  check('prijava-brisanje', emailAgain === ALLOWED_EMAIL, emailAgain);
   check('brisanje-korak1', await clickButton(page, 'Obriši nalog i sve podatke'));
   await new Promise((resolve) => setTimeout(resolve, 500));
   check('brisanje-korak2', await clickButton(page, 'Potvrdi brisanje'));
   await page.waitForFunction(() => document.body.innerText.includes('Nalog je obrisan.'), { timeout: 20000 });
-  check('brisanje-ui', true);
-  check('profil-c-obrisan', (await storeGet(`users/${uidC}`)) === null);
-  const tombstone = await storeGet(`accountTombstones/${uidC}`);
+  check('brisanje-ui', (await page.$eval('main', (element) => element.dataset.screen)) === 'gate');
+  check('profil-obrisan', (await storeGet(`users/${uidA}`)) === null);
+  const tombstone = await storeGet(`accountTombstones/${uidA}`);
   const tombFields = tombstone ? docFields(tombstone) : null;
   check('brava-ostaje', tombFields?.status === 'in_progress', JSON.stringify(tombFields));
   check('brava-bez-profila', tombFields ? Object.keys(tombFields).length === 3 : false, Object.keys(tombFields ?? {}).join(','));
-  users = await listDocs('users');
-  check('ab-netaknuti', users.length === 2);
+  check('nema-profila', (await listDocs('users')).length === 0);
 }
 
 await main().catch((error) => {

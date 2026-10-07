@@ -49,7 +49,7 @@ jobs:
           MATCHAHEAD_BASE: /matchahead/
           MATCHAHEAD_BUILD: ${{ github.sha }}
           # Javna Firebase web konfiguracija iz repository VARIABLES (nisu tajne).
-          # Prazne vrednosti ostavljaju klijent nepodešen; DEMO radi bez naloga.
+          # Prazne vrednosti ostavljaju klijent nepodešen; pristup zahteva Google prijavu.
           VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}

@@ -2,10 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { INITIAL_SEASON_ID } from '../../../../packages/domain/src/schedule-api.ts';
 import { selectableTeams } from '../../../../packages/domain/src/selectable-teams.ts';
-import type {
-  FindFixturesHttpSuccess,
-  FindFixturesResponseKind,
-} from '../../../../packages/domain/src/schedule-api.ts';
+import type { FindFixturesResponseKind } from '../../../../packages/domain/src/schedule-api.ts';
 import type { Fixture, ScheduleAvailability, Sport, Team } from '../../../../packages/domain/src/types.ts';
 import {
   fixtureTitle,
@@ -18,7 +15,7 @@ import {
   postFindFixtures,
   ScheduleApiError,
 } from '../logic/schedule-api.ts';
-import { scheduleServerDisabledMessage } from '../logic/schedule-config.ts';
+import { scheduleServerDisabledMessage, syntheticScheduleRejectedMessage } from '../logic/schedule-config.ts';
 import {
   unifiedServerTeams,
   unifiedVerifiedFixtures,
@@ -42,16 +39,8 @@ export interface ScheduleFinderDeps {
   online: boolean;
 }
 
-/** Provereno ili blokirano trajno stanje, ili efemerni DEMO samo za prikaz. */
-export interface DisplayedSchedule {
-  teamId: string;
-  sport: string;
-  seasonId: string;
-  kind: FindFixturesResponseKind;
-  response: FindFixturesHttpSuccess;
-  checkedAt: string | null;
-  storedAt: string;
-}
+/** Samo provereno ili blokirano trajno stanje. Sintetički odgovor se ne prikazuje. */
+export type DisplayedSchedule = LastGoodSchedule;
 
 const AVAILABILITY_LABEL: Record<ScheduleAvailability, string> = {
   published: 'Objavljeno',
@@ -64,7 +53,7 @@ const AVAILABILITY_LABEL: Record<ScheduleAvailability, string> = {
 const KIND_LABEL: Record<FindFixturesResponseKind, string> = {
   'verified-schedule': 'Proveren raspored',
   'source-blocked': 'Izvor blokiran',
-  'synthetic-demo': 'DEMO',
+  'synthetic-demo': 'Izvor nije dostupan',
 };
 
 export function scheduleKindLabel(kind: FindFixturesResponseKind): string {
@@ -88,9 +77,6 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  // DEMO je efemeran: prikazuje se, ali se nikad ne upisuje u trajno
-  // stanje i ne ulazi u agendu — ne sme da zameni provereno stanje.
-  const [ephemeral, setEphemeral] = useState<{ teamId: string; response: FindFixturesHttpSuccess } | null>(null);
   const pending = useRef<AbortController | null>(null);
   // Monotoni redni broj: samo najsvežije pronalaženje sme da upiše ili prijavi
   // grešku. Zastareli odgovor (dvoklik, izbor kluba/sporta, zamena naloga)
@@ -122,20 +108,7 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     () => listLastGood(store, INITIAL_SEASON_ID),
     [store, tick],
   );
-  const displayed: DisplayedSchedule | null = useMemo(() => {
-    if (ephemeral && ephemeral.teamId === activeTeamId) {
-      return {
-        teamId: activeTeamId,
-        sport,
-        seasonId: INITIAL_SEASON_ID,
-        kind: ephemeral.response.kind,
-        response: ephemeral.response,
-        checkedAt: ephemeral.response.result.checkedAt,
-        storedAt: new Date().toISOString(),
-      };
-    }
-    return lastGood;
-  }, [ephemeral, activeTeamId, sport, lastGood]);
+  const displayed: DisplayedSchedule | null = lastGood;
 
   function pickSport(next: Sport) {
     // Izbor sporta prekida let: kasni odgovor za stari sport se ne upisuje.
@@ -146,7 +119,6 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     const first = selectableTeams(next)[0];
     if (first) setTeamId(first.id);
     setError(null);
-    setEphemeral(null);
   }
 
   function pickTeam(next: string) {
@@ -156,7 +128,6 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     pending.current = null;
     setTeamId(next);
     setError(null);
-    setEphemeral(null);
   }
 
   const find = useCallback(async (refresh: boolean) => {
@@ -178,7 +149,6 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
     }
     setWorking(true);
     setError(null);
-    setEphemeral(null);
     const attemptAt = new Date().toISOString();
     try {
       writeLastAttemptAt(store, activeTeamId, INITIAL_SEASON_ID, attemptAt);
@@ -212,9 +182,7 @@ export function useScheduleFinder(deps: ScheduleFinderDeps) {
         throw new ScheduleApiError('aborted', 'Nalog je promenjen; zahtev je prekinut i nije upisan.');
       }
       if (response.kind === 'synthetic-demo') {
-        // DEMO ostaje efemeran: prikazuje se, ali se nikad ne upisuje u
-        // trajno stanje i ne ulazi u agendu.
-        setEphemeral({ teamId: activeTeamId, response });
+        setError(syntheticScheduleRejectedMessage());
       } else {
         writeLastGood(store, {
           teamId: activeTeamId,
@@ -287,7 +255,7 @@ export function ScheduleFinder(props: {
         ))}
       </div>
       {!state.configured ? (
-        <p className="warning" role="status">Server rasporeda nije podešen u ovoj instalaciji. Pronalaženje nije dostupno; prikaz je iz sačuvanog stanja i DEMO rasporeda.</p>
+        <p className="warning" role="status">{scheduleServerDisabledMessage()}</p>
       ) : null}
       <div className="filters">
         <button
@@ -339,7 +307,6 @@ export function ScheduleResult(props: {
     <div data-schedule-kind={lastGood.kind} data-provenance={lastGood.checkedAt ?? undefined}>
       <p className="meta">
         <strong>{KIND_LABEL[lastGood.kind]}</strong>
-        {lastGood.kind === 'synthetic-demo' ? ' — sintetički podaci, nisu stvarne utakmice.' : null}
         {lastGood.kind === 'source-blocked' ? ' — blokirane utakmice se ne prikazuju kao proverene; važi poslednje sačuvano stanje.' : null}
       </p>
       {lastGood.checkedAt ? (
@@ -360,7 +327,6 @@ export function ScheduleResult(props: {
           teams={response.teams}
           competitionName={competitions.get(fixture.competitionId)?.name ?? fixture.competitionId}
           timeZone={timeZone}
-          demo={lastGood.kind === 'synthetic-demo'}
           tracked={props.followed.some((id) => fixture.homeTeamId === id || fixture.awayTeamId === id)
             || props.manualFixtureIds.includes(fixture.id)}
           onToggleManual={props.onToggleManual}
@@ -409,7 +375,6 @@ export function ServerFixtureCard(props: {
   teams?: readonly Team[];
   competitionName: string;
   timeZone: string;
-  demo: boolean;
   tracked: boolean;
   onToggleManual: (fixtureId: string) => void;
 }) {
@@ -418,7 +383,6 @@ export function ServerFixtureCard(props: {
   return (
     <article className="card">
       <p className="kicker">
-        {props.demo ? <span className="demo">DEMO</span> : null}
         <span>{sportLabel(fixture.sport)}</span>
         <span>{props.competitionName}</span>
       </p>

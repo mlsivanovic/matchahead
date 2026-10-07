@@ -24,5 +24,10 @@ export function readScheduleServerConfig(env: ScheduleServerEnv): ScheduleServer
 /** Poruka za interfejs: prost srpski, bez imena promenljivih i detalja builda. */
 export function scheduleServerDisabledMessage(): string {
   return 'Server rasporeda nije podešen u ovoj instalaciji. '
-    + 'Pronalaženje nije dostupno; prikaz je iz sačuvanog stanja i DEMO rasporeda.';
+    + 'Pronalaženje nije dostupno; prikaz je iz sačuvanog proverenog stanja.';
+}
+
+/** Sintetički odgovor se ne crta i ne upisuje. Nema zamenskog rasporeda. */
+export function syntheticScheduleRejectedMessage(): string {
+  return 'Izvor rasporeda nije dostupan. Ovaj odgovor nije prihvaćen i utakmice se ne prikazuju.';
 }

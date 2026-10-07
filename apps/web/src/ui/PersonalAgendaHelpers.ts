@@ -32,8 +32,8 @@ export interface CatalogRowState {
 }
 
 /**
- * Stanje jednog reda DEMO kataloga za ručno dodavanje/uklanjanje.
- * Katalog je nezavisan od praćenih klubova: svaka DEMO utakmica se nudi.
+ * Stanje jednog reda kataloga za ručno dodavanje/uklanjanje.
+ * Katalog je nezavisan od praćenih klubova: svaka utakmica se nudi.
  */
 export function catalogRowState(
   fixture: Pick<{ id: string; homeTeamId: string; awayTeamId: string | null }, 'id' | 'homeTeamId' | 'awayTeamId'>,
@@ -127,6 +127,6 @@ export function competitionOptionsForAgenda(
   const seen = new Set<string>();
   for (const entry of entries) seen.add(entry.fixture.competitionId);
   return [...seen]
-    .map((id) => ({ id, name: competitions.find((item) => item.id === id)?.name ?? 'DEMO takmičenje' }))
+    .map((id) => ({ id, name: competitions.find((item) => item.id === id)?.name ?? 'Nepoznato takmičenje' }))
     .sort((left, right) => left.name.localeCompare(right.name, 'sr'));
 }

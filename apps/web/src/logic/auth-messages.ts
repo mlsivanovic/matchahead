@@ -1,6 +1,7 @@
-export const UNCONFIGURED_MESSAGE = 'Google prijava nije podešena na ovom izdanju. Niko nije prijavljen. DEMO raspored radi bez naloga.';
+export const UNCONFIGURED_MESSAGE = 'Google prijava nije podešena na ovom izdanju. Niko nije prijavljen. Funkcije aplikacije su zaključane.';
 export const EMULATOR_REJECTED_MESSAGE = 'Adresa emulatora nije lokalna. Prijava nije pokrenuta.';
-export const OFFLINE_MESSAGE = 'Nema mreže. Prijava nije uspela. DEMO raspored ostaje dostupan.';
+export const OFFLINE_MESSAGE = 'Nema mreže. Prijava nije uspela. Funkcije aplikacije ostaju zaključane.';
+export const ACCESS_DENIED_MESSAGE = 'Ovaj Google nalog nema pristup. Dozvoljen je samo verifikovan nalog mls.ivanovic@gmail.com. Odjavljen si, a aplikacija nije otvorena.';
 export const WORKING_MESSAGE = 'Prijava je u toku. Nalog još nije otvoren.';
 export const RECENT_LOGIN_MESSAGE = 'Brisanje naloga traži novu prijavu. Stari podaci nisu prikazani.';
 export const DELETED_MESSAGE = 'Nalog je obrisan.';

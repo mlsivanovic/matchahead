@@ -10,8 +10,10 @@ import {
 import type { Firestore } from 'firebase/firestore';
 
 import { AccountController, deletionFlagStore, type AccountSnapshot, type DeletionHooks } from './account-controller.ts';
+import { googleAccessClaim, isAllowedGoogleAccess } from './access-allowlist.ts';
 import { browserStore } from './user-local.ts';
 import {
+  ACCESS_DENIED_MESSAGE,
   EMULATOR_REJECTED_MESSAGE,
   OFFLINE_MESSAGE,
   UNCONFIGURED_MESSAGE,
@@ -96,6 +98,7 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
    * pa nova sesija povraća starog korisnika umesto popup toka.
    */
   const signOutSettled = useRef<Promise<void> | null>(null);
+  const denyFlight = useRef<Promise<void> | null>(null);
   const attachedAuth = useRef<Auth | null>(null);
   const stopAuth = useRef<(() => void) | null>(null);
   const attachRef = useRef<(() => void) | null>(null);
@@ -115,6 +118,29 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
     },
     onLocalClear: (ended) => live.current.onLocalClear(ended),
   });
+
+  /**
+   * Tuđ ili neverifikovan nalog ne ulazi u profil. Odjava je direktan
+   * signOut: kontrolerov signOut preskače tuđ currentUser i obrisao bi poruku.
+   */
+  const rejectDisallowed = (auth: Auth) => {
+    controller.holdAccessDenied(ACCESS_DENIED_MESSAGE);
+    if (denyFlight.current) return denyFlight.current;
+    const run = (async () => {
+      try {
+        const current = auth.currentUser;
+        if (current && !isAllowedGoogleAccess(googleAccessClaim(current))) {
+          await signOut(auth);
+        }
+      } catch {
+        // Prikaz je već zatvoren. Greška odjave ne otvara tuđi nalog.
+      }
+    })().finally(() => {
+      if (denyFlight.current === run) denyFlight.current = null;
+    });
+    denyFlight.current = run;
+    return run;
+  };
 
   /** Zajednički ulaz observera i popup rezultata za isti identitet. */
   const driveIdentity = (db: Firestore, identity: { uid: string; email: string | null }, auth: Auth) => {
@@ -167,6 +193,10 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
           // Null i iz drugog taba gasi memorijski keš prethodnog uid-a.
           void cycleSession();
         }
+        return;
+      }
+      if (!isAllowedGoogleAccess(googleAccessClaim(user))) {
+        void rejectDisallowed(auth);
         return;
       }
       const identity = { uid: user.uid, email: user.email ?? null };
@@ -278,6 +308,10 @@ export function useAccount(input: UseAccountInput): UseAccountResult {
           const user = credential.user;
           const sessionNow = activeFirebaseSession();
           if (!sessionNow) return;
+          if (!isAllowedGoogleAccess(googleAccessClaim(user))) {
+            void rejectDisallowed(sessionNow.auth);
+            return;
+          }
           // Isti uid posle requires-recent-login ne mora da okine
           // observer: uspešan popup rezultat sam vozi nastavak.
           // Observer je primaran; dupli poziv za svež uid je običan reload.

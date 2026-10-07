@@ -15,7 +15,7 @@ import {
   validateFindRequest,
 } from '../src/logic/schedule-api.ts';
 import { currentScheduleIdToken } from '../src/logic/schedule-auth.ts';
-import { readScheduleServerConfig } from '../src/logic/schedule-config.ts';
+import { readScheduleServerConfig, scheduleServerDisabledMessage, syntheticScheduleRejectedMessage } from '../src/logic/schedule-config.ts';
 import {
   buildUnifiedServerAgenda,
   unifiedVerifiedFixtures,
@@ -358,6 +358,9 @@ test('bez Firebase sesije nema tokena; adresa servera je javna konfiguracija', a
     readScheduleServerConfig({ VITE_SCHEDULE_API_URL: 'https://raspored.example/ ' }),
     { kind: 'ready', baseUrl: 'https://raspored.example' },
   );
+  assert.equal(scheduleServerDisabledMessage().includes('DEMO'), false);
+  assert.equal(syntheticScheduleRejectedMessage().includes('DEMO'), false);
+  assert.match(syntheticScheduleRejectedMessage(), /nije prihvaćen/);
 });
 
 test('adresa servera: HTTPS uvek, HTTP samo loopback, bez tajni u URL-u', () => {
@@ -436,7 +439,7 @@ test('DEMO se ne upisuje u trajno stanje; oštećen zapis se ne čita', () => {
       kind: 'synthetic-demo', response: demo,
       checkedAt: '2026-10-01T08:00:00.000Z', storedAt: '2026-10-01T08:05:00.000Z',
     } as never),
-    /DEMO/,
+    /Sintetički odgovor se ne upisuje/,
   );
   const corrupt = JSON.parse(JSON.stringify(envelope())) as { result: { futureFixtures: unknown[] } };
   corrupt.result.futureFixtures.push({ pokvareno: true });

@@ -16,6 +16,7 @@ import {
   writeProfile,
 } from './account-remote.ts';
 import {
+  ACCESS_DENIED_MESSAGE,
   DELETED_MESSAGE,
   OFFLINE_MESSAGE,
   RECENT_LOGIN_MESSAGE,
@@ -203,6 +204,17 @@ export class AccountController {
   }
 
   /**
+   * Tuđ nalog ne otvara profil. Poruka se postavlja pre Auth odjave, a
+   * epoha pokušaja raste da kasni popup ne prepiše odbijanje.
+   */
+  holdAccessDenied(message: string = ACCESS_DENIED_MESSAGE): void {
+    this.db = null;
+    this.endedEpoch += 1;
+    this.gate.showSignedOut(false, message);
+    this.emit();
+  }
+
+  /**
    * Klik na prijavu: radno stanje pre popup-a; uspeh stiže preko auth
    * događaja. Vraća značku konkretnog pokušaja: kasni failure se vezuje
    * za nju, pa zastareli rejection posle novog klika, novog identiteta
@@ -268,9 +280,10 @@ export class AccountController {
       // deleteUser gasi Auth i stiže null pre kraja brisanja: sveža
       // potvrda brisanja se čuva, ostalo se čisti kao odjava.
       const keepDeleted = this.gate.message === DELETED_MESSAGE;
+      const keepDenied = this.gate.message === ACCESS_DENIED_MESSAGE;
       this.showSignedOut(
         options.offline,
-        keepDeleted ? DELETED_MESSAGE : (options.offline ? OFFLINE_MESSAGE : null),
+        keepDeleted ? DELETED_MESSAGE : keepDenied ? ACCESS_DENIED_MESSAGE : (options.offline ? OFFLINE_MESSAGE : null),
       );
       return;
     }

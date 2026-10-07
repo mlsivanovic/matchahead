@@ -1,35 +1,84 @@
 # MatchAhead
 
-Projektni folder za razvoj sa Grokom, u zasebnim taskovima.
+MatchAhead je instalabilna React PWA na srpskom za praćenje fudbalskih i košarkaških utakmica i dodavanje izabranih termina u Google kalendar.
 
-**Trenutno stanje (6. oktobar 2026):** React PWA, Google/Firebase klijent i lična DEMO agenda integrisani su u `main`. Lokalni Auth i agenda pregled prolaze uz ograničenja emulatora; živa Google prijava i produkciona Firestore pravila još nisu provereni. Jedan service worker obezbeđuje instalabilnost i offline omotač.
+Aplikacija zahteva Google prijavu. Tokom pilot testa pristup je namenjen isključivo verifikovanom nalogu `mls.ivanovic@gmail.com`. Stvarni rasporedi dolaze iz zasebnog servisa; dostupnost takmičenja i pouzdanost satnice prikazuju se uz izvore. Produkcioni interfejs ne koristi demo utakmice.
 
-Pronalaženje stvarnih utakmica povezano je sa produkcijskim servisom. Javni rasporedi FSS Superlige, ABA lige i Evroliga PDF-a čitaju se na zahtev, uz zajednički keš i linkove ka izvorima. Pretraga je dostupna bez prijave; nalozi i lični podaci ostaju odvojeni. Servis ima 56 prolaznih testova, klijent 113. Kupovi, KLS, plej-of i evropski fudbal još nemaju povezan potvrđen izvor; FSS/ABA satnice bez dokazane zone ostaju nepotvrđene. [Odluka i dokazi aktiviranja](docs/phase-05-live-enablement.md) i [aktuelni napredak](docs/progress.md) beleže granice. Raniji [QA izveštaj](docs/reviews/05-schedule-service-and-client.md) je istorijski pregled pre aktiviranja javnog API-ja.
+## Lokalno pokretanje
 
-Push osnova ima 27 lokalnih testova, uključujući 4 workerd testa. Fizička isporuka na zatvorenoj PWA i edge CPU još nisu provereni; push kapije ostaju ugašene. Firebase naplata je isključena, Cloudflare plan nije verifikovan dokazom. Budžet ostaje 0 €. Integracija i završni pregled faze 05 push-ovani su na GitHub 6. oktobra 2026. Pages objava prati rezultat [GitHub Actions provera](https://github.com/mlsivanovic/matchahead/actions); [javna aplikacija](https://mlsivanovic.github.io/matchahead/) prikazuje pronađene stvarne rasporede uz odvojene DEMO podatke.
+Potrebni su Node.js 22 ili noviji i npm.
 
-## Početak
+```sh
+npm ci --prefix apps/web
+npm --prefix apps/web run dev
+```
 
-Otvori ovaj folder u okruženju u kojem agent može čitati i menjati lokalne datoteke. Posle `npm ci --prefix apps/web`, lokalne provere su `node scripts/check-data-contracts.mjs`, `npm --prefix apps/web run check` i `node scripts/check-pwa.mjs`. Aktivna faza je 05; detalji vlasništva i pregleda su u `docs/orchestration-plan.md`.
+Postavi javnu Firebase konfiguraciju u `apps/web/.env.local` (primer imena je u [.env.example](.env.example)):
 
-Ako Grok nema pristup lokalnom filesystem-u, priloži datoteke koje prompt traži ili mu obezbedi pristup projektu; sama apsolutna putanja ne daje pristup fajlovima.
+```dotenv
+VITE_FIREBASE_API_KEY=<javni-web-api-kljuc>
+VITE_FIREBASE_AUTH_DOMAIN=matchahead.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=matchahead
+VITE_FIREBASE_APP_ID=<firebase-web-app-id>
+VITE_FIREBASE_MESSAGING_SENDER_ID=298957530037
+VITE_FIREBASE_STORAGE_BUCKET=matchahead.firebasestorage.app
+VITE_SCHEDULE_API_URL=https://matchahead-schedule.mls-ivanovic.workers.dev
+```
 
-## Organizacija
+Bez validne konfiguracije prijava i pristup aplikaciji nisu dostupni. Firebase Google provider i dozvoljeni domeni moraju biti podešeni za lokalni i objavljeni host. Admin ključevi i sportski API tokeni ne pripadaju Vite promenljivama niti browseru.
 
-- [Plan od 12 celina](plans/grok-faze/README.md)
-- [Stalni kontekst](plans/grok-faze/00-stalni-kontekst.md)
-- [Glavna specifikacija 2.0](plans/plan-za-grok-sportski-kalendar.md)
-- [Stanje svih zadataka](docs/progress.md)
-- [Potvrđene odluke i otvorene pretpostavke](docs/decisions.md)
-- `docs/handoffs/` — predaje koje Grok piše posle svakog taska
-- [Šablon za sledeći task](PROMPT-SLEDECI-TASK.md)
+## Google kalendar
 
-Svi prethodno pripremljeni planovi, pojedinačni promptovi i izvorni ZIP nalaze se u `plans/`.
+U tabu **Utakmice** korisnik bira sve dostupne utakmice ili označava pojedinačne, pa pokreće dodavanje u Google kalendar. Dozvola `calendar.events` za kalendar traži se pri toj radnji, odvojeno od osnovne prijave. Upisuje se u glavni kalendar naloga, sa trajanjem događaja od dva sata. Ako utakmica ima datum ali nema potvrđeno vreme, događaj koristi **17:00** uz napomenu **„Vreme nije poznato“**. Utakmici bez poznatog datuma ne izmišlja se termin. Otkazane, odložene i završene utakmice ne nude se za izvoz. Ponovni pokušaj proverava stabilni ID događaja i izbegava duplikate. Ovo je jednokratni upis: kasnije promene rasporeda ne menjaju već dodate događaje.
 
-## Pravilo rada
+Google Calendar API je uključen na projektu `matchahead` preko CLI-ja:
 
-Jedan prompt/task = jedna numerisana celina. Task čita postojeće stanje, implementira ograničen posao, proverava kriterijume i ostavlja predaju u projektu. Sledeći task pokreće se zasebno i nastavlja isti kod.
+```sh
+gcloud services enable calendar-json.googleapis.com \
+  --project matchahead --account mls.ivanovic@gmail.com
+```
 
-Sačekaj završetak aktivnog taska pre pokretanja narednog koji menja isti projekat. DONE označava dokazan rezultat; nedostajući API ključ, netestirana integracija ili neispunjen kriterijum moraju ostati vidljivi.
+OAuth status **Testing** i lista sa jedinim test korisnikom `mls.ivanovic@gmail.com` zasebno su Google Auth Platform podešavanje. Klijentska provera naloga ne predstavlja dokaz da je Google OAuth publika podešena. Standardni `gcloud iam oauth-clients` upravlja IAM OAuth klijentima, a ne listom Google Workspace OAuth test korisnika. Aktuelna [Google uputstva za consent screen](https://developers.google.com/workspace/guides/configure-oauth-consent) opisuju podešavanje publike i test korisnika u konzoli.
 
-Nema potrebe da svaki task dobija ceo prethodni razgovor. Stalni kontekst, njegov zadatak, progress, odluke, relevantne predaje i postojeći kod predstavljaju njegovo radno stanje.
+## Provere
+
+```sh
+node scripts/check-data-contracts.mjs
+npm --prefix apps/web run check
+npm --prefix apps/web run build
+node scripts/check-pwa.mjs
+```
+
+Za raspored servis:
+
+```sh
+npm ci --prefix experiments/schedule-service
+node scripts/check-schedule-service.mjs
+```
+
+Browser provere prijave i rasporeda koriste izolovane Firebase emulatore. U jednom terminalu pokreni:
+
+```sh
+firebase emulators:start --config firebase/browser-emulators.json \
+  --project demo-matchahead --only auth,firestore
+```
+
+Zatim pokreni provere redom (Auth provera resetuje podatke tog lokalnog emulatora):
+
+```sh
+node apps/web/scripts/check-auth-browser.mjs
+node apps/web/scripts/check-schedule-ui.mjs
+```
+
+Provera kalendara koristi emulator za prijavu i presretnute Calendar API odgovore; ne pravi stvarne Google događaje. `CHROME_PATH` može zadati putanju do Chromium/Chrome izvršne datoteke.
+
+## Struktura i objava
+
+- `apps/web/` — React, Firebase prijava, lična agenda, kalendar i PWA.
+- `packages/domain/` — ugovori podataka i pravila domenskih modela.
+- `experiments/schedule-service/` — servis stvarnih rasporeda i provera izvora.
+- `firebase/` — Firestore pravila i provere naloga.
+- `docs/` — razvojne odluke, dokazi i istorijski izveštaji.
+- `plans/` — raniji planovi razvoja; opisi ranijih demo faza nisu aktuelni korisnički interfejs.
+
+GitHub Actions gradi aplikaciju iz `main` i objavljuje je na [GitHub Pages](https://mlsivanovic.github.io/matchahead/). Firebase konfiguracija i adresa raspored servisa dolaze iz repository variables. Lokalne izmene nisu objavljene dok se ne pošalju na odgovarajuću granu i workflow uspešno završi. Push obaveštenja i automatska sinhronizacija rasporeda nisu potvrđene funkcionalnosti ovog zadatka.

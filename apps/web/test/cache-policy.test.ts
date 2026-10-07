@@ -5,25 +5,26 @@ import { isPrivateApiUrl, isPublicScheduleUrl, isSensitiveUrl, PUBLIC_SCHEDULE_C
 import { isComposingElement, mayApplyUpdate } from '../src/logic/update-policy.ts';
 import { isStandaloneDisplay, needsIosInstallHelp } from '../src/logic/install.ts';
 
-test('OAuth i Google API se ne keširaju, javni DEMO raspored jeste kandidat', () => {
+test('OAuth i Google API se ne keširaju, a DEMO fajl više nije keš kandidat', () => {
   assert.equal(isSensitiveUrl('https://accounts.google.com/o/oauth2/v2/auth'), true);
   assert.equal(isSensitiveUrl('https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp'), true);
   assert.equal(isSensitiveUrl('https://securetoken.googleapis.com/v1/token'), true);
   assert.equal(isSensitiveUrl('https://fcm.googleapis.com/v1/projects/demo/messages:send'), true);
   assert.equal(isSensitiveUrl('https://example.github.io/repo/oauth/token?access_token=tajna'), true);
   assert.equal(isSensitiveUrl('https://example.github.io/repo/data/demo-schedule.json'), false);
-  assert.equal(isPublicScheduleUrl('https://example.github.io/repo/data/demo-schedule.json'), true);
+  assert.equal(isPublicScheduleUrl('https://example.github.io/repo/data/demo-schedule.json'), false);
+  assert.equal(isPublicScheduleUrl('https://example.github.io/repo/index.html'), false);
 });
 
-test('privatni /api/ odgovori su network-only, javni DEMO fajl nije privatan', () => {
+test('privatni /api/ odgovori su network-only', () => {
   assert.equal(isPrivateApiUrl('https://raspored.example/api/find-fixtures'), true);
   assert.equal(isPrivateApiUrl('https://raspored.example/api/'), true);
   assert.equal(isPrivateApiUrl('https://example.github.io/repo/data/demo-schedule.json'), false);
   assert.equal(isPrivateApiUrl('https://example.github.io/repo/index.html'), false);
 });
 
-test('aktivacija čuva raspored i workbox precache', () => {
-  assert.equal(shouldDeleteCacheOnActivate(PUBLIC_SCHEDULE_CACHE), false);
+test('aktivacija briše stari DEMO keš i čuva workbox precache', () => {
+  assert.equal(shouldDeleteCacheOnActivate(PUBLIC_SCHEDULE_CACHE), true);
   assert.equal(shouldDeleteCacheOnActivate('workbox-precache-v2-https://example/repo/'), false);
   assert.equal(shouldDeleteCacheOnActivate('matchahead-shell-stari'), true);
   assert.equal(shouldDeleteCacheOnActivate('matchahead-device'), false);

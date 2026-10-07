@@ -1,4 +1,7 @@
-/** Keš javnog DEMO rasporeda. Aktivacija ga ne briše. */
+/**
+ * Ime starog keša sintetičkog DEMO fajla. Aktivacija ga briše da
+ * instalirana aplikacija ne zadrži data/demo-schedule.json.
+ */
 export const PUBLIC_SCHEDULE_CACHE = 'matchahead-public-schedule';
 
 const SENSITIVE_URL = [
@@ -20,8 +23,9 @@ export function isSensitiveUrl(url: string): boolean {
   return SENSITIVE_URL.some((pattern) => pattern.test(url));
 }
 
-export function isPublicScheduleUrl(url: string): boolean {
-  return url.includes('/data/demo-schedule.json');
+/** Produkcija više ne isporučuje javni DEMO raspored. */
+export function isPublicScheduleUrl(_url: string): boolean {
+  return false;
 }
 
 /**
@@ -40,11 +44,11 @@ export function isPrivateApiUrl(url: string): boolean {
 
 /**
  * Workbox precache (`workbox-`) čisti sama biblioteka, tek kad novi omotač
- * postoji. Imenovani raspored se ne briše ovde: neuspeo odgovor ne sme
- * da obriše poslednji sačuvani DEMO fajl.
+ * postoji. Stari imenovani DEMO keš se briše. Neuspeo odgovor ne dira
+ * workbox precache omotača.
  */
 export function shouldDeleteCacheOnActivate(cacheName: string): boolean {
-  if (cacheName === PUBLIC_SCHEDULE_CACHE) return false;
+  if (cacheName === PUBLIC_SCHEDULE_CACHE) return true;
   if (cacheName.startsWith('workbox-')) return false;
   return cacheName.startsWith('matchahead-shell-');
 }

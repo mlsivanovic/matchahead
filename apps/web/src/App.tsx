@@ -7,7 +7,6 @@ import { ensureInstallationId } from './logic/firebase-app.ts';
 import { routeHash, routeNavLabel, parseRoute, type RouteId } from './logic/routes.ts';
 import { currentScheduleIdToken } from './logic/schedule-auth.ts';
 import { readScheduleServerConfig } from './logic/schedule-config.ts';
-import { parseDemoSchedule, type DemoSchedule } from './logic/schedule.ts';
 import { ScheduleFinder, useScheduleFinder } from './ui/ScheduleFinder.tsx';
 import { useAccount } from './logic/use-account.ts';
 import {
@@ -15,12 +14,8 @@ import {
   clearUserLocalContent,
   readDevicePrefs,
   readDraftNote,
-  readFollowedTeamIds,
-  readManualFixtureIds,
   writeDevicePrefs,
   writeDraftNote,
-  writeFollowedTeamIds,
-  writeManualFixtureIds,
   type DevicePrefs,
 } from './logic/user-local.ts';
 import { applyReadyUpdate, composingFromDocument, getUpdateSnapshot, registerProductServiceWorker, setUpdateBlocker, subscribeUpdate } from './pwa/register-sw.ts';
@@ -33,13 +28,9 @@ const NAV: RouteId[] = ['home', 'mine', 'clubs', 'settings'];
 export function App() {
   const route = useHashRoute();
   const update = useSyncExternalStore(subscribeUpdate, getUpdateSnapshot, getUpdateSnapshot);
-  const [schedule, setSchedule] = useState<DemoSchedule | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [online, setOnline] = useState(() => navigator.onLine);
   const [prefs, setPrefs] = useState<DevicePrefs>(() => readDevicePrefs(browserStore(localStorage)));
-  const [localFollowed, setLocalFollowed] = useState<string[]>(() => readFollowedTeamIds(browserStore(sessionStorage)));
-  const [localManuals, setLocalManuals] = useState<string[]>(() => readManualFixtureIds(browserStore(sessionStorage)));
   const [draftNote, setDraftNote] = useState(() => readDraftNote(browserStore(sessionStorage)));
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installMode, setInstallMode] = useState(installFlags);
@@ -53,31 +44,31 @@ export function App() {
     const env = import.meta.env as unknown as { VITE_SCHEDULE_API_URL?: string };
     return readScheduleServerConfig({ VITE_SCHEDULE_API_URL: env.VITE_SCHEDULE_API_URL });
   }, []);
-  const finder = useScheduleFinder({
-    apiBase: scheduleServer.kind === 'ready' ? scheduleServer.baseUrl : null,
-    getIdToken: currentScheduleIdToken,
-    store: scheduleStore,
-    now,
-    online,
-  });
   const { setup, account, signIn, signOut, deleteAccount } = useAccount({
     controller,
     fallbackTimeZone: prefs.timeZone,
     installationId,
     onLocalClear: (uid) => {
       clearUserLocalContent(browserStore(localStorage), browserStore(sessionStorage), uid);
-      setLocalFollowed([]);
-      setLocalManuals([]);
       setDraftNote('');
     },
   });
+  // Kapija ostaje dok profil nije otvoren. Dok traje prijava nema
+  // zahteva za raspored: apiBase je null, a finder se ne crta.
+  const unlocked = account.status === 'signed-in';
+  const finder = useScheduleFinder({
+    apiBase: unlocked && scheduleServer.kind === 'ready' ? scheduleServer.baseUrl : null,
+    getIdToken: currentScheduleIdToken,
+    store: scheduleStore,
+    now,
+    online,
+  });
 
-  const signedIn = account.status === 'signed-in';
   // Agenda prima samo aktivna praćenja i ručne izbore; omiljeni klubovi nikad ne ulaze u utakmice.
-  const followed = signedIn ? account.followedTeamIds : localFollowed;
-  const manualFixtureIds = signedIn ? account.manualFixtureIds : localManuals;
+  const followed = unlocked ? account.followedTeamIds : [];
+  const manualFixtureIds = unlocked ? account.manualFixtureIds : [];
   // Zona profila je overlay prikaza i ne upisuje se u globalna podešavanja uređaja.
-  const displayTimeZone = signedIn && account.profile
+  const displayTimeZone = unlocked && account.profile
     ? timeZoneForDisplay(account.profile.timeZone)
     : prefs.timeZone;
   // Zamena naloga prekida tekući autentifikovani zahtev: prekinuto se
@@ -91,31 +82,16 @@ export function App() {
   // Graditelj agende bira samo proverene utakmice, ali prima i blokirane
   // snimke radi politike opoziva i jasnog praznog stanja posle blokade.
   const serverSnapshots = finder.snapshots;
+  const verifiedSchedule = serverSnapshots.some((snapshot) => snapshot.kind === 'verified-schedule');
 
   useEffect(() => {
     setUpdateBlocker(() => composingFromDocument(document));
+    // Dev server nema izgrađen sw.js. Registracija na /matchahead/sw.js
+    // tada dobija HTML i baci MIME grešku. Produkcija i dalje registruje.
+    if (!import.meta.env.PROD) return;
     const registration = registerProductServiceWorker(import.meta.env.BASE_URL);
     return () => {
       void registration;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const url = `${import.meta.env.BASE_URL}data/demo-schedule.json`;
-    fetch(url)
-      .then(async (response) => {
-        if (!response.ok) throw new Error('DEMO raspored nije sačuvan na ovom uređaju. Otvori aplikaciju jednom dok si na mreži.');
-        return parseDemoSchedule(await response.json());
-      })
-      .then((next) => {
-        if (!cancelled) setSchedule(next);
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : 'DEMO raspored nije učitan.');
-      });
-    return () => {
-      cancelled = true;
     };
   }, []);
 
@@ -157,31 +133,13 @@ export function App() {
   }, []);
 
   function toggleFollow(teamId: string) {
-    if (signedIn) {
-      void controller.toggleFollow(teamId);
-      return;
-    }
-    // Funkcionalna dopuna: brzi uzastopni klikovi (dvoklik) ne smeju da se
-    // pregaze zastarelim zatvaranjem — svaki klik dopunjuje prethodni.
-    setLocalFollowed((previous) => {
-      const next = previous.includes(teamId) ? previous.filter((id) => id !== teamId) : [...previous, teamId];
-      writeFollowedTeamIds(browserStore(sessionStorage), next);
-      return readFollowedTeamIds(browserStore(sessionStorage));
-    });
+    if (!unlocked) return;
+    void controller.toggleFollow(teamId);
   }
 
   function toggleManual(fixtureId: string) {
-    if (signedIn) {
-      void controller.toggleManual(fixtureId);
-      return;
-    }
-    setLocalManuals((previous) => {
-      const next = previous.includes(fixtureId)
-        ? previous.filter((id) => id !== fixtureId)
-        : [...previous, fixtureId];
-      writeManualFixtureIds(browserStore(sessionStorage), next);
-      return readManualFixtureIds(browserStore(sessionStorage));
-    });
+    if (!unlocked) return;
+    void controller.toggleManual(fixtureId);
   }
 
   function changeDraft(value: string) {
@@ -196,17 +154,35 @@ export function App() {
 
   function clearSession() {
     clearUserLocalContent(browserStore(localStorage), browserStore(sessionStorage), null);
-    setLocalFollowed([]);
-    setLocalManuals([]);
     setDraftNote('');
   }
+
+  const accountPanel = (
+    <AccountPanel
+      setup={setup}
+      account={account}
+      onSignIn={signIn}
+      onSignOut={signOut}
+      onToggleFavorite={(teamId) => {
+        void controller.toggleFavorite(teamId);
+      }}
+      onSavePrefs={(next) => {
+        void controller.savePrefs(next);
+      }}
+      onDeleteAccount={deleteAccount}
+    />
+  );
 
   return (
     <div className="app">
       <a className="skip" href="#sadrzaj">Preskoči na sadržaj</a>
       <header className="top">
-        <p className="brand">MatchAhead {serverSnapshots.some((snapshot) => snapshot.kind === 'verified-schedule') ? null : <span className="demo">DEMO</span>}</p>
-        <p className="meta" data-app-build={APP_BUILD}>{serverSnapshots.some((snapshot) => snapshot.kind === 'verified-schedule') ? 'Raspored iz javnih izvora' : 'Sintetički raspored'}</p>
+        <p className="brand">MatchAhead</p>
+        <p className="meta" data-app-build={APP_BUILD}>
+          {unlocked
+            ? (verifiedSchedule ? 'Raspored iz javnih izvora' : 'Raspored sa servera, kada je provera dostupna')
+            : 'Tvoj sportski raspored'}
+        </p>
       </header>
       {update.ready ? (
         <div className="update" role="status" data-update-ready="true">
@@ -217,11 +193,22 @@ export function App() {
           </button>
         </div>
       ) : null}
-      <main id="sadrzaj" data-screen={route} tabIndex={-1}>
-        {route === 'home' ? (
+      <main
+        id="sadrzaj"
+        data-screen={unlocked ? route : 'gate'}
+        data-standalone={installMode.standalone ? 'true' : 'false'}
+        data-ios-install={installMode.ios ? 'true' : 'false'}
+        tabIndex={-1}
+      >
+        {unlocked ? null : (
+          <section className="login-gate">
+            <h1>Prijava</h1>
+            <p className="lead">Prati klubove i sačuvaj utakmice u svom Google kalendaru.</p>
+            {accountPanel}
+          </section>
+        )}
+        {unlocked && route === 'home' ? (
           <PersonalAgendaHome
-            schedule={schedule}
-            error={error}
             now={now}
             timeZone={displayTimeZone}
             online={online}
@@ -231,9 +218,8 @@ export function App() {
             serverSnapshots={serverSnapshots}
           />
         ) : null}
-        {route === 'mine' ? (
+        {unlocked && route === 'mine' ? (
           <PersonalAgendaScreen
-            schedule={schedule}
             now={now}
             timeZone={displayTimeZone}
             online={online}
@@ -245,7 +231,7 @@ export function App() {
             serverSnapshots={serverSnapshots}
           />
         ) : null}
-        {route === 'clubs' ? (
+        {unlocked && route === 'clubs' ? (
           <ClubsScreen
             followed={followed}
             onToggle={toggleFollow}
@@ -260,26 +246,12 @@ export function App() {
             )}
           />
         ) : null}
-        {route === 'settings' ? (
+        {unlocked && route === 'settings' ? (
           <SettingsScreen
             prefs={prefs}
             onPrefs={changePrefs}
             onClear={clearSession}
-            account={(
-              <AccountPanel
-                setup={setup}
-                account={account}
-                onSignIn={signIn}
-                onSignOut={signOut}
-                onToggleFavorite={(teamId) => {
-                  void controller.toggleFavorite(teamId);
-                }}
-                onSavePrefs={(next) => {
-                  void controller.savePrefs(next);
-                }}
-                onDeleteAccount={deleteAccount}
-              />
-            )}
+            account={accountPanel}
             install={{
               standalone: installMode.standalone,
               ios: installMode.ios,
@@ -291,11 +263,13 @@ export function App() {
           />
         ) : null}
       </main>
-      <nav className="nav" aria-label="Glavna navigacija">
-        {NAV.map((item) => (
-          <a key={item} href={routeHash(item)} aria-current={item === route ? 'page' : undefined}>{routeNavLabel(item)}</a>
-        ))}
-      </nav>
+      {unlocked ? (
+        <nav className="nav" aria-label="Glavna navigacija">
+          {NAV.map((item) => (
+            <a key={item} href={routeHash(item)} aria-current={item === route ? 'page' : undefined}>{routeNavLabel(item)}</a>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }

@@ -14,7 +14,7 @@ import type { KeyValueStore } from './user-local.ts';
  * Pad servera, 429, timeout i pogrešan odgovor čuvaju prikaz: ništa se ne
  * briše pre uspešnog novog odgovora. Nestanak reda nije otkazivanje.
  *
- * Sintetički DEMO se ovde nikad ne upisuje: služi izolovanoj proveri i ne
+ * Sintetički odgovor se ovde nikad ne upisuje: služi izolovanoj proveri i ne
  * sme da zameni niti zarazi provereni prikaz i agendu. Prva blokada sa
  * checkedAt null je validna i ne sme se potpisati kao „poslednji uspeh”.
  */
@@ -76,11 +76,11 @@ export function readLastGood(store: KeyValueStore, teamId: string, seasonId: str
 
 /**
  * Upis samo posle uspešno validiranog verified/blocked odgovora.
- * DEMO se odbija da ne bi zamenio provereno stanje; greške nikad ne brišu.
+ * Sintetički odgovor se odbija da ne bi zamenio provereno stanje; greške nikad ne brišu.
  */
 export function writeLastGood(store: KeyValueStore, entry: LastGoodSchedule): void {
   if (!isSafeKey(entry.teamId, entry.seasonId)) throw new Error('Neispravan ključ rasporeda.');
-  if (entry.kind === 'synthetic-demo' as string) throw new Error('DEMO se ne upisuje u trajno stanje.');
+  if (entry.kind === 'synthetic-demo' as string) throw new Error('Sintetički odgovor se ne upisuje u trajno stanje.');
   const response = parseFindResponse(entry.response);
   if (response.result.teamId !== entry.teamId
     || response.result.sport !== entry.sport

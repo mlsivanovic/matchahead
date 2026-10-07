@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,14 +23,27 @@ const mime = {
   '.png': 'image/png',
 };
 
-function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit' });
+function run(command, args, cwd, env = process.env) {
+  const result = spawnSync(command, args, { cwd, env, stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
 function build(id, outDir) {
   rmSync(outDir, { recursive: true, force: true });
-  run(process.execPath, [resolve(webRoot, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir'], webRoot);
+  // Lokalni .env.local ne sme da pretvori ovu proveru u prijavljenu
+  // instalaciju. Prazne VITE vrednosti imaju prednost nad fajlom.
+  const env = { ...process.env };
+  for (const key of [
+    'VITE_FIREBASE_API_KEY',
+    'VITE_FIREBASE_AUTH_DOMAIN',
+    'VITE_FIREBASE_PROJECT_ID',
+    'VITE_FIREBASE_APP_ID',
+    'VITE_FIREBASE_MESSAGING_SENDER_ID',
+    'VITE_FIREBASE_STORAGE_BUCKET',
+    'VITE_FIREBASE_AUTH_EMULATOR_HOST',
+    'VITE_FIREBASE_FIRESTORE_EMULATOR_HOST',
+  ]) env[key] = '';
+  run(process.execPath, [resolve(webRoot, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir'], webRoot, env);
 }
 
 function assert(condition, message) {
@@ -56,23 +69,26 @@ function staticChecks(dir) {
   assert(!index.includes('src="/assets/'), 'skripta pretpostavlja koren domena');
   assert(readDist(dir, '404.html').includes('"/repo/"'), '404 ne zna za /repo/');
   const sw = readDist(dir, 'sw.js');
+  assert(!manifest.description.toLowerCase().includes('demo'), `manifest i dalje kaže DEMO: ${manifest.description}`);
   assert(sw.includes('matchahead-shell-and-future-fcm'), 'worker nema oznaku jednog scope-a');
   assert(!sw.includes('firebase-messaging-sw'), 'worker pominje drugi FCM fajl');
   assert(!sw.includes('getToken('), 'worker zove getToken');
-  assert(sw.includes('demo-schedule.json'), 'worker ne kešira DEMO raspored');
+  assert(!sw.includes('demo-schedule.json'), 'worker i dalje pominje DEMO raspored');
   const scripts = readdirSync(join(dir, 'assets')).filter((name) => name.endsWith('.js'));
   const app = scripts.map((name) => readFileSync(join(dir, 'assets', name), 'utf8')).join('\n');
   const registers = app.split('serviceWorker.register').length - 1;
   assert(registers === 1, `registracija service worker-a: ${registers}`);
   assert(!app.includes('firebase-messaging-sw'), 'aplikacija registruje drugi worker');
+  assert(!app.includes('demo-schedule.json'), 'aplikacija i dalje traži DEMO raspored');
+  assert(!/\bDEMO\b/.test(app), 'aplikacija i dalje ima korisnički DEMO tekst');
+  assert(!/\bDEMO\b/.test(sw), 'worker i dalje ima korisnički DEMO tekst');
   // Faza 05: jedini sportski mrežni poziv iz browsera je konfigurisani server.
   assert(app.includes('/api/find-fixtures'), 'klijent nema poziv faze 05');
   for (const host of ['aba-liga.com', 'api-football', 'api-sports.io', 'thesportsdb.com', 'euroleaguebasketball']) {
     assert(!app.includes(host), `browser zove sportski host direktno: ${host}`);
   }
-  const schedule = JSON.parse(readDist(dir, 'data/demo-schedule.json'));
-  assert(schedule.kind === 'synthetic-demo' && schedule.publication === 'forbidden', 'raspored nije zabranjen DEMO');
-  console.log('PASS: statička provera /repo/ manifesta, jednog workera i DEMO rasporeda');
+  assert(!existsSync(join(dir, 'data/demo-schedule.json')), 'dist i dalje ima DEMO raspored');
+  console.log('PASS: statička provera /repo/ manifesta i jednog workera, bez DEMO rasporeda');
 }
 
 function startServer(state) {
@@ -120,18 +136,6 @@ async function overflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
-async function openRoute(page, hash, screen) {
-  await page.click(`nav a[href="${hash}"]`);
-  await page.waitForFunction((expected) => location.hash === expected, {}, hash);
-  // Hash se menja pre React crtanja: čekaj stvarno iscrtan ekran, ne samo hash.
-  await page.waitForFunction(
-    (expected) => document.querySelector('main')?.dataset.screen === expected
-      && document.querySelector('main h1') !== null,
-    {},
-    screen,
-  );
-}
-
 run(process.execPath, ['--experimental-strip-types', '--test', ...readdirSync(join(webRoot, 'test')).filter((name) => name.endsWith('.test.ts')).map((name) => join(webRoot, 'test', name))], webRoot);
 run(process.execPath, [resolve(webRoot, 'node_modules/typescript/bin/tsc'), '--noEmit'], webRoot);
 
@@ -175,95 +179,47 @@ try {
   await page.setViewport({ width: 360, height: 740, deviceScaleFactor: 1 });
   await page.goto(`${origin}/repo/`, { waitUntil: 'load' });
   await page.waitForSelector('h1');
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Početna', 'početni ekran');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('DEMO'), 'nema DEMO oznake');
-  assert((await page.$eval('[data-stale]', (element) => element.dataset.stale)) === 'true', 'zastareo raspored nije označen');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Podaci su zastareli'), 'nema rečenice o zastarelosti');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Ovo nije svež sportski izvor'), 'online prikaz zvuči kao svež izvor');
-  assert(await overflow(page) <= 1, `preliv na početnoj: ${await overflow(page)}`);
-
-  const navHeights = await page.$$eval('nav a', (links) => links.map((link) => ({
-    text: link.textContent ?? '',
-    height: link.getBoundingClientRect().height,
-  })));
-  assert(navHeights.length === 4, 'navigacija nema četiri stavke');
-  assert(navHeights.every((item) => item.height >= 48), `stavke navigacije su preniske: ${JSON.stringify(navHeights)}`);
-
-  await page.focus('nav a[href="#/klubovi"]');
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => location.hash === '#/klubovi');
-  await page.waitForFunction(() => document.querySelector('main')?.dataset.screen === 'clubs'
-    && document.querySelector('main h1') !== null);
-  assert((await page.$eval('main', (element) => element.dataset.screen)) === 'clubs', 'Enter nije otvorio klubove');
-  await page.focus('#club-search');
-  await page.keyboard.type('zvezda');
-  const clubCount = await page.$$eval('.club-list li', (items) => items.length);
-  assert(clubCount === 1, `pretraga zvezda daje ${clubCount}`);
-  await page.click('#club-search', { clickCount: 3 });
-  await page.keyboard.press('Backspace');
-  await page.keyboard.type('DEMO');
-  assert(await page.$$eval('.club-list li', (items) => items.length) === 0, 'DEMO protivnik je u izboru');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Nema kluba'), 'nema prazne pretrage');
-  await page.click('#club-search', { clickCount: 3 });
-  await page.keyboard.press('Backspace');
-  const followedName = await page.evaluate(() => {
-    const button = document.querySelector('.club-list button');
-    const name = button?.parentElement?.querySelector('strong')?.textContent ?? '';
-    button?.click();
-    return name;
-  });
-  assert(followedName.includes('Crvena zvezda'), `praćen je ${followedName}`);
-  assert((await page.$eval('.club-list button', (element) => element.textContent))?.includes('Pratim'), 'dugme nije označilo praćenje');
-  assert(await overflow(page) <= 1, 'preliv na klubovima');
-
-  await openRoute(page, '#/moje', 'mine');
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Moje utakmice', 'moje utakmice');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('DEMO Rival'), 'praćeni klub ne vidi protivnika van kataloga');
-  await page.focus('#draft-note');
-  await page.keyboard.type('beleška za utakmicu');
-  assert(await overflow(page) <= 1, 'preliv na mojim utakmicama');
-
-  await openRoute(page, '#/podesavanja', 'settings');
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Podešavanja', 'podešavanja');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('BLOCKED'), 'podešavanja ne čuvaju da je faza 02 blokirana');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Dodaj na početni ekran'), 'nema iPhone uputstva');
-  await page.select('#zone', 'UTC');
-  assert(await overflow(page) <= 1, 'preliv na podešavanjima');
-  await page.evaluate(() => {
-    const button = [...document.querySelectorAll('button')].find((item) => item.textContent?.includes('Obriši lokalni sadržaj'));
-    button?.click();
-  });
-  assert((await page.$eval('#zone', (element) => element.value)) === 'UTC', 'brisanje sesije je obrisalo zonu uređaja');
-  await openRoute(page, '#/moje', 'mine');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Nema utakmica u agendi'), 'odjava nije obrisala praćenje');
-  assert((await page.$eval('#draft-note', (element) => element.value)) === '', 'odjava nije obrisala belešku');
-  console.log('PASS: četiri ekrana, tastatura, 360 px, izbor klubova i brisanje sesije');
+  const gateText = await page.$eval('body', (element) => element.innerText);
+  assert((await page.$eval('h1', (element) => element.textContent)) === 'Prijava', 'nema kapije prijave');
+  assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', 'ekran nije kapija');
+  assert(gateText.includes('Google prijava nije podešena'), 'nepodešena prijava nema poruku');
+  assert(gateText.includes('zaključane'), 'kapija ne kaže da su funkcije zaključane');
+  assert(!gateText.includes('DEMO'), 'kapija prikazuje DEMO');
+  assert(await page.$('nav') === null, 'navigacija je vidljiva pre prijave');
+  assert(await page.$('#club-search') === null, 'klubovi su vidljivi pre prijave');
+  assert(await overflow(page) <= 1, `preliv na kapiji: ${await overflow(page)}`);
 
   await page.setViewport({ width: 1280, height: 800 });
-  await openRoute(page, '#/', 'home');
   assert(await overflow(page) <= 1, 'preliv na 1280 px');
   await page.setViewport({ width: 360, height: 740 });
 
   await page.goto(`${origin}/repo/#/podesavanja`, { waitUntil: 'load' });
   await page.reload({ waitUntil: 'load' });
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Podešavanja', 'osvežavanje hash putanje');
+  assert((await page.$eval('h1', (element) => element.textContent)) === 'Prijava', 'osvežavanje hash putanje otvara podešavanja');
+  assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', 'hash podešavanja otvara funkcije');
   await page.goto(`${origin}/repo/klubovi`, { waitUntil: 'load' });
   await page.waitForFunction(() => location.pathname === '/repo/' && location.hash === '#/klubovi');
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Klubovi', '404 nije vratio hash rutu');
-  console.log('PASS: osvežavanje i putanja /repo/klubovi');
+  assert((await page.$eval('h1', (element) => element.textContent)) === 'Prijava', '404 je otvorio klubove bez prijave');
+  assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', '404 ruta nije ostala na kapiji');
+  console.log('PASS: kapija prijave, 360/1280 px, hash i /repo/klubovi bez funkcija');
 
   await page.goto(`${origin}/repo/`, { waitUntil: 'load' });
   await page.waitForFunction(async () => {
     const registration = await navigator.serviceWorker.ready;
-    if (!registration.active) return false;
-    const names = await caches.keys();
-    for (const name of names) {
-      const cache = await caches.open(name);
-      const keys = await cache.keys();
-      if (keys.some((item) => item.url.includes('demo-schedule.json'))) return true;
-    }
-    return false;
+    return Boolean(registration.active);
   });
+  const demoCached = await page.evaluate(async () => {
+    const found = [];
+    for (const name of await caches.keys()) {
+      if (name === 'matchahead-public-schedule') found.push(name);
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        if (request.url.includes('demo-schedule.json')) found.push(request.url);
+      }
+    }
+    return found;
+  });
+  assert(demoCached.length === 0, `keš i dalje drži DEMO: ${demoCached.join(',')}`);
   const scopes = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((item) => item.scope));
   assert(scopes.length === 1 && scopes[0]?.endsWith('/repo/'), `scope registracije: ${scopes.join(',')}`);
 
@@ -319,18 +275,12 @@ try {
       return 0;
     }
   });
-  assert(offlineSchedule === 200, 'offline nema keširan raspored');
+  assert(offlineSchedule !== 200, `offline i dalje servira DEMO raspored: ${offlineSchedule}`);
   const offlineText = await page.$eval('body', (element) => element.innerText);
-  assert(offlineText.includes('Tvoja agenda je prazna'), 'offline home bez prazne agende');
-  assert(!offlineText.includes('Raspored nije učitan'), 'offline izgubio keširani raspored');
-  assert((await page.$eval('[data-offline]', (element) => element.dataset.offline)) === 'true', 'offline oznaka');
-  assert((await page.$eval('[data-stale]', (element) => element.dataset.stale)) === 'true', 'offline gubi oznaku zastarelosti');
-  assert(offlineText.includes('ne donosi sveže termine'), 'offline tvrdi sveže termine');
-  assert(!offlineText.includes('Termini su sveži'), 'offline ima lažnu svežinu');
-  await openRoute(page, '#/klubovi', 'clubs');
-  assert((await page.$eval('h1', (element) => element.textContent)) === 'Klubovi', 'offline navigacija');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('FK Crvena zvezda'), 'offline klubovi bez statičke liste');
-  console.log('PASS: posle jednog online učitavanja omotač i raspored rade offline');
+  assert(offlineText.includes('Prijava'), 'offline je izgubio kapiju');
+  assert(!offlineText.includes('DEMO'), 'offline prikazuje DEMO');
+  assert((await page.$eval('main', (element) => element.dataset.screen)) === 'gate', 'offline otvara funkcije');
+  console.log('PASS: posle jednog online učitavanja omotač radi offline, bez DEMO rasporeda');
 
   await page.setOfflineMode(false);
   await page.goto(`${origin}/repo/`, { waitUntil: 'load' });
@@ -369,8 +319,9 @@ try {
   assert(failed.build === 'build-a', `neuspeo deploy je zamenio prikaz: ${failed.build}`);
   assert(!failed.waiting, 'neuspeo deploy je ostavio čekajuću verziju');
   const stillThere = await page.$eval('body', (element) => element.innerText);
-  assert(stillThere.includes('DEMO'), 'neuspeo deploy je obrisao raspored');
-  console.log(`PASS: neuspeo novi omotač nije aktiviran i stari keš je ostao (update odbijen: ${failed.rejected})`);
+  assert(stillThere.includes('Prijava'), 'neuspeo deploy je obrisao kapiju');
+  assert(!stillThere.includes('DEMO'), 'neuspeo deploy je vratio DEMO');
+  console.log(`PASS: neuspeo novi omotač nije aktiviran i kapija je ostala (update odbijen: ${failed.rejected})`);
 
   state.failShell = false;
   state.dir = dirB2;
@@ -379,26 +330,14 @@ try {
     await registration.update();
   });
   await page.waitForSelector('[data-update-ready="true"]');
-  await openRoute(page, '#/moje', 'mine');
-  await page.focus('#draft-note');
-  await page.keyboard.type('unos u toku');
-  await page.click('[data-update-ready] button');
-  await new Promise((resolveWait) => setTimeout(resolveWait, 400));
-  assert((await page.$eval('[data-app-build]', (element) => element.dataset.appBuild)) === 'build-a', 'verzija se učitala tokom unosa');
-  assert((await page.$eval('#draft-note', (element) => element.value)).includes('unos u toku'), 'unos je izgubljen');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('Unos je u toku'), 'nema objašnjenja zašto reload čeka');
-  await page.focus('#draft-note');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('KeyA');
-  await page.keyboard.up('Control');
-  await page.keyboard.press('Backspace');
-  await page.keyboard.press('Tab');
   await page.click('[data-update-ready] button');
   await page.waitForFunction(() => document.querySelector('[data-app-build]')?.getAttribute('data-app-build') === 'build-b');
-  assert((await page.$eval('body', (element) => element.innerText)).includes('DEMO'), 'nova verzija nema DEMO raspored');
+  const updatedText = await page.$eval('body', (element) => element.innerText);
+  assert(updatedText.includes('Prijava'), 'nova verzija nema kapiju');
+  assert(!updatedText.includes('DEMO'), 'nova verzija prikazuje DEMO');
   const scopesAfter = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((item) => item.scope));
   assert(scopesAfter.length === 1, `posle ažuriranja ima ${scopesAfter.length} registracija`);
-  console.log('PASS: nova verzija čeka kraj unosa i zamenjuje omotač');
+  console.log('PASS: nova verzija zamenjuje omotač, kapija ostaje, bez DEMO');
 } finally {
   await browser.close();
   server.close();

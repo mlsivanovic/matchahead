@@ -28,23 +28,24 @@ const ZONES = ['Europe/Belgrade', 'Europe/Zagreb', 'Europe/London', 'UTC'];
 export function AccountPanel(props: AccountPanelProps) {
   const { account } = props;
   return (
-    <section aria-label="Nalog">
+    <section className="account" aria-label="Nalog">
       <h2>Nalog</h2>
       {account.status === 'unconfigured' ? (
-        <p>{account.message ?? 'Google prijava nije podešena na ovom izdanju. Niko nije prijavljen. DEMO raspored radi bez naloga.'}</p>
+        <p>{account.message ?? 'Google prijava nije podešena na ovom izdanju. Niko nije prijavljen. Funkcije aplikacije su zaključane.'}</p>
       ) : null}
       {account.status === 'signed-out' || account.status === 'offline' ? (
         <>
           <p>
             {account.status === 'offline'
-              ? 'Nema mreže. Prijava nije uspela. DEMO raspored ostaje dostupan.'
-              : 'Niko nije prijavljen. DEMO raspored radi bez naloga; praćenja i ručni izbori ostaju samo u ovoj sesiji.'}
+              ? 'Nema mreže. Prijava nije uspela. Funkcije aplikacije ostaju zaključane.'
+              : 'Prijavi se Google nalogom da nastaviš.'}
           </p>
-          {account.message ? <p className="meta" role="status">{account.message}</p> : null}
+          {account.message ? <p className="warning" role="alert">{account.message}</p> : null}
           {props.setup === 'ready' ? (
-            <button type="button" onClick={props.onSignIn}>Prijavi se Google nalogom</button>
+            <button type="button" className="primary" onClick={props.onSignIn}>Prijavi se Google nalogom</button>
           ) : null}
-          <p className="meta">Google prozor se otvara samo na klik. Dozvola za obaveštenja se ne traži.</p>
+          <p className="meta">Prijava se otvara u Google prozoru.</p>
+          <p className="meta">Pilot test je trenutno dostupan samo nalogu mls.ivanovic@gmail.com.</p>
         </>
       ) : null}
       {account.status === 'working' ? <p>Prijava je u toku. Nalog još nije otvoren.</p> : null}
@@ -52,7 +53,7 @@ export function AccountPanel(props: AccountPanelProps) {
         <>
           <p className="warning" role="alert">{account.message ?? 'Prijava nije uspela.'}</p>
           {props.setup === 'ready' ? (
-            <button type="button" onClick={props.onSignIn}>Pokušaj ponovo</button>
+            <button type="button" className="primary" onClick={props.onSignIn}>Pokušaj ponovo</button>
           ) : null}
         </>
       ) : null}

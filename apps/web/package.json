@@ -8,8 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check": "node --experimental-strip-types --test test/*.test.ts",
-    "icons": "node scripts/write-icons.mjs",
-    "demo-schedule": "node --experimental-strip-types scripts/write-demo-schedule.ts"
+    "icons": "node scripts/write-icons.mjs"
   },
   "dependencies": {
     "firebase": "12.19.0",

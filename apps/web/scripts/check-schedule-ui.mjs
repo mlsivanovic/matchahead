@@ -4,6 +4,9 @@
  * sva tri režima odgovora, greške i pogrešan oblik; tačno poreklo
  * (checkedAt) proverava se do milisekunde. Nema periodičnog poziva:
  * svaki mrežni zahtev potiče od klika, što server i broji.
+ * Potrebni su lokalni Auth/Firestore emulatori na 9098/8081:
+ * firebase emulators:start --config firebase/browser-emulators.json --project demo-matchahead --only auth,firestore
+ * Calendar API upisi presreću se u browseru uz zaobilaženje service workera.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -16,7 +19,7 @@ import puppeteer from 'puppeteer-core';
 const webRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dirUI = '/tmp/matchahead-sched-ui';
 const dirNoCfg = '/tmp/matchahead-sched-ui-nocfg';
-const chromePath = '/usr/bin/google-chrome-stable';
+const chromePath = process.env.CHROME_PATH ?? '/usr/bin/chromium';
 const basePath = '/repo/';
 const SEASON = '2026-2027';
 const CHECKED_AT = '2026-10-01T08:00:00.000Z';
@@ -111,7 +114,7 @@ function unknownTimeFixture(teamId) {
     startsAtUtc: null,
     timeConfirmed: false,
     status: 'time_tbd',
-    scheduledLocalDate: null,
+    scheduledLocalDate: '2026-10-06',
     venue: null,
     round: null,
     providerFixtureId: 'fx-tbd',
@@ -419,7 +422,15 @@ function build(outDir, apiUrl) {
   run(process.execPath, [resolve(webRoot, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir'], webRoot, {
     MATCHAHEAD_BASE: basePath,
     MATCHAHEAD_BUILD: 'sched-ui',
-    ...(apiUrl ? { VITE_SCHEDULE_API_URL: apiUrl } : {}),
+    VITE_SCHEDULE_API_URL: apiUrl ?? '',
+    VITE_FIREBASE_API_KEY: 'demo',
+    VITE_FIREBASE_AUTH_DOMAIN: 'demo-matchahead.firebaseapp.com',
+    VITE_FIREBASE_PROJECT_ID: 'demo-matchahead',
+    VITE_FIREBASE_APP_ID: '1:0:web:demo',
+    VITE_FIREBASE_MESSAGING_SENDER_ID: '',
+    VITE_FIREBASE_STORAGE_BUCKET: '',
+    VITE_FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9098',
+    VITE_FIREBASE_FIRESTORE_EMULATOR_HOST: '127.0.0.1:8081',
   });
 }
 
@@ -458,6 +469,48 @@ async function bodyText(page) {
   return page.$eval('body', (element) => element.innerText);
 }
 
+/** Local Auth emulator only; never drive a live Google account. */
+async function signInEmulator(browser, page, calendarExport = false) {
+  if (!calendarExport) await page.waitForSelector('[data-screen="gate"]');
+  const opened = new Promise((resolvePopup, rejectPopup) => {
+    const timer = setTimeout(() => rejectPopup(new Error('Emulator popup nije otvoren')), 25000);
+    page.once('popup', (popup) => { clearTimeout(timer); resolvePopup(popup); });
+  });
+  await page.evaluate((exporting) => {
+    const button = [...document.querySelectorAll('button')].find((item) => item.textContent?.includes(exporting ? 'Dodaj u Google kalendar' : 'Prijavi se Google'));
+    if (!button) throw new Error('Nema Google prijave');
+    button.click();
+  }, calendarExport);
+  const popup = await opened;
+  await popup.waitForFunction(() => document.body.innerText.includes('Google.com'));
+  if (!popup.url().startsWith('http://127.0.0.1:9098/')) throw new Error('Provera sme da koristi samo lokalni Auth emulator.');
+  const selected = await popup.evaluate(() => {
+    const button = [...document.querySelectorAll('button, li, [role="button"]')].find((item) => item.innerText?.includes('mls.ivanovic@gmail.com'));
+    if (!button) return false;
+    button.click();
+    return true;
+  });
+  if (!selected) {
+    await popup.evaluate(() => [...document.querySelectorAll('button')].find((item) => item.innerText.includes('Add new account')).click());
+    await popup.waitForSelector('#email-input');
+    await popup.$eval('#email-input', (input) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, 'mls.ivanovic@gmail.com');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  await new Promise((resolveWait) => setTimeout(resolveWait, 800));
+  if (!popup.isClosed()) await popup.evaluate(() => {
+    const buttons = [...document.querySelectorAll('button')].filter((item) => item.innerText.includes('Sign in with Google.com'));
+    const button = buttons.find((item) => item.offsetParent !== null) ?? buttons[0];
+    if (button) button.click();
+  });
+  if (calendarExport) await page.waitForFunction(() => document.querySelector('.calendar-export [role=status]')?.textContent?.includes('Dodato:'));
+  else await page.waitForFunction(() => document.querySelector('main')?.dataset.screen === 'clubs');
+  if (!popup.isClosed()) await popup.close();
+}
+
 run(process.execPath, ['--experimental-strip-types', '--test', ...readdirSync(join(webRoot, 'test')).filter((name) => name.endsWith('.test.ts')).map((name) => join(webRoot, 'test', name))], webRoot);
 run(process.execPath, [resolve(webRoot, 'node_modules/typescript/bin/tsc'), '--noEmit'], webRoot);
 
@@ -484,6 +537,7 @@ try {
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
 
   await page.goto(`${originUI}/repo/#/klubovi`, { waitUntil: 'load' });
+  await signInEmulator(browser, page);
   await page.waitForSelector('section[aria-label="Raspored na zahtev"]');
   assert((await bodyText(page)).includes('Raspored na zahtev'), 'nema sekcije rasporeda');
   assert((await finderKind(page)) === null, 'rezultat postoji pre klika');
@@ -542,11 +596,10 @@ try {
 
   apiState.mode = 'demo';
   await clickFinderButton(page, 'Pronađi utakmice');
-  await page.waitForFunction(
-    () => document.querySelector('[data-schedule-kind]')?.getAttribute('data-schedule-kind') === 'synthetic-demo',
-  );
-  assert((await bodyText(page)).includes('nisu stvarne utakmice'), 'DEMO nije jasno označen');
-  console.log('PASS: synthetic-demo je vidljivo označen i efemeran');
+  await page.waitForFunction(() => document.body.innerText.includes('nije prihvaćen'));
+  assert((await finderKind(page)) === 'source-blocked', 'sintetički odgovor zamenio sačuvano stanje');
+  assert(!(await bodyText(page)).includes('DEMO'), 'korisnički tekst i dalje kaže DEMO');
+  console.log('PASS: sintetički odgovor je odbijen i nije prikazan');
 
   const hitsBefore = apiState.requests.length;
   apiState.mode = 'error500';
@@ -579,9 +632,9 @@ try {
   console.log('PASS: pronalaženje drugog kluba');
 
   await page.evaluate(() => {
-    const buttons = [...document.querySelectorAll('.club-list button')].filter((button) => (button.textContent ?? '').trim() === 'Prati');
+    const buttons = [...document.querySelectorAll('.club-list button')];
     if (buttons.length < 2) throw new Error(`nema dva kluba za praćenje: ${buttons.length}`);
-    buttons.forEach((button) => button.click());
+    buttons.filter((button) => (button.textContent ?? '').trim() === 'Prati').forEach((button) => button.click());
   });
   await page.waitForFunction(
     () => [...document.querySelectorAll('.club-list button')].filter((button) => (button.textContent ?? '').includes('Pratim')).length >= 2,
@@ -616,6 +669,69 @@ try {
 
   await openRoute(page, '#/moje', 'mine');
   await page.waitForSelector('[data-server-agenda]');
+  // Calendar API is fully intercepted: this test cannot create real Google events.
+  const calendarEvents = new Map();
+  let calendarPosts = 0;
+  let failSecondOnce = true;
+  // Bypass the worker so its network-only forwarding cannot evade page interception.
+  await page.setBypassServiceWorker(true);
+  await page.setRequestInterception(true);
+  page.on('request', async (request) => {
+    if (!request.url().startsWith('https://www.googleapis.com/calendar/v3/')) {
+      await request.continue();
+      return;
+    }
+    const headers = {
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': 'authorization,content-type',
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'content-type': 'application/json',
+    };
+    if (request.method() === 'OPTIONS') {
+      await request.respond({ status: 204, headers });
+    } else if (request.method() === 'GET') {
+      const id = new URL(request.url()).pathname.split('/').at(-1);
+      await request.respond({ status: calendarEvents.has(id) ? 200 : 404, headers, body: JSON.stringify(calendarEvents.get(id) ?? {}) });
+    } else if (request.method() === 'POST') {
+      calendarPosts += 1;
+      assert(Boolean(request.headers().authorization), 'calendar request nema OAuth header');
+      const event = JSON.parse(request.postData());
+      if (failSecondOnce && calendarPosts === 2) {
+        failSecondOnce = false;
+        await request.respond({ status: 500, headers, body: '{}' });
+      } else if (calendarEvents.has(event.id)) {
+        await request.respond({ status: 409, headers, body: '{}' });
+      } else {
+        calendarEvents.set(event.id, event);
+        await request.respond({ status: 200, headers, body: JSON.stringify(event) });
+      }
+    } else {
+      await request.respond({ status: 405, headers, body: '{}' });
+    }
+  });
+  const chooseAllCalendar = () => page.evaluate(() => [...document.querySelectorAll('.calendar-export button')].find((button) => button.textContent.includes('Izaberi sve')).click());
+  await chooseAllCalendar();
+  const eligibleCount = await page.$$eval('.calendar-selection input:checked', (inputs) => inputs.length);
+  assert(eligibleCount >= 2, 'calendar nema više dostupnih utakmica');
+  await page.type('#draft-note', 'Provera beleške');
+  await signInEmulator(browser, page, true);
+  assert(calendarEvents.size === 1, `delimičan upis: events=${calendarEvents.size}, posts=${calendarPosts}, status=${await page.$eval('.calendar-export [role=status]', (element) => element.textContent)}`);
+  assert(await page.$$eval('.calendar-selection input:checked', (inputs) => inputs.length) === eligibleCount - 1, 'uspešna utakmica ostala u izboru posle greške');
+  await signInEmulator(browser, page, true);
+  await page.waitForFunction(() => document.querySelector('.calendar-export [role=status]')?.textContent?.includes('Već u kalendaru: 0.') && !document.querySelector('.calendar-selection input:checked'));
+  assert(calendarEvents.size === eligibleCount, 'ponovni pokušaj nije dodao preostale događaje');
+  assert([...calendarEvents.values()].every((event) => event.description.includes('Provera beleške')), 'beleška nije preneta');
+  const fallbackEvent = [...calendarEvents.values()].find((event) => event.description.includes('Vreme nije poznato'));
+  assert(fallbackEvent && new Date(fallbackEvent.start.dateTime).getUTCHours() === 15, 'nepoznata satnica nije 17h u Beogradu');
+  await chooseAllCalendar();
+  await signInEmulator(browser, page, true);
+  await page.waitForFunction((count) => document.querySelector('.calendar-export [role=status]')?.textContent?.includes(`Dodato: 0. Već u kalendaru: ${count}.`), {}, eligibleCount);
+  assert(calendarEvents.size === eligibleCount, 'ponovljeni izbor napravio duplikate');
+  await page.setRequestInterception(false);
+  await page.setBypassServiceWorker(false);
+  page.removeAllListeners('request');
+  console.log('PASS: kalendar — izbor svih, beleška, delimičan uspeh, nastavak, 17h i bez duplikata; svi Google upisi mockovani');
+
   await page.select('#agenda-club', 'football:rs:partizan');
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert((await bodyText(page)).includes('Derbi arena'), 'filter kluba Partizan sakrio derbi');
@@ -628,10 +744,10 @@ try {
     target.click();
   });
   await new Promise((resolve) => setTimeout(resolve, 300));
-  assert((await bodyText(page)).includes('Nema serverskih utakmica za ovaj filter.'), 'filter košarke nije ispraznio serversku agendu');
+  assert((await bodyText(page)).includes('Nema utakmica za ovaj izbor.'), 'filter košarke nije ispraznio serversku agendu');
   await page.evaluate(() => {
     const group = document.querySelector('[role="group"][aria-label="Filter sporta"]');
-    [...group.querySelectorAll('button')].find((button) => (button.textContent ?? '').trim() === 'Svi').click();
+    [...group.querySelectorAll('button')].find((button) => (button.textContent ?? '').trim() === 'Sve').click();
   });
   await new Promise((resolve) => setTimeout(resolve, 300));
   await page.select('#agenda-competition', 'Superliga');
@@ -668,14 +784,10 @@ try {
   await narrow.setViewport({ width: 360, height: 740, deviceScaleFactor: 1 });
   const narrowText = async () => narrow.$eval('body', (element) => element.innerText);
   const narrowOverflow = async () => narrow.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  // Nova kartica ima prazan sessionStorage: praćenja se biraju ponovo, snimci su deljeni.
+  // Nova kartica obnavlja Google sesiju i serverom sačuvana praćenja; snimci su deljeni.
   await narrow.goto(`${originUI}/repo/#/klubovi`, { waitUntil: 'load' });
   await narrow.waitForSelector('section[aria-label="Raspored na zahtev"]');
-  await narrow.evaluate(() => {
-    const buttons = [...document.querySelectorAll('.club-list button')].filter((button) => (button.textContent ?? '').trim() === 'Prati');
-    if (buttons.length < 2) throw new Error('nema dva kluba za praćenje na 360px');
-    buttons.forEach((button) => button.click());
-  });
+  await narrow.waitForFunction(() => [...document.querySelectorAll('.club-list button')].filter((button) => button.textContent?.includes('Pratim')).length >= 2);
   await narrow.evaluate((target) => {
     location.hash = target;
   }, '#/');
@@ -746,7 +858,7 @@ try {
   );
   await openRoute(page, '#/', 'home');
   await page.waitForFunction(() => !document.querySelector('[data-server-agenda]'));
-  assert((await bodyText(page)).includes('Nema serverskih utakmica za praćene klubove'), 'opoziv nije ispraznio agendu');
+  assert((await bodyText(page)).includes('Agenda je prazna'), 'opoziv nije ispraznio agendu');
   const partizanStored = await page.evaluate(() => {
     const raw = localStorage.getItem('matchahead.device.schedule.football:rs:partizan:2026-2027');
     if (!raw) return -1;
@@ -758,14 +870,15 @@ try {
   const sawValid = apiState.requests.filter((entry) => entry.valid);
   assert(sawValid.length >= 10, `server video ${sawValid.length} ispravnih zahteva`);
   assert(sawValid.some((entry) => entry.refresh === false), 'nema find bez refresh');
-  assert(sawValid.every((entry) => entry.authorized === false), 'neprijavljen klijent poslao Authorization');
-  console.log('PASS: svi zahtevi na klik, ugovor tela ispravan, bez lažnog tokena');
+  assert(sawValid.every((entry) => entry.authorized === true), 'prijavljen klijent nije poslao Authorization');
+  console.log('PASS: svi zahtevi na klik, ugovor tela ispravan, uz token lokalnog emulatora');
 
   const plain = await browser.newPage();
   await freezeBrowserCalendar(plain);
   plain.setDefaultTimeout(15000);
   await plain.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
   await plain.goto(`${originNoCfg}/repo/#/klubovi`, { waitUntil: 'load' });
+  await signInEmulator(browser, plain);
   await plain.waitForSelector('section[aria-label="Raspored na zahtev"]');
   assert((await bodyText(plain)).includes('nije podešen'), 'onemogućeno stanje nije pošteno');
   const disabledCount = await plain.$$eval('section[aria-label="Raspored na zahtev"] button', (buttons) => buttons.filter((button) => button.disabled).length);
