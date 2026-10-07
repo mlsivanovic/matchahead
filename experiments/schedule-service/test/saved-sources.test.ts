@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
+import { zonedWallTimeToUtc } from '../src/kickoff.ts';
 import { parseAbaCalendar } from '../src/sources/aba.ts';
 import { parseCzSchedule } from '../src/sources/cz-football.ts';
 import { parseEuroleaguePdf } from '../src/sources/euroleague-pdf.ts';
@@ -31,9 +32,14 @@ test('opciono: ABA snimak', { skip: saved('aba.html') }, () => {
   assert.equal(aba.complete, true);
   assert.equal(aba.failure, 'none');
   const evening = aba.drafts.find((draft) => draft.providerFixtureId === '15');
-  assert.equal(evening?.startsAtUtc, null);
   assert.equal(evening?.scheduledLocalDate, '2026-10-02');
   assert.equal(evening?.printedLocalTime, '18:30');
+  if (/CET je Beograd/.test(aba.evidence)) {
+    assert.equal(evening?.startsAtUtc, zonedWallTimeToUtc('2026-10-02', '18:30', 'Europe/Belgrade'));
+    assert.equal(evening?.sourceTimeZone, 'Europe/Belgrade');
+  } else {
+    assert.equal(evening?.startsAtUtc, null);
+  }
   assert.match(aba.evidence, /26\/1/);
 });
 

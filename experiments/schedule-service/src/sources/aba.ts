@@ -1,5 +1,5 @@
 import { competitionId, isUntrustedKickoffClock } from '../../../../packages/domain/src/index.ts';
-import { zonedWallTimeToUtc } from '../kickoff.ts';
+import { abaPageConfirmsBelgrade, zonedWallTimeToUtc } from '../kickoff.ts';
 import { teamIdForName } from '../names.ts';
 import { observedDraft } from './draft.ts';
 import { visibleText } from './html.ts';
@@ -24,13 +24,13 @@ interface Row {
 
 export function parseAbaCalendar(html: string, fetchedAt: string): ParsedSource {
   const rows = readRows(html);
+  const belgrade = abaPageConfirmsBelgrade(rows);
   const rounds = new Set<number>();
   const drafts = rows.flatMap((row) => {
     if (!row.home || !row.away) return [];
     const roundNumber = /^ROUND\s+(\d+)$/.exec(row.round ?? '');
     if (roundNumber) rounds.add(Number(roundNumber[1]));
-    const clujTrusted = row.cluj !== null && !isUntrustedKickoffClock({ printedLocalTime: row.cluj, startsAtUtc: null });
-    const startsAtUtc = clujTrusted && row.date && row.cluj ? zonedWallTimeToUtc(row.date, row.cluj, 'Europe/Bucharest') : null;
+    const kick = kickoffFor(row, belgrade);
     return [
       observedDraft({
         sport: 'basketball',
@@ -40,8 +40,8 @@ export function parseAbaCalendar(html: string, fetchedAt: string): ParsedSource 
         awayTeamId: teamIdForName('basketball', row.away),
         scheduledLocalDate: row.date,
         printedLocalTime: row.clock,
-        startsAtUtc,
-        sourceTimeZone: startsAtUtc ? 'Europe/Bucharest' : null,
+        startsAtUtc: kick.startsAtUtc,
+        sourceTimeZone: kick.sourceTimeZone,
         status: row.finished ? 'finished' : 'scheduled',
         venue: null,
         round: row.round,
@@ -82,8 +82,30 @@ export function parseAbaCalendar(html: string, fetchedAt: string): ParsedSource 
         providerIds: { 'aba-liga': '26/1' },
       },
     ],
-    evidence: `ABA kalendar 26/1: redova ${rows.length}, mečeva naša dva kluba u kolima 1–18 je ${clubRows}. Potpunost traži tačno kola 1–18 i tačno 18 mečeva po klubu. UTC postoji samo na redu koji sam ispisuje Cluj-Napoca, preko Europe/Bucharest. CET na ostalim redovima ne dokazuje Beograd. Potvrđenih UTC ${confirmedUtc}. Dozvola za objavu nije utvrđena.`,
+    evidence: `ABA kalendar 26/1: redova ${rows.length}, mečeva naša dva kluba u kolima 1–18 je ${clubRows}. Potpunost traži tačno kola 1–18 i tačno 18 mečeva po klubu. ${zoneEvidence(belgrade)} Potvrđenih UTC ${confirmedUtc}. Dozvola za objavu nije utvrđena.`,
   };
+}
+
+/** Cluj red ide preko Bukurešta. Ostali CET satovi postaju Beograd samo uz dokaz cele strane. */
+function kickoffFor(row: Row, belgrade: boolean): { startsAtUtc: string | null; sourceTimeZone: string | null } {
+  const clujTrusted = row.cluj !== null && !isUntrustedKickoffClock({ printedLocalTime: row.cluj, startsAtUtc: null });
+  if (clujTrusted && row.date && row.cluj) {
+    const startsAtUtc = zonedWallTimeToUtc(row.date, row.cluj, 'Europe/Bucharest');
+    return { startsAtUtc, sourceTimeZone: startsAtUtc ? 'Europe/Bucharest' : null };
+  }
+  const clockTrusted = row.clock !== null && !isUntrustedKickoffClock({ printedLocalTime: row.clock, startsAtUtc: null });
+  if (belgrade && clockTrusted && row.date && row.clock) {
+    const startsAtUtc = zonedWallTimeToUtc(row.date, row.clock, 'Europe/Belgrade');
+    return { startsAtUtc, sourceTimeZone: startsAtUtc ? 'Europe/Belgrade' : null };
+  }
+  return { startsAtUtc: null, sourceTimeZone: null };
+}
+
+function zoneEvidence(belgrade: boolean): string {
+  if (belgrade) {
+    return 'CET je Beograd: neki red ima Cluj-Napoca tačno sat kasnije i satovi nisu svi isti. Red koji sam ispisuje Cluj i dalje ide preko Europe/Bucharest.';
+  }
+  return 'CET ostaje nepotvrđen: nema dokaza da je natpis beogradsko vreme. UTC postoji samo na redu koji sam ispisuje Cluj-Napoca, preko Europe/Bucharest.';
 }
 
 function readRows(html: string): Row[] {

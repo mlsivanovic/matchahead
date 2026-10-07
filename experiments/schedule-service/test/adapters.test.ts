@@ -41,22 +41,52 @@ test('mapiranje je izričito, a isti par bez mape nije isti ID', () => {
 test('ABA potvrđuje Beograd samo uz Cluj i različite satove', () => {
   const proved = parseAbaCalendar(abaHtml(true, ['18:30', '12:00']), '2026-10-02T12:00:00Z');
   const evening = proved.drafts.find((draft) => draft.providerFixtureId === '15');
-  assert.equal(evening?.startsAtUtc, null);
+  assert.equal(evening?.startsAtUtc, zonedWallTimeToUtc('2026-10-02', '18:30', 'Europe/Belgrade'));
+  assert.equal(evening?.sourceTimeZone, 'Europe/Belgrade');
+  assert.equal(evening?.status, 'scheduled');
+  assert.equal(evening?.sourceClaimsTimeConfirmed, true);
   assert.equal(evening?.scheduledLocalDate, '2026-10-02');
   assert.equal(evening?.printedLocalTime, '18:30');
   assert.equal(evening?.homeTeamId, 'basketball:rs:partizan');
   const clujRow = proved.drafts.find((draft) => draft.providerFixtureId === '27');
   assert.equal(clujRow?.startsAtUtc, zonedWallTimeToUtc('2026-10-11', '13:00', 'Europe/Bucharest'));
   assert.equal(clujRow?.sourceTimeZone, 'Europe/Bucharest');
+  assert.match(proved.evidence, /CET je Beograd/);
 
   const sameClock = parseAbaCalendar(abaHtml(true, ['18:30', '18:30']), '2026-10-02T12:00:00Z');
   assert.equal(sameClock.drafts.find((draft) => draft.providerFixtureId === '15')?.startsAtUtc, null);
   assert.equal(sameClock.drafts.find((draft) => draft.providerFixtureId === '27')?.sourceTimeZone, 'Europe/Bucharest');
+  assert.match(sameClock.evidence, /CET ostaje nepotvrđen/);
 
   const noProof = parseAbaCalendar(abaHtml(false, ['18:30', '20:30']), '2026-10-02T12:00:00Z');
   assert.equal(noProof.drafts.every((draft) => draft.startsAtUtc === null), true);
   assert.equal(noProof.drafts[0]?.scheduledLocalDate, '2026-10-02');
+  assert.equal(noProof.drafts[0]?.printedLocalTime, '18:30');
+  assert.match(noProof.evidence, /CET ostaje nepotvrđen/);
   assert.match(proved.evidence, /Dozvola/);
+
+  const placeholder = parseAbaCalendar(abaHtml(true, ['00:00', '12:00']), '2026-10-02T12:00:00Z');
+  const midnight = placeholder.drafts.find((draft) => draft.providerFixtureId === '15');
+  assert.equal(midnight?.startsAtUtc, null);
+  assert.equal(midnight?.printedLocalTime, null);
+  assert.equal(midnight?.status, 'time_tbd');
+  assert.equal(placeholder.drafts.find((draft) => draft.providerFixtureId === '27')?.startsAtUtc, zonedWallTimeToUtc('2026-10-11', '13:00', 'Europe/Bucharest'));
+
+  const mixed = parseAbaCalendar(`${abaHtml(true, ['18:30', '12:00'])}
+    <h4>ROUND 5</h4>
+    <p class="hidden-xs"><a href="https://www.aba-liga.com/match/41/26/1/Overview/x">Igokea m:tel <span>:</span> Crvena zvezda Meridianbet</a></p>
+    <td class="scoretable"></td><td class="locationtable">Saturday, 24.10.2026</td>
+    <h4>ROUND 6</h4>
+    <p class="hidden-xs"><a href="https://www.aba-liga.com/match/52/26/1/Overview/y">Partizan Mozzart Bet <span>:</span> U-BT Cluj-Napoca</a></p>
+    <td class="scoretable"></td><td class="locationtable">Sunday, 03.01.2027 17:00 CET</td>`, '2026-10-02T12:00:00Z');
+  const dateOnly = mixed.drafts.find((draft) => draft.providerFixtureId === '41');
+  assert.equal(dateOnly?.startsAtUtc, null);
+  assert.equal(dateOnly?.status, 'time_tbd');
+  assert.equal(dateOnly?.scheduledLocalDate, '2026-10-24');
+  const winter = mixed.drafts.find((draft) => draft.providerFixtureId === '52');
+  assert.equal(winter?.startsAtUtc, '2027-01-03T16:00:00Z');
+  assert.equal(winter?.startsAtUtc, zonedWallTimeToUtc('2027-01-03', '17:00', 'Europe/Belgrade'));
+  assert.equal(winter?.sourceTimeZone, 'Europe/Belgrade');
 
   const tel = parseAbaCalendar(
     `<h4>ROUND 5</h4><p class="hidden-xs"><a href="https://www.aba-liga.com/match/41/26/1/Overview/x">Igokea m:tel <span>:</span> Crvena zvezda Meridianbet</a></p><td class="scoretable"></td><td class="locationtable">Saturday, 24.10.2026</td>`,
